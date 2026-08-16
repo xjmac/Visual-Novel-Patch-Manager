@@ -39,50 +39,48 @@ A lightweight, automated Visual Novel patch manager designed to streamline patch
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Quick Start & Installation
 
-### 1. One-Click Launch (Recommended)
+### 1. One-Line Installer for Steam Deck & Linux Desktop (Recommended)
 
-Clone the repository and run the included `start.sh` launcher. It will automatically create an isolated Python virtual environment (`.venv`) and install all required dependencies on first run:
+In Desktop Mode on your Steam Deck or Linux PC, open a terminal (Konsole) and run:
 
 ```bash
-git clone https://github.com/xjmac/Visual-Novel-Patch-Manager.git
-cd Visual-Novel-Patch-Manager
-chmod +x start.sh
-./start.sh
+curl -sSL https://raw.githubusercontent.com/xjmac/Visual-Novel-Patch-Manager/main/install.sh | bash
 ```
 
-### 2. Manual Installation
+**What this does automatically:**
+- ✅ Sets up an isolated environment in `~/.local/share/vnpm/` (**100% persistent across SteamOS system updates**).
+- ✅ Adds **VN Patch Manager** as a **Non-Steam Game in Steam Game Mode** with custom portrait capsule, wide capsule, hero banner, and app icon.
+- ✅ Creates desktop and application menu launchers.
+- ✅ Requires **zero sudo / root permissions**.
 
-If you prefer to manage your own Python environment:
+---
+
+### 2. Manual / Development Installation
+
+If you prefer to clone and develop locally:
 
 ```bash
-# Clone the repository
+# Clone repository
 git clone https://github.com/xjmac/Visual-Novel-Patch-Manager.git
 cd Visual-Novel-Patch-Manager
 
-# Create & activate a virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Launch VNPM
-python3 vnpatchmanager.py
+# Run local installer or start script
+./install.sh
+# or
+./start.sh
 ```
 
 ---
 
-## 🎮 Steam Deck Usage
+## 🗑️ Uninstallation
 
-1. Switch to **Desktop Mode** on your Steam Deck.
-2. Open **Konsole** and clone/download VNPM to a folder of your choice (e.g., `~/Games/VNPM` or `~/Documents/prog/VNPM`).
-3. Make `start.sh` executable:
-   ```bash
-   chmod +x start.sh
-   ```
-4. Double-click `start.sh` (select **Execute** when prompted) or add `start.sh` as a **Non-Steam Game** in desktop Steam to launch it directly from Game Mode.
+To cleanly remove VN Patch Manager and its shortcuts:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/xjmac/Visual-Novel-Patch-Manager/main/uninstall.sh | bash
+```
 
 ---
 
