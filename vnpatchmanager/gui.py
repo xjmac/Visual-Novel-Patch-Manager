@@ -773,74 +773,85 @@ class VNPatchManagerApp(ctk.CTk):
             current_entry = self._card_entries[self._focused_card_idx] if 0 <= self._focused_card_idx < num_cards else None
             num_buttons = len(current_entry["buttons"]) if current_entry else 0
 
-            if action == ACTION_UP:
-                if self._focused_btn_idx >= 0:
-                    # Move focus back to card container
+            # -------------------------------------------------------------
+            # Case A: In Action Mode (A button was pressed to enter buttons)
+            # -------------------------------------------------------------
+            if self._focused_btn_idx >= 0:
+                if action == ACTION_LEFT:
+                    if self._focused_btn_idx > 0:
+                        self._focused_btn_idx -= 1
+                        self._apply_focus_visuals()
+                elif action == ACTION_RIGHT:
+                    if self._focused_btn_idx < num_buttons - 1:
+                        self._focused_btn_idx += 1
+                        self._apply_focus_visuals()
+                elif action == ACTION_SELECT:
+                    if current_entry and 0 <= self._focused_btn_idx < num_buttons:
+                        current_entry["buttons"][self._focused_btn_idx].invoke()
+                elif action in (ACTION_BACK, ACTION_UP, ACTION_DOWN):
+                    # Exit Action Mode and return to Card Browsing Mode
                     self._focused_btn_idx = -1
                     self._apply_focus_visuals()
-                else:
-                    if is_grid:
-                        if self._focused_card_idx in (0, 1):
-                            self._focused_zone = "TOOLBAR"
-                            self._focused_toolbar_idx = 0
-                            self._apply_focus_visuals()
-                        else:
-                            self._focused_card_idx = max(0, self._focused_card_idx - 2)
-                            self._apply_focus_visuals()
+                return
+
+            # -------------------------------------------------------------
+            # Case B: In Card Browsing Mode (_focused_btn_idx == -1)
+            # -------------------------------------------------------------
+            if action == ACTION_UP:
+                if is_grid:
+                    if self._focused_card_idx in (0, 1):
+                        self._focused_zone = "TOOLBAR"
+                        self._focused_toolbar_idx = 0
+                        self._apply_focus_visuals()
                     else:
-                        if self._focused_card_idx == 0:
-                            self._focused_zone = "TOOLBAR"
-                            self._focused_toolbar_idx = 0
-                            self._apply_focus_visuals()
-                        else:
-                            self._focused_card_idx = max(0, self._focused_card_idx - 1)
-                            self._apply_focus_visuals()
+                        self._focused_card_idx = max(0, self._focused_card_idx - 2)
+                        self._apply_focus_visuals()
+                else:
+                    if self._focused_card_idx == 0:
+                        self._focused_zone = "TOOLBAR"
+                        self._focused_toolbar_idx = 0
+                        self._apply_focus_visuals()
+                    else:
+                        self._focused_card_idx = max(0, self._focused_card_idx - 1)
+                        self._apply_focus_visuals()
 
             elif action == ACTION_DOWN:
-                if self._focused_btn_idx == -1 and num_buttons > 0:
-                    # Step down into the action button row
-                    self._focused_btn_idx = 0
-                    self._apply_focus_visuals()
+                if is_grid:
+                    self._focused_card_idx = min(num_cards - 1, self._focused_card_idx + 2)
                 else:
-                    self._focused_btn_idx = -1
-                    if is_grid:
-                        self._focused_card_idx = min(num_cards - 1, self._focused_card_idx + 2)
-                    else:
-                        self._focused_card_idx = min(num_cards - 1, self._focused_card_idx + 1)
-                    self._apply_focus_visuals()
+                    self._focused_card_idx = min(num_cards - 1, self._focused_card_idx + 1)
+                self._apply_focus_visuals()
 
             elif action == ACTION_LEFT:
-                if self._focused_btn_idx > 0:
-                    self._focused_btn_idx -= 1
-                    self._apply_focus_visuals()
-                elif is_grid and self._focused_btn_idx == -1 and (self._focused_card_idx % 2 == 1):
-                    self._focused_card_idx -= 1
-                    self._apply_focus_visuals()
+                if is_grid:
+                    if self._focused_card_idx % 2 == 1:
+                        self._focused_card_idx -= 1
+                        self._apply_focus_visuals()
+                    elif self._focused_card_idx > 0:
+                        self._focused_card_idx -= 1
+                        self._apply_focus_visuals()
+                else:
+                    if self._focused_card_idx > 0:
+                        self._focused_card_idx -= 1
+                        self._apply_focus_visuals()
 
             elif action == ACTION_RIGHT:
-                if self._focused_btn_idx >= 0 and self._focused_btn_idx < num_buttons - 1:
-                    self._focused_btn_idx += 1
-                    self._apply_focus_visuals()
-                elif is_grid and self._focused_btn_idx == -1 and (self._focused_card_idx % 2 == 0) and (self._focused_card_idx + 1 < num_cards):
+                if self._focused_card_idx < num_cards - 1:
                     self._focused_card_idx += 1
                     self._apply_focus_visuals()
 
             elif action == ACTION_SELECT:
-                if current_entry:
-                    if self._focused_btn_idx >= 0 and self._focused_btn_idx < num_buttons:
-                        current_entry["buttons"][self._focused_btn_idx].invoke()
-                    elif current_entry.get("default_button"):
-                        current_entry["default_button"].invoke()
+                # Pressing A enters Action Mode on the selected card's action buttons
+                if current_entry and num_buttons > 0:
+                    self._focused_btn_idx = 0
+                    self._apply_focus_visuals()
 
-            elif action == ACTION_QUICK_ACTION:  # X Button
+            elif action == ACTION_QUICK_ACTION:  # X Button directly invokes default action
                 if current_entry and current_entry.get("default_button"):
                     current_entry["default_button"].invoke()
 
             elif action == ACTION_BACK:
-                if self._focused_btn_idx >= 0:
-                    self._focused_btn_idx = -1
-                    self._apply_focus_visuals()
-                elif self.search_var.get():
+                if self.search_var.get():
                     self.search_var.set("")
                     self._apply_focus_visuals()
 
@@ -932,17 +943,44 @@ class VNPatchManagerApp(ctk.CTk):
                     btn.configure(border_width=0 if btn.cget("fg_color") != "transparent" else 1)
 
     def _scroll_card_into_view(self, card_widget):
-        """Auto-scrolls the scrollable frame viewport so the focused card is fully visible."""
+        """Auto-scrolls the scrollable frame viewport so the focused card is fully visible without jitter."""
         try:
-            canvas = self.scrollable_games._parent_canvas
-            card_y = card_widget.winfo_y()
-            card_h = card_widget.winfo_height() or 120
-            canvas_h = canvas.winfo_height() or 500
-            total_h = self.scrollable_games.winfo_height() or 1000
+            canvas = getattr(self.scrollable_games, "_parent_canvas", None)
+            if not canvas or not canvas.winfo_exists() or not card_widget.winfo_exists():
+                return
 
-            if total_h > canvas_h and total_h > 0:
-                fraction = max(0.0, min(1.0, (card_y - 20) / max(total_h - canvas_h, 1)))
-                canvas.yview_moveto(fraction)
+            canvas.update_idletasks()
+
+            card_root_y = card_widget.winfo_rooty()
+            canvas_root_y = canvas.winfo_rooty()
+            card_h = card_widget.winfo_height() or 140
+            canvas_h = canvas.winfo_height() or 500
+
+            rel_top = card_root_y - canvas_root_y
+            rel_bottom = rel_top + card_h
+
+            bbox = canvas.bbox("all")
+            if not bbox:
+                return
+            total_h = max(bbox[3] - bbox[1], canvas_h, 1)
+
+            if total_h <= canvas_h:
+                return
+
+            curr_y_view = canvas.yview()
+            curr_top_fraction = curr_y_view[0]
+            curr_top_y = curr_top_fraction * total_h
+
+            padding = 16
+
+            # If card is above viewport margin
+            if rel_top < padding:
+                target_top_y = max(0.0, curr_top_y + rel_top - padding)
+                canvas.yview_moveto(target_top_y / total_h)
+            # If card is below viewport margin
+            elif rel_bottom > canvas_h - padding:
+                target_top_y = min(total_h - canvas_h, curr_top_y + (rel_bottom - canvas_h) + padding)
+                canvas.yview_moveto(target_top_y / total_h)
         except Exception:
             pass
 
