@@ -47,3 +47,17 @@ def test_hide_onscreen_keyboard():
         mock_popen.assert_called_once()
         args = mock_popen.call_args[0][0]
         assert "steam://close/keyboard" in args
+
+
+def test_osk_exceptions_and_no_binaries():
+    # 1. No steam or xdg-open binary available
+    with patch("shutil.which", return_value=None):
+        assert SteamOSHelper.show_onscreen_keyboard() is False
+        assert SteamOSHelper.hide_onscreen_keyboard() is False
+
+    # 2. Popen exception
+    with patch("shutil.which", return_value="/usr/bin/steam"), \
+         patch("subprocess.Popen", side_effect=OSError("Exec format error")):
+        assert SteamOSHelper.show_onscreen_keyboard() is False
+        assert SteamOSHelper.hide_onscreen_keyboard() is False
+

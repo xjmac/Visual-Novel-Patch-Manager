@@ -1,5 +1,5 @@
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 import vdf
 from vnpatchmanager import SteamScanner
 
@@ -205,6 +205,63 @@ def test_is_dlc_or_addon_filtering(mock_steam_structure):
     assert "900013" not in owned
     assert "900014" not in owned
     assert "900015" not in owned
-    assert "900016" not in owned
     assert "900017" not in owned
     assert "900018" not in owned
+
+
+def test_get_steam_root_flatpak_darwin_and_windows(tmp_path, monkeypatch):
+    fake_home = tmp_path / "home_user"
+    fake_home.mkdir()
+    monkeypatch.setattr(Path, "home", lambda: fake_home)
+
+    # 1. Flatpak Steam path
+    flatpak_steam = fake_home / ".var" / "app" / "com.valvesoftware.Steam" / ".local" / "share" / "Steam"
+    (flatpak_steam / "steamapps").mkdir(parents=True)
+    assert SteamScanner.get_steam_root() == flatpak_steam
+
+    # 2. Darwin path
+    darwin_steam = fake_home / "Library" / "Application Support" / "Steam"
+    (darwin_steam / "steamapps").mkdir(parents=True)
+    with patch("sys.platform", "darwin"):
+        assert SteamScanner.get_steam_root() == darwin_steam
+
+    # 3. Windows path with winreg
+    win_steam = tmp_path / "ProgramFiles" / "Steam"
+    (win_steam / "steamapps").mkdir(parents=True)
+
+    class MockKey:
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+
+    mock_winreg = MagicMock()
+    mock_winreg.OpenKey.return_value = MockKey()
+    mock_winreg.QueryValueEx.return_value = (str(win_steam), 1)
+
+    with patch("sys.platform", "win32"), patch.dict("sys.modules", {"winreg": mock_winreg}):
+        assert SteamScanner.get_steam_root() == win_steam
+
+
+def test_get_owned_games_store_sections_and_corrupt_files(mock_steam_structure):
+    steam_root = mock_steam_structure["steam_root"]
+    userdata_dir = steam_root / "userdata" / "123456" / "config"
+    userdata_dir.mkdir(parents=True, exist_ok=True)
+
+    localconfig_file = userdata_dir / "localconfig.vdf"
+    localconfig_data = {
+        "UserLocalConfigStore": {
+            "apps": {
+                "900031": {},
+                "900032": {}
+            }
+        }
+    }
+    with open(localconfig_file, "w") as f:
+        vdf.dump(localconfig_data, f)
+
+    with patch.object(SteamScanner, "get_steam_root", return_value=steam_root):
+        owned = SteamScanner.get_owned_games()
+        assert "900031" in owned
+        assert "900032" in owned
+

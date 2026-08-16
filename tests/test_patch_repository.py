@@ -223,3 +223,92 @@ def test_scan_local_recursive_and_auto_detection(temp_config_dir, tmp_path):
     # Synthetic Explicit AppID 900040
     assert "900040" in repo.available_patches
     assert repo.available_patches["900040"]["actions"][0]["source"] == "patch_data"
+
+
+def test_title_map_and_match_title_to_app_id(tmp_path, temp_config_dir):
+    fake_db = tmp_path / "vndb_patches.json"
+    fake_db.write_text(json.dumps({
+        "900001": {
+            "vn_title": "Synthetic VN Alpha: Special Edition",
+            "patch_releases": [{"title": "Alpha 18+ Restoration DLC Patch"}]
+        },
+        "900002": {
+            "vn_title": "Synthetic Visual Novel Beta",
+            "patch_releases": []
+        }
+    }))
+
+    cm = ConfigManager()
+    repo = PatchRepository(cm, bundled_db_path=fake_db)
+
+    # 1. Exact match against VN Title
+    aid, title = repo.match_title_to_app_id("Synthetic VN Alpha: Special Edition")
+    assert aid == "900001"
+    assert title == "Synthetic VN Alpha: Special Edition"
+
+    # 2. Match against patch release title
+    aid, title = repo.match_title_to_app_id("Alpha 18+ Restoration DLC Patch")
+    assert aid == "900001"
+
+    # 3. Normalized / clean string match
+    aid, title = repo.match_title_to_app_id("Synthetic Visual Novel Beta - Perfect Edition")
+    assert aid == "900002"
+
+    # 4. Word subset matching
+    aid, title = repo.match_title_to_app_id("Synthetic Beta")
+    assert aid == "900002"
+
+    # 5. Empty or unknown query
+    assert repo.match_title_to_app_id("") == (None, None)
+    assert repo.match_title_to_app_id("Completely Unrelated Game 2026") == (None, None)
+
+
+def test_scan_smb_missing_module(temp_config_dir, caplog):
+    cm = ConfigManager()
+    cm.config["mode"] = "smb"
+    cm.config["smb_server"] = "192.168.1.50"
+    cm.config["smb_share"] = "Share"
+
+    repo = PatchRepository(cm)
+    with patch("vnpatchmanager.patch_repository.smbclient", None):
+        repo._scan_smb()
+        assert "SMB mode requires 'smbprotocol' package" in caplog.text
+
+
+def test_scan_smb_rpa_auto_detection_and_oserrors(temp_config_dir, tmp_path):
+    cm = ConfigManager()
+    cm.config["mode"] = "smb"
+    cm.config["smb_server"] = "192.168.1.100"
+    cm.config["smb_share"] = "VNShare"
+    cm.config["smb_path"] = "Patches/"
+
+    repo = PatchRepository(cm)
+
+    def mock_listdir(unc):
+        if unc.endswith("ErrorFolder"):
+            raise OSError("Permission denied")
+        if unc.endswith("RenpyShare"):
+            return ["archive.rpa"]
+        return ["RenpyShare", "ErrorFolder"]
+
+    def mock_stat(unc):
+        stat_res = MagicMock()
+        if unc.endswith("ErrorFolder"):
+            raise OSError("Stat failed")
+        if unc.endswith(".rpa"):
+            stat_res.st_mode = 0o100644
+        else:
+            stat_res.st_mode = 0o040755
+        return stat_res
+
+    with patch("smbclient.register_session"), \
+         patch("smbclient.open_file", side_effect=OSError(2, "No patch.json")), \
+         patch("smbclient.listdir", side_effect=mock_listdir), \
+         patch("smbclient.stat", side_effect=mock_stat), \
+         patch.object(repo, "match_title_to_app_id", return_value=("900010", "Synthetic Renpy Adventure")):
+        repo.refresh_patches()
+        assert "900010" in repo.available_patches
+        patch_info = repo.available_patches["900010"]
+        assert patch_info["actions"][0]["type"] == "copy_file"
+        assert patch_info["actions"][0]["source"] == "archive.rpa"
+
