@@ -13,6 +13,8 @@ from .backup_manager import BackupManager
 from .cover_art_manager import CoverArtManager
 from .vndb_scanner import VNDBScanner
 from .patch_execution import PatchExecutionEngine
+from .steamos_helper import SteamOSHelper
+from .controller_manager import GamepadControllerManager
 from .gui import VNPatchManagerApp, APP_NAME
 
 __all__ = [
@@ -25,6 +27,8 @@ __all__ = [
     "CoverArtManager",
     "VNDBScanner",
     "PatchExecutionEngine",
+    "SteamOSHelper",
+    "GamepadControllerManager",
     "VNPatchManagerApp",
     "APP_NAME",
 ]
