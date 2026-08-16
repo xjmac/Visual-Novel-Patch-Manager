@@ -624,15 +624,44 @@ class VNPatchManagerApp(ctk.CTk):
                 pass
             return
 
-        # 4. Zone: TABS (Top Tab Bar)
+        # 4. Zone: HEADER (Top Header - Scan Games & Patches button)
+        if self._focused_zone == "HEADER":
+            if action == ACTION_LEFT:
+                self._focused_zone = "TABS"
+                self._focused_tab_idx = 1 if self.tabview.get() == "Settings" else 0
+                self._apply_focus_visuals()
+            elif action == ACTION_DOWN:
+                if self.tabview.get() == "Settings":
+                    self._focused_zone = "SETTINGS"
+                else:
+                    self._focused_zone = "TOOLBAR"
+                    self._focused_toolbar_idx = 3
+                self._apply_focus_visuals()
+            elif action in (ACTION_SELECT, ACTION_QUICK_ACTION):
+                self.refresh_data()
+            elif action == ACTION_BACK:
+                self._focused_zone = "TABS"
+                self._focused_tab_idx = 0
+                self._apply_focus_visuals()
+            return
+
+        # 5. Zone: TABS (Top Tab Bar)
         if self._focused_zone == "TABS":
             if action == ACTION_LEFT:
-                self._focused_tab_idx = 0
-                self.tabview.set("Games Library")
-                self._apply_focus_visuals()
+                if self._focused_tab_idx == 1:
+                    self._focused_tab_idx = 0
+                    self.tabview.set("Games Library")
+                    self._apply_focus_visuals()
             elif action == ACTION_RIGHT:
-                self._focused_tab_idx = 1
-                self.tabview.set("Settings")
+                if self._focused_tab_idx == 0:
+                    self._focused_tab_idx = 1
+                    self.tabview.set("Settings")
+                    self._apply_focus_visuals()
+                else:
+                    self._focused_zone = "HEADER"
+                    self._apply_focus_visuals()
+            elif action == ACTION_UP:
+                self._focused_zone = "HEADER"
                 self._apply_focus_visuals()
             elif action == ACTION_SELECT:
                 if self._focused_tab_idx == 0:
@@ -658,7 +687,7 @@ class VNPatchManagerApp(ctk.CTk):
                 self._apply_focus_visuals()
             return
 
-        # 5. Zone: TOOLBAR
+        # 6. Zone: TOOLBAR
         if self._focused_zone == "TOOLBAR":
             filter_options = ["All", "Patch Available", "Patched", "Missing 18+ (VNDB)", "Backed Up"]
             sort_options = ["Title (A-Z)", "Title (Z-A)", "VNDB Rating", "Status Priority", "Installed First"]
@@ -671,10 +700,10 @@ class VNPatchManagerApp(ctk.CTk):
                 SteamOSHelper.hide_onscreen_keyboard()
                 self._apply_focus_visuals()
             elif action == ACTION_LEFT:
-                self._focused_toolbar_idx = (self._focused_toolbar_idx - 1) % 5
+                self._focused_toolbar_idx = (self._focused_toolbar_idx - 1) % 4
                 self._apply_focus_visuals()
             elif action == ACTION_RIGHT:
-                self._focused_toolbar_idx = (self._focused_toolbar_idx + 1) % 5
+                self._focused_toolbar_idx = (self._focused_toolbar_idx + 1) % 4
                 self._apply_focus_visuals()
             elif action == ACTION_DOWN:
                 self._focused_zone = "LIBRARY"
@@ -705,8 +734,6 @@ class VNPatchManagerApp(ctk.CTk):
                     next_idx = (curr_idx + 1) % len(view_options)
                     self.view_var.set(view_options[next_idx])
                     self._apply_filters_and_render()
-                elif self._focused_toolbar_idx == 4:  # Refresh
-                    self.refresh_data()
             elif action == ACTION_BACK:
                 self._on_search_submit()
             return
@@ -863,10 +890,11 @@ class VNPatchManagerApp(ctk.CTk):
             )
 
         if hasattr(self, 'btn_refresh') and self.btn_refresh.winfo_exists():
-            is_refresh_focused = (self._focused_zone == "TOOLBAR" and self._focused_toolbar_idx == 4)
+            is_refresh_focused = (self._focused_zone == "HEADER")
             self.btn_refresh.configure(
                 border_color="#60a5fa" if is_refresh_focused else "#1d4ed8",
-                border_width=2 if is_refresh_focused else 0
+                border_width=2 if is_refresh_focused else 0,
+                fg_color="#1d4ed8" if is_refresh_focused else "#2563eb"
             )
 
         # 2. Update Card Focus Highlights

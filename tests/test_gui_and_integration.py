@@ -1286,6 +1286,50 @@ def test_gui_controller_tab_bar_spatial_navigation(app_instance, mock_steam_stru
     assert app_instance._focused_zone == "LIBRARY"
 
 
+def test_gui_controller_header_scan_button_navigation(app_instance):
+    from unittest.mock import patch
+    from vnpatchmanager.controller_manager import (
+        ACTION_LEFT,
+        ACTION_RIGHT,
+        ACTION_UP,
+        ACTION_DOWN,
+        ACTION_SELECT,
+        ACTION_BACK
+    )
+
+    # 1. Start in TABS zone on Games Library
+    app_instance._focused_zone = "TABS"
+    app_instance._focused_tab_idx = 0
+    app_instance._apply_focus_visuals()
+
+    # Move UP into HEADER (Scan Games & Patches button)
+    app_instance._handle_controller_action(ACTION_UP)
+    assert app_instance._focused_zone == "HEADER"
+    assert app_instance.btn_refresh.cget("border_width") == 2
+    assert app_instance.btn_refresh.cget("border_color") == "#60a5fa"
+
+    # Press A (SELECT) in HEADER -> triggers refresh_data
+    with patch.object(app_instance, "refresh_data") as mock_refresh:
+        app_instance._handle_controller_action(ACTION_SELECT)
+        mock_refresh.assert_called_once()
+
+    # Press LEFT in HEADER -> returns to TABS
+    app_instance._handle_controller_action(ACTION_LEFT)
+    assert app_instance._focused_zone == "TABS"
+    assert app_instance.btn_refresh.cget("border_width") == 0
+
+    # In TABS, move RIGHT to Settings, then RIGHT again into HEADER
+    app_instance._handle_controller_action(ACTION_RIGHT)
+    assert app_instance._focused_tab_idx == 1
+    app_instance._handle_controller_action(ACTION_RIGHT)
+    assert app_instance._focused_zone == "HEADER"
+
+    # In HEADER, press DOWN -> drops into SETTINGS
+    app_instance._handle_controller_action(ACTION_DOWN)
+    assert app_instance._focused_zone == "SETTINGS"
+
+
+
 
 
 
