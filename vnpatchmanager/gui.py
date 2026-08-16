@@ -1584,3 +1584,14 @@ class VNPatchManagerApp(ctk.CTk):
                 self.run_on_main_thread(lambda: self.lbl_status.configure(text="Steam Restore Failed! Check terminal.", text_color="#ff4444"))
 
         threading.Thread(target=_steam_task, daemon=True).start()
+
+
+if __name__ == "__main__":
+    try:
+        ctk.set_appearance_mode("Dark")
+        ctk.set_default_color_theme("blue")
+    except Exception:
+        pass
+    app = VNPatchManagerApp()
+    app.mainloop()
+

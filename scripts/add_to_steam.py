@@ -106,8 +106,8 @@ def register_shortcut(
         shortcuts[target_idx] = {
             "appid": signed_appid,
             "AppName": APP_NAME,
-            "Exe": f'"{exe_path}"',
-            "StartDir": f'"{exe_path.parent}"',
+            "Exe": str(exe_path),
+            "StartDir": str(exe_path.parent) + "/",
             "icon": str(icon_path) if icon_path.exists() else "",
             "ShortcutPath": "",
             "LaunchOptions": "",

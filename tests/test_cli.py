@@ -33,3 +33,16 @@ def test_cli_export_licenses_logic(tmp_path):
                 f.write(f"{game}\n")
 
         assert out_file.read_text() == "Synthetic VN Alpha\nSynthetic VN Beta\n"
+
+
+def test_package_main_entrypoint():
+    from unittest.mock import patch, MagicMock
+    import vnpatchmanager.__main__
+
+    with patch("vnpatchmanager.__main__.VNPatchManagerApp") as mock_app_class:
+        mock_instance = MagicMock()
+        mock_app_class.return_value = mock_instance
+        vnpatchmanager.__main__.main()
+        mock_app_class.assert_called_once()
+        mock_instance.mainloop.assert_called_once()
+

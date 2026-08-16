@@ -47,6 +47,7 @@ if [ -d "${SCRIPT_DIR}/vnpatchmanager" ] && [ -d "${SCRIPT_DIR}/assets" ]; then
     echo "📂 Installing from local source..."
     cp -r "${SCRIPT_DIR}/vnpatchmanager" "${INSTALL_DIR}/"
     cp -r "${SCRIPT_DIR}/assets" "${INSTALL_DIR}/"
+    [ -f "${SCRIPT_DIR}/vnpatchmanager.py" ] && cp "${SCRIPT_DIR}/vnpatchmanager.py" "${INSTALL_DIR}/"
     mkdir -p "${INSTALL_DIR}/scripts"
     if [ -d "${SCRIPT_DIR}/scripts" ]; then
         cp -r "${SCRIPT_DIR}/scripts/"* "${INSTALL_DIR}/scripts/"
@@ -63,6 +64,7 @@ else
     fi
     cp -r "${SRC_EXTRACT}/vnpatchmanager" "${INSTALL_DIR}/"
     cp -r "${SRC_EXTRACT}/assets" "${INSTALL_DIR}/"
+    [ -f "${SRC_EXTRACT}/vnpatchmanager.py" ] && cp "${SRC_EXTRACT}/vnpatchmanager.py" "${INSTALL_DIR}/"
     mkdir -p "${INSTALL_DIR}/scripts"
     if [ -d "${SRC_EXTRACT}/scripts" ]; then
         cp -r "${SRC_EXTRACT}/scripts/"* "${INSTALL_DIR}/scripts/"
@@ -76,7 +78,13 @@ cat << 'EOF' > "${LAUNCHER}"
 #!/usr/bin/env bash
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export PYTHONPATH="${SCRIPT_DIR}:${PYTHONPATH}"
-exec "${SCRIPT_DIR}/venv/bin/python3" -m vnpatchmanager.gui "$@"
+cd "${SCRIPT_DIR}"
+
+if [ -t 1 ]; then
+    exec "${SCRIPT_DIR}/venv/bin/python3" -m vnpatchmanager "$@"
+else
+    exec "${SCRIPT_DIR}/venv/bin/python3" -m vnpatchmanager "$@" >> "${SCRIPT_DIR}/vnpm.log" 2>&1
+fi
 EOF
 chmod +x "${LAUNCHER}"
 
