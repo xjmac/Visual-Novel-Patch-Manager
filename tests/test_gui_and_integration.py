@@ -1064,21 +1064,18 @@ def test_gui_controller_toolbar_and_button_navigation(app_instance, mock_steam_s
     assert app_instance._focused_card_idx == 0
     assert app_instance._focused_btn_idx == -1
 
-    # Down into card action button row
-    app_instance._handle_controller_action(ACTION_DOWN)
+    # Press A (SELECT) to enter Action Mode on the card's buttons
+    app_instance._handle_controller_action(ACTION_SELECT)
     assert app_instance._focused_btn_idx == 0
 
-    # Select active button
+    # Select active button with A
     with patch.object(app_instance, "run_patch") as mock_p:
         app_instance._handle_controller_action(ACTION_SELECT)
         mock_p.assert_called_once()
 
-    # Up back to card level
-    app_instance._handle_controller_action(ACTION_UP)
-    assert app_instance._focused_btn_idx == -1
-
-    # Back action
+    # Press B (BACK) to return to card browsing level
     app_instance._handle_controller_action(ACTION_BACK)
+    assert app_instance._focused_btn_idx == -1
 
 
 def test_gui_controller_grid_multi_card_navigation(app_instance, mock_steam_structure, mock_patch_repo):
@@ -1116,14 +1113,12 @@ def test_gui_controller_grid_multi_card_navigation(app_instance, mock_steam_stru
     app_instance._handle_controller_action(ACTION_RIGHT)
     assert app_instance._focused_card_idx == 1
 
-    # Move down to card 3 (in row 1)
-    app_instance._handle_controller_action(ACTION_DOWN)
-    assert app_instance._focused_btn_idx == 0
+    # Single-press DOWN moves directly to card 3 (row 1, col 1)
     app_instance._handle_controller_action(ACTION_DOWN)
     assert app_instance._focused_card_idx == 3
     assert app_instance._focused_btn_idx == -1
 
-    # Move up back to card 1
+    # Single-press UP moves back to card 1
     app_instance._handle_controller_action(ACTION_UP)
     assert app_instance._focused_card_idx == 1
 
