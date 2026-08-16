@@ -1033,16 +1033,23 @@ class VNPatchManagerApp(ctk.CTk):
                 for app_id, game_data in all_games.items():
                     vn_info = cached_vndb.get(app_id, {})
                     game_data["vndb"] = vn_info
-                    has_local_patch = app_id in self.repo.available_patches
+                    patch_info = self.repo.available_patches.get(app_id)
+                    has_local_patch = patch_info is not None
                     has_vndb_18_patch = vn_info.get("has_18plus_en_patch", False)
                     is_installed = bool(game_data.get("is_installed", True)) and bool(game_data.get("path"))
+
+                    # Resolve human-readable game title if currently placeholder or empty
+                    cur_name = game_data.get("name", "")
+                    if not cur_name or cur_name.startswith("Steam App #"):
+                        if vn_info.get("vn_title"):
+                            game_data["name"] = vn_info["vn_title"]
+                        elif patch_info and patch_info.get("game_name"):
+                            game_data["name"] = patch_info["game_name"]
 
                     if has_local_patch:
                         supported[app_id] = game_data
                     elif has_vndb_18_patch and (not is_installed or (is_installed and vn_info.get("is_vn", False))):
                         if vn_info.get("is_vn", False):
-                            if not is_installed and vn_info.get("vn_title"):
-                                game_data["name"] = vn_info["vn_title"]
                             supported[app_id] = game_data
 
                 # Pre-compute status & search index for each supported game in background
@@ -1217,6 +1224,14 @@ class VNPatchManagerApp(ctk.CTk):
             status_text = ""
             status_color = "#94a3b8"
             status_priority = 3
+
+        # Ensure human-readable name is resolved if placeholder
+        cur_name = game_data.get("name", "")
+        if not cur_name or cur_name.startswith("Steam App #"):
+            if vn_info.get("vn_title"):
+                game_data["name"] = vn_info["vn_title"]
+            elif patch_info and patch_info.get("game_name"):
+                game_data["name"] = patch_info["game_name"]
 
         # Pre-compute unified lowercase search index
         name_str = game_data.get("name", "").lower()
