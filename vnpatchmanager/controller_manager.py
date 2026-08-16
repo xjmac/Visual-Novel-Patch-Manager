@@ -1,6 +1,7 @@
 import glob
 import logging
 import os
+from pathlib import Path
 import select
 import struct
 import threading
@@ -31,8 +32,8 @@ JS_EVENT_AXIS = 0x02
 JS_EVENT_INIT = 0x80
 
 AXIS_DEADZONE = 16000
-REPEAT_DELAY = 0.28
-REPEAT_INTERVAL = 0.08
+REPEAT_DELAY = 0.25
+REPEAT_INTERVAL = 0.07
 
 
 class GamepadControllerManager:
@@ -43,30 +44,27 @@ class GamepadControllerManager:
 
     def __init__(self, action_callback: Optional[Callable[[str], None]] = None):
         self.action_callback = action_callback
-        self._running = False
         self._thread: Optional[threading.Thread] = None
+        self._running = False
         self._fd: Optional[int] = None
         self._device_path: Optional[str] = None
 
-        # Repeat state for directional hold navigation
+        # State tracking for axis D-pad / sticks
+        self._axis_values: dict[int, int] = {}
         self._held_direction: Optional[str] = None
         self._held_since: float = 0.0
         self._last_repeat: float = 0.0
 
-        # Axis states for stick and d-pad tracking
-        self._axis_values: dict[int, int] = {}
-
     def start(self):
-        """Starts the background gamepad listener thread."""
+        """Starts background gamepad polling thread."""
         if self._running:
             return
         self._running = True
         self._thread = threading.Thread(target=self._run_loop, daemon=True, name="GamepadListener")
         self._thread.start()
-        logger.info("Gamepad controller manager started.")
 
     def stop(self):
-        """Stops the controller manager and closes open devices."""
+        """Stops background thread and releases device descriptor."""
         self._running = False
         if self._fd is not None:
             try:
@@ -76,13 +74,16 @@ class GamepadControllerManager:
             self._fd = None
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=0.5)
-        logger.info("Gamepad controller manager stopped.")
 
     def _find_joystick_device(self) -> Optional[str]:
-        """Scans /dev/input for available joystick devices."""
-        js_devices = sorted(glob.glob("/dev/input/js*"))
-        if js_devices:
-            return js_devices[0]
+        """Finds the first accessible joystick device file in /dev/input."""
+        js_devs = sorted(glob.glob("/dev/input/js*"))
+        for dev in js_devs:
+            try:
+                if os.access(dev, os.R_OK):
+                    return dev
+            except Exception:
+                pass
         return None
 
     def _emit(self, action: str):
@@ -94,7 +95,7 @@ class GamepadControllerManager:
                 logger.error(f"Error in gamepad action callback: {e}")
 
     def _run_loop(self):
-        """Main event polling loop."""
+        """Main event polling loop with ultra-low latency 5ms select."""
         while self._running:
             # Reconnect device if not currently open
             if self._fd is None:
@@ -121,7 +122,7 @@ class GamepadControllerManager:
                 continue
 
             try:
-                r, _, _ = select.select([self._fd], [], [], 0.02)
+                r, _, _ = select.select([self._fd], [], [], 0.005)
                 if not r or not self._running or self._fd is None:
                     continue
 
