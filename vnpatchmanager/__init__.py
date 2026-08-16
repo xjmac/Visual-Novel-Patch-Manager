@@ -15,7 +15,10 @@ from .vndb_scanner import VNDBScanner
 from .patch_execution import PatchExecutionEngine
 from .steamos_helper import SteamOSHelper
 from .controller_manager import GamepadControllerManager
-from .gui import VNPatchManagerApp, APP_NAME
+from .version import get_version
+from .gui import VNPatchManagerApp, APP_NAME, APP_VERSION
+
+__version__ = APP_VERSION
 
 __all__ = [
     "CONFIG_DIR",
@@ -31,4 +34,7 @@ __all__ = [
     "GamepadControllerManager",
     "VNPatchManagerApp",
     "APP_NAME",
+    "APP_VERSION",
+    "__version__",
+    "get_version",
 ]

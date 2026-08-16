@@ -63,6 +63,7 @@ def test_save_settings(app_instance, temp_config_dir):
     assert app_instance.config_manager.config["local_path"] == "/custom/local/path"
     assert app_instance.config_manager.config["smb_server"] == "192.168.99.1"
     assert cfg_file.exists()
+    assert "v0.1." in app_instance.lbl_version.cget("text")
 
 
 def test_refresh_data_filtering(app_instance, mock_steam_structure, mock_patch_repo):

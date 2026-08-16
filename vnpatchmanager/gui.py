@@ -37,7 +37,10 @@ from .controller_manager import (
     ACTION_SCROLL_DOWN,
 )
 
+from .version import get_version
+
 APP_NAME = "VN Patch Manager"
+APP_VERSION = get_version()
 
 
 class VNPatchManagerApp(ctk.CTk):
@@ -324,7 +327,16 @@ class VNPatchManagerApp(ctk.CTk):
             hover_color="#1d4ed8",
             command=self.save_settings
         )
-        self.btn_save.grid(row=3, column=0, columnspan=2, pady=20)
+        self.btn_save.grid(row=3, column=0, columnspan=2, pady=(20, 10))
+
+        # Version Info Label
+        self.lbl_version = ctk.CTkLabel(
+            self.tab_settings,
+            text=f"{APP_NAME} v{APP_VERSION}",
+            font=ctk.CTkFont(size=12),
+            text_color="#71717a"
+        )
+        self.lbl_version.grid(row=4, column=0, columnspan=2, pady=(0, 10))
 
         self._toggle_settings_fields(self.var_mode.get())
 
