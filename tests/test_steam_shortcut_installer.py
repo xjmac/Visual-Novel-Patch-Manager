@@ -50,6 +50,7 @@ def test_register_shortcut_and_grid_artwork(tmp_path):
     (assets_dir / "steam_grid_portrait.jpg").write_bytes(b"mock_portrait")
     (assets_dir / "steam_grid_landscape.jpg").write_bytes(b"mock_landscape")
     (assets_dir / "steam_hero.jpg").write_bytes(b"mock_hero")
+    (assets_dir / "steam_logo.png").write_bytes(b"mock_logo")
     (assets_dir / "steam_icon.jpg").write_bytes(b"mock_icon")
 
     exe_path = tmp_path / "bin" / "vnpm"
@@ -78,6 +79,7 @@ def test_register_shortcut_and_grid_artwork(tmp_path):
     assert (grid_dir / f"{appid_32}p.jpg").read_bytes() == b"mock_portrait"
     assert (grid_dir / f"{appid_32}.jpg").read_bytes() == b"mock_landscape"
     assert (grid_dir / f"{appid_32}_hero.jpg").read_bytes() == b"mock_hero"
+    assert (grid_dir / f"{appid_32}_logo.png").read_bytes() == b"mock_logo"
     assert (grid_dir / f"{appid_32}_icon.jpg").read_bytes() == b"mock_icon"
 
     # 2. Re-register (update existing entry without duplicating)
