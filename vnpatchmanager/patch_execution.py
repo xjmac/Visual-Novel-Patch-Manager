@@ -63,23 +63,41 @@ class PatchExecutionEngine:
                 source = action.get("source", "")
                 destination = action.get("destination", "{game_dir}/")
 
-                # RPA files
-                if source.endswith(".rpa"):
-                    target_dir = game_path / "game" if "game" in destination else game_path
-                    if (target_dir / source).exists():
-                        return True
+                dest_clean = destination.replace("{game_dir}", "").strip("/\\")
+                target_dir = (game_path / dest_clean) if dest_clean else game_path
 
                 # Specific patch payload files
                 if atype == "copy_file":
                     if source in [".", "patch_data"]:
-                        if patch_src_dir.exists():
-                            src_files = [f for f in patch_src_dir.glob("*") if f.is_file() and not f.name.endswith(".txt")]
-                            if src_files and any((game_path / f.name).exists() for f in src_files):
-                                return True
+                        src_dir = (patch_src_dir / source) if source != "." else patch_src_dir
+                        if src_dir.exists() and src_dir.is_dir():
+                            src_files = [f for f in src_dir.glob("*") if f.is_file() and not f.name.endswith(".txt")]
+                            for sf in src_files:
+                                installed_file = target_dir / sf.name
+                                if not installed_file.exists():
+                                    installed_file = game_path / sf.name
+                                if installed_file.exists():
+                                    try:
+                                        if installed_file.stat().st_size == sf.stat().st_size:
+                                            return True
+                                    except OSError:
+                                        pass
                     else:
-                        target_file = game_path / source
-                        if target_file.exists() and target_file.is_file():
-                            return True
+                        src_file = patch_src_dir / source if patch_src_dir.exists() else None
+                        installed_file = target_dir / source if (source.endswith(".rpa") or dest_clean) else (game_path / source)
+                        if not installed_file.exists():
+                            installed_file = (game_path / "game" / source) if source.endswith(".rpa") else (game_path / source)
+
+                        if installed_file.exists() and installed_file.is_file():
+                            if src_file and src_file.exists() and src_file.is_file():
+                                try:
+                                    if installed_file.stat().st_size == src_file.stat().st_size:
+                                        return True
+                                except OSError:
+                                    pass
+                            else:
+                                if source.lower() not in ["assets.rpa", "archive.rpa", "data.xp3"]:
+                                    return True
 
                 # Archive extraction
                 if atype == "extract_archive":
@@ -89,9 +107,15 @@ class PatchExecutionEngine:
                             try:
                                 import zipfile
                                 with zipfile.ZipFile(arc_path, "r") as zf:
-                                    members = [Path(m).name for m in zf.namelist() if Path(m).name and not Path(m).name.endswith(".txt")]
-                                    if members and any((game_path / m).exists() for m in members):
-                                        return True
+                                    for info in zf.infolist():
+                                        if info.is_dir() or info.filename.endswith(".txt"):
+                                            continue
+                                        fname = Path(info.filename).name
+                                        installed_f = target_dir / fname
+                                        if not installed_f.exists():
+                                            installed_f = game_path / fname
+                                        if installed_f.exists() and installed_f.stat().st_size == info.file_size:
+                                            return True
                             except Exception as e:
                                 logger.warning(f"Error checking zip members: {e}")
 
@@ -101,10 +125,6 @@ class PatchExecutionEngine:
             # Distinct 18+ Ren'Py patch additions
             for rpa_name in ["patch0x.rpa", "r18.rpa", "patch.rpa", "adult.rpa"]:
                 if (game_sub / rpa_name).exists():
-                    return True
-            # For assets.rpa, only treat as patch if game needs an 18+ patch
-            if (game_sub / "assets.rpa").exists():
-                if vn_info is None or vn_info.get("has_18plus_en_patch", True):
                     return True
 
         # Kirikiri / XP3
