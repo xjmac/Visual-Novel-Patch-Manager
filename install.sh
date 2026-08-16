@@ -48,6 +48,7 @@ if [ -d "${SCRIPT_DIR}/vnpatchmanager" ] && [ -d "${SCRIPT_DIR}/assets" ]; then
     cp -r "${SCRIPT_DIR}/vnpatchmanager" "${INSTALL_DIR}/"
     cp -r "${SCRIPT_DIR}/assets" "${INSTALL_DIR}/"
     [ -f "${SCRIPT_DIR}/vnpatchmanager.py" ] && cp "${SCRIPT_DIR}/vnpatchmanager.py" "${INSTALL_DIR}/"
+    [ -f "${SCRIPT_DIR}/vndb_steam_database.json" ] && cp "${SCRIPT_DIR}/vndb_steam_database.json" "${INSTALL_DIR}/"
     mkdir -p "${INSTALL_DIR}/scripts"
     if [ -d "${SCRIPT_DIR}/scripts" ]; then
         cp -r "${SCRIPT_DIR}/scripts/"* "${INSTALL_DIR}/scripts/"
@@ -65,6 +66,7 @@ else
     cp -r "${SRC_EXTRACT}/vnpatchmanager" "${INSTALL_DIR}/"
     cp -r "${SRC_EXTRACT}/assets" "${INSTALL_DIR}/"
     [ -f "${SRC_EXTRACT}/vnpatchmanager.py" ] && cp "${SRC_EXTRACT}/vnpatchmanager.py" "${INSTALL_DIR}/"
+    [ -f "${SRC_EXTRACT}/vndb_steam_database.json" ] && cp "${SRC_EXTRACT}/vndb_steam_database.json" "${INSTALL_DIR}/"
     mkdir -p "${INSTALL_DIR}/scripts"
     if [ -d "${SRC_EXTRACT}/scripts" ]; then
         cp -r "${SRC_EXTRACT}/scripts/"* "${INSTALL_DIR}/scripts/"

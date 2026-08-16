@@ -70,23 +70,38 @@ class VNDBScanner:
     API_URL = "https://api.vndb.org/kana/release"
     SNAPSHOT_URL = "https://query.vndb.org/"
     CACHE_FILE = Path.home() / ".cache" / "vnpatchmanager" / "vndb_cache.json"
-    # Important: Adjust Path(__file__).parent / ".." to get to the root where the db json might live
     BUNDLED_DB_PATH = Path(__file__).parent.parent / "vndb_steam_database.json"
     CACHE_TTL_SECONDS = 86400 * 7 # 7 days (bundled DB provides instant offline baseline)
 
     SCHEMA_VERSION = 3
 
+    @classmethod
+    def find_database_file(cls, explicit_path: Path = None) -> Path:
+        if explicit_path and explicit_path.exists():
+            return explicit_path
+        candidates = [
+            Path(__file__).parent.parent / "vndb_steam_database.json",
+            Path(__file__).parent / "vndb_steam_database.json",
+            Path.home() / ".local/share/vnpm/vndb_steam_database.json",
+            Path.home() / ".cache/vnpatchmanager/vndb_cache.json"
+        ]
+        for c in candidates:
+            if c.exists():
+                return c
+        return candidates[0]
+
     def __init__(self, cache_file: Path = None, bundled_db_path: Path = None):
         self.cache_file = cache_file or self.CACHE_FILE
-        self.bundled_db_path = bundled_db_path or self.BUNDLED_DB_PATH
+        self.bundled_db_path = bundled_db_path or self.find_database_file()
         self.cache_file.parent.mkdir(parents=True, exist_ok=True)
         self.bundled_db = self._load_bundled_db()
         self.cache = self._load_cache()
 
     def _load_bundled_db(self) -> dict:
-        if self.bundled_db_path and self.bundled_db_path.exists():
+        db_path = self.find_database_file(self.bundled_db_path)
+        if db_path and db_path.exists():
             try:
-                with open(self.bundled_db_path, "r", encoding="utf-8") as f:
+                with open(db_path, "r", encoding="utf-8") as f:
                     return json.load(f)
             except Exception as e:
                 logger.error(f"Error loading bundled VNDB database: {e}")

@@ -312,3 +312,57 @@ def test_scan_smb_rpa_auto_detection_and_oserrors(temp_config_dir, tmp_path):
         assert patch_info["actions"][0]["type"] == "copy_file"
         assert patch_info["actions"][0]["source"] == "archive.rpa"
 
+
+def test_find_database_file_and_cache_fallback(tmp_path, temp_config_dir):
+    cache_db = tmp_path / "vndb_cache.json"
+    cache_db.write_text(json.dumps({
+        "_schema_version": 3,
+        "_timestamp": 12345678,
+        "900088": {
+            "vn_title": "Cache Fallback Romance VN",
+            "has_18plus_en_patch": True
+        }
+    }))
+
+    with patch.object(PatchRepository, "find_database_file", return_value=cache_db):
+        cm = ConfigManager()
+        repo = PatchRepository(cm, bundled_db_path=cache_db)
+        aid, title = repo.match_title_to_app_id("Cache Fallback Romance VN")
+        assert aid == "900088"
+        assert title == "Cache Fallback Romance VN"
+
+
+def test_scan_local_multiple_archives_in_same_folder(temp_config_dir, tmp_path):
+    repo_dir = tmp_path / "multi_archives"
+    repo_dir.mkdir()
+
+    (repo_dir / "GameA_Patch.zip").write_bytes(b"zip a")
+    (repo_dir / "GameB_Patch.zip").write_bytes(b"zip b")
+
+    sub_dir = repo_dir / "subfolder"
+    sub_dir.mkdir()
+    (sub_dir / "GameC_Patch.7z").write_bytes(b"7z c")
+
+    cm = ConfigManager()
+    cm.config["mode"] = "local"
+    cm.config["local_path"] = str(repo_dir)
+
+    repo = PatchRepository(cm)
+
+    def mock_match(query):
+        if "GameA" in query:
+            return "900101", "Game A"
+        if "GameB" in query:
+            return "900102", "Game B"
+        if "GameC" in query:
+            return "900103", "Game C"
+        return None, None
+
+    with patch.object(repo, "match_title_to_app_id", side_effect=mock_match):
+        repo.refresh_patches()
+
+    assert "900101" in repo.available_patches
+    assert "900102" in repo.available_patches
+    assert "900103" in repo.available_patches
+
+
