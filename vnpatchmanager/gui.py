@@ -3,7 +3,7 @@ import threading
 import queue
 import time
 import webbrowser
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -41,6 +41,9 @@ from .version import get_version
 
 APP_NAME = "VN Patch Manager"
 APP_VERSION = get_version()
+
+MODE_LOCAL_DISPLAY = "📁 Local Storage"
+MODE_SMB_DISPLAY = "🌐 Network Share (NAS)"
 
 
 class VNPatchManagerApp(ctk.CTk):
@@ -266,15 +269,32 @@ class VNPatchManagerApp(ctk.CTk):
         )
         self.btn_refresh.pack(side="right", padx=(8, 0))
 
-    def _setup_settings_tab(self):
-        self.tab_settings.grid_columnconfigure(1, weight=1)
+    def _browse_local_path(self):
+        """Opens a folder picker to choose local patch repository directory."""
+        curr_path = self.entry_local_path.get().strip() or str(Path.home())
+        selected = filedialog.askdirectory(
+            parent=self,
+            title="Select Local Patch Folder",
+            initialdir=curr_path
+        )
+        if selected:
+            self.entry_local_path.delete(0, "end")
+            self.entry_local_path.insert(0, selected)
 
-        # Connection Mode
-        ctk.CTkLabel(self.tab_settings, text="Connection Mode:", font=ctk.CTkFont(weight="bold"), text_color="#f1f5f9").grid(row=0, column=0, padx=12, pady=12, sticky="w")
-        self.var_mode = ctk.StringVar(value=self.config_manager.config.get("mode"))
+    def _setup_settings_tab(self):
+        self.tab_settings.grid_columnconfigure(0, weight=1)
+
+        # Connection Mode Header Frame (Row 0)
+        mode_header = ctk.CTkFrame(self.tab_settings, fg_color="transparent")
+        mode_header.grid(row=0, column=0, padx=12, pady=(12, 6), sticky="w")
+
+        ctk.CTkLabel(mode_header, text="Connection Mode:", font=ctk.CTkFont(weight="bold"), text_color="#f1f5f9").pack(side="left", padx=(0, 12))
+        curr_mode = self.config_manager.config.get("mode", "local")
+        initial_mode_display = MODE_SMB_DISPLAY if curr_mode == "smb" else MODE_LOCAL_DISPLAY
+        self.var_mode = ctk.StringVar(value=initial_mode_display)
         self.opt_mode = ctk.CTkSegmentedButton(
-            self.tab_settings,
-            values=["local", "smb"],
+            mode_header,
+            values=[MODE_LOCAL_DISPLAY, MODE_SMB_DISPLAY],
             variable=self.var_mode,
             command=self._toggle_settings_fields,
             fg_color="#121212",
@@ -283,43 +303,77 @@ class VNPatchManagerApp(ctk.CTk):
             unselected_hover_color="#1e1e1e",
             text_color="#f1f5f9"
         )
-        self.opt_mode.grid(row=0, column=1, padx=12, pady=12, sticky="w")
+        self.opt_mode.pack(side="left")
+
+        # Dynamic Content Container (Row 1) - unified slot
+        self.frame_mode_container = ctk.CTkFrame(self.tab_settings, fg_color="transparent")
+        self.frame_mode_container.grid(row=1, column=0, padx=12, pady=4, sticky="nsew")
+        self.frame_mode_container.grid_columnconfigure(0, weight=1)
 
         # Local Settings Frame
-        self.frame_local = ctk.CTkFrame(self.tab_settings, fg_color="#121212", border_width=1, border_color="#27272a", corner_radius=10)
-        self.frame_local.grid(row=1, column=0, columnspan=2, padx=12, pady=8, sticky="nsew")
+        self.frame_local = ctk.CTkFrame(self.frame_mode_container, fg_color="#121212", border_width=1, border_color="#27272a", corner_radius=10)
+        self.frame_local.grid(row=0, column=0, sticky="nsew")
         self.frame_local.grid_columnconfigure(1, weight=1)
 
-        ctk.CTkLabel(self.frame_local, text="Local Path:", text_color="#f1f5f9").grid(row=0, column=0, padx=12, pady=12, sticky="w")
-        self.entry_local_path = ctk.CTkEntry(self.frame_local, fg_color="#18181b", border_color="#27272a", border_width=1, text_color="#f1f5f9")
-        self.entry_local_path.insert(0, self.config_manager.config.get("local_path"))
-        self.entry_local_path.grid(row=0, column=1, padx=12, pady=12, sticky="ew")
+        ctk.CTkLabel(self.frame_local, text="Patch Folder Path:", font=ctk.CTkFont(weight="bold"), text_color="#f1f5f9").grid(row=0, column=0, padx=12, pady=12, sticky="w")
+        self.entry_local_path = ctk.CTkEntry(
+            self.frame_local,
+            placeholder_text="/home/deck/Games/Patches or MicroSD path",
+            fg_color="#18181b",
+            border_color="#27272a",
+            border_width=1,
+            text_color="#f1f5f9"
+        )
+        self.entry_local_path.insert(0, self.config_manager.config.get("local_path", ""))
+        self.entry_local_path.grid(row=0, column=1, padx=(0, 8), pady=12, sticky="ew")
+
+        btn_browse = ctk.CTkButton(
+            self.frame_local,
+            text="📂 Browse...",
+            width=90,
+            fg_color="#27272a",
+            hover_color="#3f3f46",
+            command=self._browse_local_path
+        )
+        btn_browse.grid(row=0, column=2, padx=(0, 12), pady=12)
 
         # SMB Settings Frame
-        self.frame_smb = ctk.CTkFrame(self.tab_settings, fg_color="#121212", border_width=1, border_color="#27272a", corner_radius=10)
-        self.frame_smb.grid(row=2, column=0, columnspan=2, padx=12, pady=8, sticky="nsew")
+        self.frame_smb = ctk.CTkFrame(self.frame_mode_container, fg_color="#121212", border_width=1, border_color="#27272a", corner_radius=10)
+        self.frame_smb.grid(row=0, column=0, sticky="nsew")
         self.frame_smb.grid_columnconfigure(1, weight=1)
 
-        # SMB Fields
+        # SMB Fields (Friendlier Labels & Helpful Placeholders)
         smb_fields = [
-            ("SMB Server IP:", "smb_server"),
-            ("SMB Share Name:", "smb_share"),
-            ("Path inside Share:", "smb_path"),
-            ("Username:", "smb_username"),
-            ("Password:", "smb_password")
+            ("Server Address / IP:", "smb_server", "e.g. 192.168.1.100 or truenas.local"),
+            ("Share Name:", "smb_share", "e.g. Patches or Games"),
+            ("Subfolder Path (Optional):", "smb_path", "e.g. Visual Novel Patches/ (leave blank for root)"),
+            ("Username (Optional):", "smb_username", "Account or guest username"),
+            ("Password (Optional):", "smb_password", "Account password")
         ]
 
         self.smb_entries = {}
-        for idx, (label_text, key) in enumerate(smb_fields):
+        for idx, (label_text, key, placeholder) in enumerate(smb_fields):
             ctk.CTkLabel(self.frame_smb, text=label_text, text_color="#f1f5f9").grid(row=idx, column=0, padx=12, pady=6, sticky="w")
-            entry = ctk.CTkEntry(self.frame_smb, show="*" if "password" in key else "", fg_color="#18181b", border_color="#27272a", border_width=1, text_color="#f1f5f9")
+            entry = ctk.CTkEntry(
+                self.frame_smb,
+                placeholder_text=placeholder,
+                show="*" if "password" in key else "",
+                fg_color="#18181b",
+                border_color="#27272a",
+                border_width=1,
+                text_color="#f1f5f9"
+            )
             entry.insert(0, self.config_manager.config.get(key, ""))
             entry.grid(row=idx, column=1, padx=12, pady=6, sticky="ew")
             self.smb_entries[key] = entry
 
+        # Stable Footer Container (Row 2)
+        frame_actions = ctk.CTkFrame(self.tab_settings, fg_color="transparent")
+        frame_actions.grid(row=2, column=0, pady=(24, 10))
+
         # Save Button
         self.btn_save = ctk.CTkButton(
-            self.tab_settings,
+            frame_actions,
             text="Save Settings & Refresh",
             font=ctk.CTkFont(weight="bold"),
             height=34,
@@ -327,22 +381,22 @@ class VNPatchManagerApp(ctk.CTk):
             hover_color="#1d4ed8",
             command=self.save_settings
         )
-        self.btn_save.grid(row=3, column=0, columnspan=2, pady=(20, 10))
+        self.btn_save.pack(pady=(0, 10))
 
         # Version Info Label
         self.lbl_version = ctk.CTkLabel(
-            self.tab_settings,
+            frame_actions,
             text=f"{APP_NAME} v{APP_VERSION}",
             font=ctk.CTkFont(size=12),
             text_color="#71717a"
         )
-        self.lbl_version.grid(row=4, column=0, columnspan=2, pady=(0, 10))
+        self.lbl_version.pack()
 
         self._toggle_settings_fields(self.var_mode.get())
 
     def _toggle_settings_fields(self, mode):
         """Show/Hide frames based on selected mode."""
-        if mode == "local":
+        if mode in ("local", MODE_LOCAL_DISPLAY):
             self.frame_local.grid()
             self.frame_smb.grid_remove()
         else:
@@ -351,7 +405,8 @@ class VNPatchManagerApp(ctk.CTk):
 
     def save_settings(self):
         """Commits GUI inputs to the config manager."""
-        self.config_manager.config["mode"] = self.var_mode.get()
+        mode_val = self.var_mode.get()
+        self.config_manager.config["mode"] = "smb" if mode_val in ("smb", MODE_SMB_DISPLAY) else "local"
         self.config_manager.config["local_path"] = self.entry_local_path.get()
         for key, entry in self.smb_entries.items():
             self.config_manager.config[key] = entry.get()
@@ -663,11 +718,11 @@ class VNPatchManagerApp(ctk.CTk):
                 self._focused_tab_idx = 1
                 self._apply_focus_visuals()
             elif action == ACTION_LEFT:
-                self.var_mode.set("local")
-                self._toggle_settings_fields("local")
+                self.var_mode.set(MODE_LOCAL_DISPLAY)
+                self._toggle_settings_fields(MODE_LOCAL_DISPLAY)
             elif action == ACTION_RIGHT:
-                self.var_mode.set("smb")
-                self._toggle_settings_fields("smb")
+                self.var_mode.set(MODE_SMB_DISPLAY)
+                self._toggle_settings_fields(MODE_SMB_DISPLAY)
             elif action == ACTION_SELECT or action == ACTION_QUICK_ACTION:
                 self.save_settings()
             elif action == ACTION_BACK:
