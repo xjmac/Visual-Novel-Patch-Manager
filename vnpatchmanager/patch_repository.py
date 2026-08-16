@@ -18,9 +18,24 @@ class PatchRepository:
 
     BUNDLED_DB_PATH = Path(__file__).parent.parent / "vndb_steam_database.json"
 
+    @classmethod
+    def find_database_file(cls, explicit_path: Path = None) -> Path:
+        if explicit_path and explicit_path.exists():
+            return explicit_path
+        candidates = [
+            Path(__file__).parent.parent / "vndb_steam_database.json",
+            Path(__file__).parent / "vndb_steam_database.json",
+            Path.home() / ".local/share/vnpm/vndb_steam_database.json",
+            Path.home() / ".cache/vnpatchmanager/vndb_cache.json"
+        ]
+        for c in candidates:
+            if c.exists():
+                return c
+        return candidates[0]
+
     def __init__(self, config_manager, bundled_db_path: Path = None):
         self.cm = config_manager
-        self.bundled_db_path = bundled_db_path or self.BUNDLED_DB_PATH
+        self.bundled_db_path = bundled_db_path or self.find_database_file()
         self.available_patches = {} # Map AppID -> Patch config data
         self._title_map = None
 
@@ -37,19 +52,22 @@ class PatchRepository:
             return self._title_map
 
         title_map = {}
-        if self.bundled_db_path and self.bundled_db_path.exists():
+        db_path = self.find_database_file(self.bundled_db_path)
+        if db_path and db_path.exists():
             try:
-                with open(self.bundled_db_path, "r", encoding="utf-8") as f:
+                with open(db_path, "r", encoding="utf-8") as f:
                     db = json.load(f)
                 for aid, data in db.items():
+                    if str(aid).startswith("_") or not isinstance(data, dict):
+                        continue
                     vn_title = data.get("vn_title", "")
                     if vn_title:
-                        title_map[self._normalize_title(vn_title)] = (aid, vn_title)
+                        title_map[self._normalize_title(vn_title)] = (str(aid), vn_title)
                     for p in data.get("patch_releases", []):
                         p_title = p.get("title", "")
                         if p_title:
                             p_clean = re.sub(r"\b(patch|18\+|r18|uncensored|restoration|dlc|steam)\b", "", p_title, flags=re.IGNORECASE)
-                            title_map[self._normalize_title(p_clean)] = (aid, vn_title)
+                            title_map[self._normalize_title(p_clean)] = (str(aid), vn_title)
             except (OSError, json.JSONDecodeError) as e:
                 logger.warning(f"Error loading title map for patch repository: {e}")
 
@@ -184,23 +202,17 @@ class PatchRepository:
                     continue
 
             # 4. Auto-detection: Standalone archives (.zip, .7z, .rar)
-            # Only use archive if no extracted subfolder is present
-            has_extracted_subfolder = any(
-                (r_path / d).is_dir() and any((r_path / d).glob("*"))
-                for d in dirs
-            )
-            if not has_extracted_subfolder:
-                archives = [f for f in files if any(f.lower().endswith(ext) for ext in [".zip", ".7z", ".rar"])]
-                for arc in archives:
-                    aid, title = self.match_title_to_app_id(arc)
-                    if not aid:
-                        aid, title = self.match_title_to_app_id(r_path.name)
-                    if aid and aid not in self.available_patches:
-                        self.available_patches[aid] = {
-                            "steam_app_id": aid,
-                            "game_name": title or r_path.name,
-                            "actions": [
-                                {
+            archives = [f for f in files if any(f.lower().endswith(ext) for ext in [".zip", ".7z", ".rar"])]
+            for arc in archives:
+                aid, title = self.match_title_to_app_id(arc)
+                if not aid:
+                    aid, title = self.match_title_to_app_id(r_path.name)
+                if aid and aid not in self.available_patches:
+                    self.available_patches[aid] = {
+                        "steam_app_id": aid,
+                        "game_name": title or r_path.name,
+                        "actions": [
+                            {
                                 "type": "extract_archive",
                                 "source": arc,
                                 "destination": "{game_dir}/"
@@ -208,7 +220,6 @@ class PatchRepository:
                         ],
                         "patch_source_dir": str(r_path)
                     }
-                    dirs[:] = []
 
     def _scan_smb(self):
         if smbclient is None:
