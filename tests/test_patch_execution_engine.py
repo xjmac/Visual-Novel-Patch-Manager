@@ -570,8 +570,12 @@ def test_get_patch_status_manual_rpa(tmp_path):
     game_sub.mkdir()
     assert not PatchExecutionEngine.get_patch_status(game_dir)
 
-    # Adding assets.rpa into game/
-    (game_sub / "assets.rpa").write_bytes(b"rpa data")
+    # Adding stock assets.rpa alone is not considered patched without patch_data
+    (game_sub / "assets.rpa").write_bytes(b"stock rpa data")
+    assert PatchExecutionEngine.get_patch_status(game_dir) is False
+
+    # Adding dedicated patch rpa (e.g. r18.rpa or patch.rpa) is detected
+    (game_sub / "r18.rpa").write_bytes(b"rpa data")
     assert PatchExecutionEngine.get_patch_status(game_dir) is True
 
 
@@ -903,8 +907,48 @@ def test_find_proton_experimental_and_custom_sorting(mock_steam_structure):
         assert "Experimental" in str(proton_bin)
 
 
+def test_get_patch_status_replacement_rpa_size_verification(tmp_path):
+    game_dir = tmp_path / "RenpyGame"
+    game_dir.mkdir()
+    game_sub = game_dir / "game"
+    game_sub.mkdir()
 
+    # Stock unpatched game has small assets.rpa (3.9 MB)
+    stock_rpa = game_sub / "assets.rpa"
+    stock_rpa.write_bytes(b"A" * 1000)
 
+    # Patch source has replacement assets.rpa (98 MB)
+    patch_dir = tmp_path / "PatchSource"
+    patch_data_dir = patch_dir / "patch_data"
+    patch_data_dir.mkdir(parents=True)
+    patch_rpa = patch_data_dir / "assets.rpa"
+    patch_rpa.write_bytes(b"B" * 5000)
 
+    patch_manifest = {
+        "steam_app_id": "2375080",
+        "actions": [
+            {
+                "type": "copy_file",
+                "source": "patch_data",
+                "destination": "{game_dir}/game/"
+            }
+        ],
+        "patch_source_dir": str(patch_dir)
+    }
 
+    # 1. Unpatched: stock file size (1000) does not match patch size (5000)
+    status_unpatched = PatchExecutionEngine.get_patch_status(
+        game_dir,
+        patch_data=patch_manifest,
+        vn_info={"has_18plus_en_patch": True, "is_vn": True}
+    )
+    assert status_unpatched is False
 
+    # 2. Patched: write patch file into game
+    stock_rpa.write_bytes(b"B" * 5000)
+    status_patched = PatchExecutionEngine.get_patch_status(
+        game_dir,
+        patch_data=patch_manifest,
+        vn_info={"has_18plus_en_patch": True, "is_vn": True}
+    )
+    assert status_patched is True
