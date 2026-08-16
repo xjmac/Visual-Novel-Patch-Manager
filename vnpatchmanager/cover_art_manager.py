@@ -127,7 +127,7 @@ class CoverArtManager:
         if cache_path.exists() and cache_path.stat().st_size > 0:
             try:
                 pil_img = Image.open(cache_path).convert("RGB")
-                pil_img = pil_img.resize(size, Image.Resampling.LANCZOS)
+                pil_img = pil_img.resize(size, Image.Resampling.BICUBIC)
                 ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=size)
                 if len(self._image_cache) >= self.MAX_CACHE_SIZE:
                     self._image_cache.pop(next(iter(self._image_cache)))

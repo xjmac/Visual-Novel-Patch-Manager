@@ -855,7 +855,7 @@ class VNPatchManagerApp(ctk.CTk):
                     self.search_var.set("")
                     self._apply_focus_visuals()
 
-    def _apply_focus_visuals(self):
+    def _apply_focus_visuals(self, force_all: bool = False):
         """Updates high-contrast OLED visual focus borders across all UI components."""
         # 1. Update Tabview and Toolbar Focus Highlights
         is_tabs_focused = (self._focused_zone == "TABS")
@@ -908,39 +908,57 @@ class VNPatchManagerApp(ctk.CTk):
                 fg_color="#1d4ed8" if is_refresh_focused else "#2563eb"
             )
 
-        # 2. Update Card Focus Highlights
-        for idx, entry in enumerate(self._card_entries):
-            card = entry.get("card")
-            if not card or not card.winfo_exists():
+        # 2. Update Card Focus Highlights (Differential O(1) Updates)
+        is_library = (self._focused_zone == "LIBRARY")
+        cur_card_idx = self._focused_card_idx if is_library else None
+        prev_card_idx = getattr(self, "_prev_focused_card_idx", None)
+
+        if force_all or prev_card_idx is None:
+            for idx in range(len(self._card_entries)):
+                self._apply_card_visual(idx, is_focused=(idx == cur_card_idx))
+        else:
+            # Unfocus previously focused card if it changed or button index changed
+            if prev_card_idx != cur_card_idx or getattr(self, "_prev_focused_btn_idx", None) != self._focused_btn_idx:
+                if prev_card_idx is not None:
+                    self._apply_card_visual(prev_card_idx, is_focused=False)
+            # Focus current card
+            if cur_card_idx is not None:
+                self._apply_card_visual(cur_card_idx, is_focused=True)
+
+        self._prev_focused_card_idx = cur_card_idx
+        self._prev_focused_btn_idx = self._focused_btn_idx
+
+    def _apply_card_visual(self, idx: int, is_focused: bool):
+        """Applies high-contrast focus highlight to a single card in O(1) time."""
+        if not (0 <= idx < len(self._card_entries)):
+            return
+        entry = self._card_entries[idx]
+        card = entry.get("card")
+        if not card or not card.winfo_exists():
+            return
+
+        if is_focused:
+            card.configure(
+                border_color="#3b82f6",
+                border_width=3,
+                fg_color="#1e293b"
+            )
+            self._scroll_card_into_view(card)
+        else:
+            card.configure(
+                border_color="#27272a",
+                border_width=1,
+                fg_color="#121212"
+            )
+
+        buttons = entry.get("buttons", [])
+        for b_idx, btn in enumerate(buttons):
+            if not btn.winfo_exists():
                 continue
-
-            is_card_focused = (self._focused_zone == "LIBRARY" and idx == self._focused_card_idx)
-
-            if is_card_focused:
-                # Vibrant Glowing Blue Focus Outline + Elevated Surface
-                card.configure(
-                    border_color="#3b82f6",
-                    border_width=3,
-                    fg_color="#1e293b"
-                )
-                self._scroll_card_into_view(card)
+            if is_focused and b_idx == self._focused_btn_idx:
+                btn.configure(border_color="#93c5fd", border_width=2)
             else:
-                card.configure(
-                    border_color="#27272a",
-                    border_width=1,
-                    fg_color="#121212"
-                )
-
-            # Update Button Highlights inside this card
-            buttons = entry.get("buttons", [])
-            for b_idx, btn in enumerate(buttons):
-                if not btn.winfo_exists():
-                    continue
-                if is_card_focused and b_idx == self._focused_btn_idx:
-                    # Highlighted active button
-                    btn.configure(border_color="#93c5fd", border_width=2)
-                else:
-                    btn.configure(border_width=0 if btn.cget("fg_color") != "transparent" else 1)
+                btn.configure(border_width=0 if btn.cget("fg_color") != "transparent" else 1)
 
     def _scroll_card_into_view(self, card_widget):
         """Auto-scrolls the scrollable frame viewport so the focused card is fully visible without jitter."""
