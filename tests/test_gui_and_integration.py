@@ -1324,6 +1324,45 @@ def test_gui_controller_header_scan_button_navigation(app_instance):
     assert app_instance._focused_zone == "SETTINGS"
 
 
+def test_placeholder_steam_app_name_resolution(app_instance):
+    """Verifies that uninstalled or local patch games with 'Steam App #xxxx' names resolve to canonical titles."""
+    synthetic_game = {
+        "name": "Steam App #990001",
+        "path": "",
+        "library_path": "",
+        "is_installed": False,
+        "vndb": {
+            "vn_id": "v99999",
+            "vn_title": "Synthetic Mystery Novel",
+            "is_vn": True,
+            "has_18plus_en_patch": True,
+            "rating": 8.5
+        }
+    }
+
+    # Verify status info resolution
+    status_info = app_instance._compute_status_info("990001", synthetic_game)
+    assert synthetic_game["name"] == "Synthetic Mystery Novel"
+    assert "synthetic mystery novel" in status_info["search_haystack"]
+
+    # Test patch repository game_name fallback when vndb title is missing
+    synthetic_patch_game = {
+        "name": "Steam App #990002",
+        "path": "",
+        "library_path": "",
+        "is_installed": False,
+        "vndb": {}
+    }
+    app_instance.repo.available_patches["990002"] = {
+        "steam_app_id": "990002",
+        "game_name": "Synthetic Fantasy Chronicle"
+    }
+    status_info_2 = app_instance._compute_status_info("990002", synthetic_patch_game)
+    assert synthetic_patch_game["name"] == "Synthetic Fantasy Chronicle"
+    assert "synthetic fantasy chronicle" in status_info_2["search_haystack"]
+
+
+
 
 
 
