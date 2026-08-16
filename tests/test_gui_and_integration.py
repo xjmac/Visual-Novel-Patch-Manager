@@ -273,8 +273,8 @@ def test_search_and_status_filtering(app_instance, mock_steam_structure):
     app_instance.search_var.set("")
     app_instance._apply_filters_and_render()
 
-    # 3. Test Filter: Available
-    app_instance.filter_var.set("Available")
+    # 3. Test Filter: Patch Available
+    app_instance.filter_var.set("Patch Available")
     app_instance._apply_filters_and_render()
     assert len(app_instance.scrollable_games.winfo_children()) == 1
 
@@ -717,10 +717,17 @@ def test_oled_pure_black_theming_and_card_styling(app_instance, mock_steam_struc
     assert app_instance.tabview.cget("fg_color") == "#000000"
     assert app_instance.scrollable_games.cget("fg_color") == "#000000"
 
-    # Verify card surface and border
+    # Verify focused card styling (prominent blue border + elevated surface)
     cards = app_instance.scrollable_games.winfo_children()
     assert len(cards) == 1
     card = cards[0]
+    assert card.cget("fg_color") == "#1e293b"
+    assert card.cget("border_color") == "#3b82f6"
+    assert card.cget("border_width") == 3
+
+    # Switch focus to Toolbar -> card returns to unfocused #121212 and #27272a
+    app_instance._focused_zone = "TOOLBAR"
+    app_instance._apply_focus_visuals()
     assert card.cget("fg_color") == "#121212"
     assert card.cget("border_color") == "#27272a"
     assert card.cget("border_width") == 1
@@ -779,3 +786,107 @@ def test_multi_field_search_indexing(app_instance, mock_steam_structure):
     app_instance.search_var.set("")
     app_instance._apply_filters_and_render()
     assert len(app_instance.scrollable_games.winfo_children()) == 2
+
+
+def test_controller_card_navigation_and_visual_focus(app_instance, mock_steam_structure):
+    games = {
+        "900001": {
+            "name": "Synthetic VN Alpha",
+            "path": mock_steam_structure["game1"]["path"],
+            "library_path": mock_steam_structure["game1"]["library_path"],
+            "is_installed": True
+        },
+        "900002": {
+            "name": "Synthetic VN Beta",
+            "path": mock_steam_structure["game2"]["path"],
+            "library_path": mock_steam_structure["game2"]["library_path"],
+            "is_installed": True
+        }
+    }
+    app_instance.view_var.set("Grid")
+    app_instance._populate_game_list(games)
+    app_instance.update()
+
+    # Initial focus should be on card 0
+    app_instance._focused_zone = "LIBRARY"
+    app_instance._focused_card_idx = 0
+    app_instance._focused_btn_idx = -1
+    app_instance._apply_focus_visuals()
+
+    assert len(app_instance._card_entries) == 2
+    card0 = app_instance._card_entries[0]["card"]
+    card1 = app_instance._card_entries[1]["card"]
+
+    # Focused Card 0: Must have 3px bright blue border and elevated surface
+    assert card0.cget("border_width") == 3
+    assert card0.cget("border_color") == "#3b82f6"
+    assert card0.cget("fg_color") == "#1e293b"
+
+    # Unfocused Card 1: Must have 1px dark border
+    assert card1.cget("border_width") == 1
+    assert card1.cget("border_color") == "#27272a"
+    assert card1.cget("fg_color") == "#121212"
+
+    # Move Right -> Focus moves to card 1
+    from vnpatchmanager.controller_manager import ACTION_RIGHT, ACTION_LEFT, ACTION_UP, ACTION_DOWN
+    app_instance._handle_controller_action(ACTION_RIGHT)
+    assert app_instance._focused_card_idx == 1
+    assert card1.cget("border_width") == 3
+    assert card1.cget("border_color") == "#3b82f6"
+
+    # Move Left -> Returns to card 0
+    app_instance._handle_controller_action(ACTION_LEFT)
+    assert app_instance._focused_card_idx == 0
+
+    # Move Up from row 0 -> Jumps focus to Toolbar
+    app_instance._handle_controller_action(ACTION_UP)
+    assert app_instance._focused_zone == "TOOLBAR"
+    assert app_instance._search_frame.cget("border_width") == 2
+    assert app_instance._search_frame.cget("border_color") == "#3b82f6"
+
+
+def test_controller_search_bar_osk_trigger(app_instance, mock_steam_structure):
+    from vnpatchmanager.controller_manager import ACTION_SEARCH, ACTION_SELECT
+    from vnpatchmanager.steamos_helper import SteamOSHelper
+
+    with patch.object(SteamOSHelper, "show_onscreen_keyboard") as mock_osk:
+        # Trigger quick search via Y button action
+        app_instance._handle_controller_action(ACTION_SEARCH)
+        assert app_instance._focused_zone == "TOOLBAR"
+        assert app_instance._focused_toolbar_idx == 0
+        mock_osk.assert_called_once()
+
+
+def test_controller_bumper_tab_switching(app_instance):
+    from vnpatchmanager.controller_manager import ACTION_NEXT_TAB, ACTION_PREV_TAB
+
+    # L1 / R1 bumper switching
+    app_instance._handle_controller_action(ACTION_NEXT_TAB)
+    assert app_instance.tabview.get() == "Settings"
+    assert app_instance._focused_zone == "SETTINGS"
+
+    app_instance._handle_controller_action(ACTION_PREV_TAB)
+    assert app_instance.tabview.get() == "Games Library"
+    assert app_instance._focused_zone == "LIBRARY"
+
+
+def test_controller_quick_action_x_button(app_instance, mock_steam_structure, mock_patch_repo):
+    from vnpatchmanager.controller_manager import ACTION_QUICK_ACTION
+
+    app_instance.repo.available_patches = {"900001": mock_patch_repo["patch1_manifest"]}
+    games = {
+        "900001": {
+            "name": "Synthetic VN Alpha",
+            "path": mock_steam_structure["game1"]["path"],
+            "library_path": mock_steam_structure["game1"]["library_path"],
+            "is_installed": True
+        }
+    }
+    app_instance.view_var.set("Grid")
+    app_instance._populate_game_list(games)
+    app_instance.update()
+
+    with patch.object(app_instance, "run_patch") as mock_run:
+        app_instance._handle_controller_action(ACTION_QUICK_ACTION)
+        mock_run.assert_called_once()
+

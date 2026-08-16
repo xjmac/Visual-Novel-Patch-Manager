@@ -20,8 +20,25 @@ from .cover_art_manager import CoverArtManager
 from .vndb_scanner import VNDBScanner
 from .patch_execution import PatchExecutionEngine
 from .backup_manager import BackupManager
+from .steamos_helper import SteamOSHelper
+from .controller_manager import (
+    GamepadControllerManager,
+    ACTION_UP,
+    ACTION_DOWN,
+    ACTION_LEFT,
+    ACTION_RIGHT,
+    ACTION_SELECT,
+    ACTION_BACK,
+    ACTION_QUICK_ACTION,
+    ACTION_SEARCH,
+    ACTION_PREV_TAB,
+    ACTION_NEXT_TAB,
+    ACTION_SCROLL_UP,
+    ACTION_SCROLL_DOWN,
+)
 
 APP_NAME = "VN Patch Manager"
+
 
 class VNPatchManagerApp(ctk.CTk):
     def __init__(self):
@@ -63,6 +80,14 @@ class VNPatchManagerApp(ctk.CTk):
         self._search_debounce_job = None
         self._active_render_job = None
 
+        # Controller & Spatial Focus State
+        self._card_entries = []  # List of rendered card dictionaries
+        self._focused_zone = "LIBRARY"  # "LIBRARY", "TOOLBAR", "SETTINGS"
+        self._focused_card_idx = 0
+        self._focused_btn_idx = -1  # -1 = whole card, >= 0 = specific button in card
+        self._focused_toolbar_idx = 0  # 0: Search, 1: Filter, 2: Sort, 3: View, 4: Scan
+        self._search_frame = None
+
         # Trace search input with debounce
         self.search_var.trace_add("write", self._on_search_changed)
 
@@ -102,8 +127,24 @@ class VNPatchManagerApp(ctk.CTk):
         self._gui_queue = queue.Queue()
         self.after(50, self._process_gui_queue)
 
+        # Gamepad & Keyboard Navigation Initialization
+        self.controller_manager = GamepadControllerManager(
+            action_callback=lambda act: self.run_on_main_thread(self._handle_controller_action, act)
+        )
+        self.controller_manager.start()
+        self._bind_controller_and_keyboard_events()
+
         # Initial Data Load
         self.refresh_data()
+
+    def destroy(self):
+        """Cleanly stops background controller listener before closing."""
+        try:
+            if hasattr(self, "controller_manager") and self.controller_manager:
+                self.controller_manager.stop()
+        except Exception:
+            pass
+        super().destroy()
 
     def run_on_main_thread(self, func, *args, **kwargs):
         """Thread-safe dispatch to execute a function on the main Tkinter thread."""
@@ -129,6 +170,38 @@ class VNPatchManagerApp(ctk.CTk):
                 self.after(50, self._process_gui_queue)
             except Exception:
                 pass
+
+    def _bind_controller_and_keyboard_events(self):
+        """Binds universal keyboard and Steam Input shortcut keys."""
+        self.bind_all("<Up>", lambda e: self._on_key_event(ACTION_UP, e))
+        self.bind_all("<Down>", lambda e: self._on_key_event(ACTION_DOWN, e))
+        self.bind_all("<Left>", lambda e: self._on_key_event(ACTION_LEFT, e))
+        self.bind_all("<Right>", lambda e: self._on_key_event(ACTION_RIGHT, e))
+        self.bind_all("<Return>", lambda e: self._on_key_event(ACTION_SELECT, e))
+        self.bind_all("<Escape>", lambda e: self._on_key_event(ACTION_BACK, e))
+        self.bind_all("<F1>", lambda e: self._on_key_event(ACTION_PREV_TAB, e))
+        self.bind_all("<F2>", lambda e: self._on_key_event(ACTION_NEXT_TAB, e))
+        self.bind_all("<Prior>", lambda e: self._on_key_event(ACTION_SCROLL_UP, e))
+        self.bind_all("<Next>", lambda e: self._on_key_event(ACTION_SCROLL_DOWN, e))
+
+    def _on_key_event(self, action: str, event=None):
+        """Filters keyboard events if user is currently typing in an Entry widget."""
+        focused_widget = self.focus_get()
+        if isinstance(focused_widget, (ctk.CTkEntry,)):
+            # If in entry, let standard typing happen except for Escape / Return
+            if action == ACTION_BACK:
+                self._handle_controller_action(ACTION_BACK)
+                return "break"
+            elif action == ACTION_SELECT:
+                self._handle_controller_action(ACTION_SELECT)
+                return "break"
+            elif action in (ACTION_UP, ACTION_DOWN):
+                self._handle_controller_action(action)
+                return "break"
+            return None
+
+        self._handle_controller_action(action)
+        return "break"
 
     def _on_search_changed(self, *args):
         """Debounces search input to prevent UI lag during typing."""
@@ -290,6 +363,7 @@ class VNPatchManagerApp(ctk.CTk):
         )
         search_frame.grid(row=0, column=0, sticky="ew", padx=(0, 10))
         search_frame.grid_columnconfigure(1, weight=1)
+        self._search_frame = search_frame
 
         lbl_search_icon = ctk.CTkLabel(
             search_frame,
@@ -311,6 +385,7 @@ class VNPatchManagerApp(ctk.CTk):
             height=30
         )
         self.entry_search.grid(row=0, column=1, sticky="ew", padx=(0, 4), pady=2)
+        self.entry_search.bind("<FocusIn>", self._on_search_focused)
 
         self.btn_clear_search = ctk.CTkButton(
             search_frame,
@@ -329,7 +404,7 @@ class VNPatchManagerApp(ctk.CTk):
         # Status Filter
         self.opt_filter = ctk.CTkSegmentedButton(
             toolbar_frame,
-            values=["All", "Available", "Patched", "Missing 18+ (VNDB)", "Backed Up"],
+            values=["All", "Patch Available", "Patched", "Missing 18+ (VNDB)", "Backed Up"],
             variable=self.filter_var,
             command=lambda v: self._apply_filters_and_render(),
             fg_color="#121212",
@@ -368,174 +443,344 @@ class VNPatchManagerApp(ctk.CTk):
         )
         self.opt_view.grid(row=0, column=3)
 
-        # Scrollable Game Cards Container - OLED Pure Black Background
+        # Scrollable Game Area - OLED Pure Black Surface
         self.scrollable_games = ctk.CTkScrollableFrame(
             self.tab_games,
-            corner_radius=8,
             fg_color="#000000",
-            scrollbar_button_color="#27272a",
-            scrollbar_button_hover_color="#3f3f46"
+            corner_radius=10,
+            border_width=1,
+            border_color="#18181b"
         )
-        self.scrollable_games.grid(row=1, column=0, sticky="nsew", padx=4, pady=(0, 4))
+        self.scrollable_games.grid(row=1, column=0, sticky="nsew")
         self.scrollable_games.grid_columnconfigure(0, weight=1)
 
     def _setup_bottom_footer(self):
         footer_frame = ctk.CTkFrame(self, fg_color="transparent")
-        footer_frame.grid(row=2, column=0, padx=20, pady=(4, 10), sticky="ew")
+        footer_frame.grid(row=2, column=0, padx=20, pady=(4, 12), sticky="ew")
         footer_frame.grid_columnconfigure(0, weight=1)
 
-        self.lbl_status = ctk.CTkLabel(footer_frame, text="Ready", text_color="gray", font=ctk.CTkFont(size=12))
+        self.lbl_status = ctk.CTkLabel(footer_frame, text="Ready", font=ctk.CTkFont(size=12), text_color="gray")
         self.lbl_status.grid(row=0, column=0, sticky="w")
 
-        self.progress_bar = ctk.CTkProgressBar(footer_frame, width=200, height=10)
+        self.progress_bar = ctk.CTkProgressBar(footer_frame, width=200, height=8, mode="indeterminate", progress_color="#2563eb")
         self.progress_bar.grid(row=0, column=1, sticky="e")
         self.progress_bar.set(0)
 
+    def _on_search_focused(self, event=None):
+        """Invoked when the search entry receives focus; automatically opens the SteamOS OSK."""
+        self._focused_zone = "TOOLBAR"
+        self._focused_toolbar_idx = 0
+        SteamOSHelper.show_onscreen_keyboard()
+        self._apply_focus_visuals()
+
+    def _on_search_submit(self):
+        """Dismisses the OSK and returns focus to the game library."""
+        SteamOSHelper.hide_onscreen_keyboard()
+        self.focus_set()
+        self._focused_zone = "LIBRARY"
+        self._focused_card_idx = 0
+        self._focused_btn_idx = -1
+        self._apply_focus_visuals()
+
+    def _handle_controller_action(self, action: str):
+        """Processes virtual controller and keyboard navigation actions."""
+        # 1. Global Tab Switching (L1 / R1)
+        if action == ACTION_PREV_TAB:
+            self.tabview.set("Games Library")
+            self._focused_zone = "LIBRARY"
+            self._apply_focus_visuals()
+            return
+        elif action == ACTION_NEXT_TAB:
+            self.tabview.set("Settings")
+            self._focused_zone = "SETTINGS"
+            self._apply_focus_visuals()
+            return
+
+        # 2. Global Quick Search (Y Button)
+        if action == ACTION_SEARCH:
+            self.tabview.set("Games Library")
+            self._focused_zone = "TOOLBAR"
+            self._focused_toolbar_idx = 0
+            self.entry_search.focus_set()
+            SteamOSHelper.show_onscreen_keyboard()
+            self._apply_focus_visuals()
+            return
+
+        # 3. Fast Page Scrolling (L2 / R2 / Right Stick)
+        if action == ACTION_SCROLL_UP:
+            try:
+                self.scrollable_games._parent_canvas.yview_scroll(-4, "units")
+            except Exception:
+                pass
+            return
+        elif action == ACTION_SCROLL_DOWN:
+            try:
+                self.scrollable_games._parent_canvas.yview_scroll(4, "units")
+            except Exception:
+                pass
+            return
+
+        # 4. Zone: TOOLBAR
+        if self._focused_zone == "TOOLBAR":
+            if action == ACTION_LEFT:
+                self._focused_toolbar_idx = (self._focused_toolbar_idx - 1) % 5
+                self._apply_focus_visuals()
+            elif action == ACTION_RIGHT:
+                self._focused_toolbar_idx = (self._focused_toolbar_idx + 1) % 5
+                self._apply_focus_visuals()
+            elif action == ACTION_DOWN:
+                self._focused_zone = "LIBRARY"
+                self._focused_card_idx = 0
+                self._focused_btn_idx = -1
+                self.focus_set()
+                SteamOSHelper.hide_onscreen_keyboard()
+                self._apply_focus_visuals()
+            elif action == ACTION_SELECT:
+                if self._focused_toolbar_idx == 0:  # Search
+                    self.entry_search.focus_set()
+                    SteamOSHelper.show_onscreen_keyboard()
+                elif self._focused_toolbar_idx == 4:  # Refresh
+                    self.refresh_data()
+            elif action == ACTION_BACK:
+                self._on_search_submit()
+            return
+
+        # 5. Zone: LIBRARY
+        if self._focused_zone == "LIBRARY":
+            num_cards = len(self._card_entries)
+            if num_cards == 0:
+                if action == ACTION_UP:
+                    self._focused_zone = "TOOLBAR"
+                    self._focused_toolbar_idx = 0
+                    self._apply_focus_visuals()
+                return
+
+            is_grid = ("Grid" in self.view_var.get())
+            current_entry = self._card_entries[self._focused_card_idx] if 0 <= self._focused_card_idx < num_cards else None
+            num_buttons = len(current_entry["buttons"]) if current_entry else 0
+
+            if action == ACTION_UP:
+                if self._focused_btn_idx >= 0:
+                    # Move focus back to card container
+                    self._focused_btn_idx = -1
+                    self._apply_focus_visuals()
+                else:
+                    if is_grid:
+                        if self._focused_card_idx in (0, 1):
+                            self._focused_zone = "TOOLBAR"
+                            self._focused_toolbar_idx = 0
+                            self._apply_focus_visuals()
+                        else:
+                            self._focused_card_idx = max(0, self._focused_card_idx - 2)
+                            self._apply_focus_visuals()
+                    else:
+                        if self._focused_card_idx == 0:
+                            self._focused_zone = "TOOLBAR"
+                            self._focused_toolbar_idx = 0
+                            self._apply_focus_visuals()
+                        else:
+                            self._focused_card_idx = max(0, self._focused_card_idx - 1)
+                            self._apply_focus_visuals()
+
+            elif action == ACTION_DOWN:
+                if self._focused_btn_idx == -1 and num_buttons > 0:
+                    # Step down into the action button row
+                    self._focused_btn_idx = 0
+                    self._apply_focus_visuals()
+                else:
+                    self._focused_btn_idx = -1
+                    if is_grid:
+                        self._focused_card_idx = min(num_cards - 1, self._focused_card_idx + 2)
+                    else:
+                        self._focused_card_idx = min(num_cards - 1, self._focused_card_idx + 1)
+                    self._apply_focus_visuals()
+
+            elif action == ACTION_LEFT:
+                if self._focused_btn_idx > 0:
+                    self._focused_btn_idx -= 1
+                    self._apply_focus_visuals()
+                elif is_grid and self._focused_btn_idx == -1 and (self._focused_card_idx % 2 == 1):
+                    self._focused_card_idx -= 1
+                    self._apply_focus_visuals()
+
+            elif action == ACTION_RIGHT:
+                if self._focused_btn_idx >= 0 and self._focused_btn_idx < num_buttons - 1:
+                    self._focused_btn_idx += 1
+                    self._apply_focus_visuals()
+                elif is_grid and self._focused_btn_idx == -1 and (self._focused_card_idx % 2 == 0) and (self._focused_card_idx + 1 < num_cards):
+                    self._focused_card_idx += 1
+                    self._apply_focus_visuals()
+
+            elif action == ACTION_SELECT:
+                if current_entry:
+                    if self._focused_btn_idx >= 0 and self._focused_btn_idx < num_buttons:
+                        current_entry["buttons"][self._focused_btn_idx].invoke()
+                    elif current_entry.get("default_button"):
+                        current_entry["default_button"].invoke()
+
+            elif action == ACTION_QUICK_ACTION:  # X Button
+                if current_entry and current_entry.get("default_button"):
+                    current_entry["default_button"].invoke()
+
+            elif action == ACTION_BACK:
+                if self._focused_btn_idx >= 0:
+                    self._focused_btn_idx = -1
+                    self._apply_focus_visuals()
+                elif self.search_var.get():
+                    self.search_var.set("")
+                    self._apply_focus_visuals()
+
+    def _apply_focus_visuals(self):
+        """Updates high-contrast OLED visual focus borders across all UI components."""
+        # 1. Reset Toolbar Focus Highlights
+        if self._search_frame and self._search_frame.winfo_exists():
+            self._search_frame.configure(border_color="#3b82f6" if (self._focused_zone == "TOOLBAR" and self._focused_toolbar_idx == 0) else "#3f3f46", border_width=2 if (self._focused_zone == "TOOLBAR" and self._focused_toolbar_idx == 0) else 1)
+
+        if hasattr(self, 'btn_refresh') and self.btn_refresh.winfo_exists():
+            self.btn_refresh.configure(
+                border_color="#60a5fa" if (self._focused_zone == "TOOLBAR" and self._focused_toolbar_idx == 4) else "#1d4ed8",
+                border_width=2 if (self._focused_zone == "TOOLBAR" and self._focused_toolbar_idx == 4) else 0
+            )
+
+        # 2. Update Card Focus Highlights
+        for idx, entry in enumerate(self._card_entries):
+            card = entry.get("card")
+            if not card or not card.winfo_exists():
+                continue
+
+            is_card_focused = (self._focused_zone == "LIBRARY" and idx == self._focused_card_idx)
+
+            if is_card_focused:
+                # Vibrant Glowing Blue Focus Outline + Elevated Surface
+                card.configure(
+                    border_color="#3b82f6",
+                    border_width=3,
+                    fg_color="#1e293b"
+                )
+                self._scroll_card_into_view(card)
+            else:
+                card.configure(
+                    border_color="#27272a",
+                    border_width=1,
+                    fg_color="#121212"
+                )
+
+            # Update Button Highlights inside this card
+            buttons = entry.get("buttons", [])
+            for b_idx, btn in enumerate(buttons):
+                if not btn.winfo_exists():
+                    continue
+                if is_card_focused and b_idx == self._focused_btn_idx:
+                    # Highlighted active button
+                    btn.configure(border_color="#93c5fd", border_width=2)
+                else:
+                    btn.configure(border_width=0 if btn.cget("fg_color") != "transparent" else 1)
+
+    def _scroll_card_into_view(self, card_widget):
+        """Auto-scrolls the scrollable frame viewport so the focused card is fully visible."""
+        try:
+            canvas = self.scrollable_games._parent_canvas
+            card_y = card_widget.winfo_y()
+            card_h = card_widget.winfo_height() or 120
+            canvas_h = canvas.winfo_height() or 500
+            total_h = self.scrollable_games.winfo_height() or 1000
+
+            if total_h > canvas_h and total_h > 0:
+                fraction = max(0.0, min(1.0, (card_y - 20) / max(total_h - canvas_h, 1)))
+                canvas.yview_moveto(fraction)
+        except Exception:
+            pass
+
     def refresh_data(self):
-        """Scans Steam, NAS repository, and VNDB to update the UI with instant loading and background sync."""
-        self.lbl_status.configure(text="Loading visual novels...", text_color="gray")
+        """Scans Steam installations, updates patches from local/SMB, and populates the library."""
+        self.lbl_status.configure(text="Scanning Steam library & patch repository...", text_color="gray")
         self.progress_bar.configure(mode="indeterminate")
         self.progress_bar.start()
 
-        def _bg_task():
+        def _worker():
             try:
-                # ----------------------------------------------------
-                # PHASE 1: INSTANT LOCAL & BUNDLED DISCOVERY (< 0.05s)
-                # ----------------------------------------------------
-                # 1. Fetch available patches from NAS/Local
+                # 1. Scan Installed & Owned Steam Games
+                installed_games = self.steam_scanner.get_installed_games()
+                owned_games = self.steam_scanner.get_owned_games()
+                all_games = {**owned_games, **installed_games}
+
+                # 2. Refresh Patch Definitions from Local or SMB
                 self.repo.refresh_patches()
 
-                # 2. Get all owned Steam games (installed and uninstalled)
-                all_owned = self.steam_scanner.get_owned_games()
-
-                # 3. Get all existing cached & bundled VNDB metadata (< 0.005s)
+                # 3. Synchronize / Pre-cache VNDB Catalog Data
+                self.vndb_scanner.sync_vndb_snapshot(timeout_sec=8, force=False)
                 cached_vndb = self.vndb_scanner.get_cached_vns()
 
-                # 4. Build immediate initial game list
-                current_games = {}
-                for app_id, game_data in all_owned.items():
-                    patch_info = self.repo.available_patches.get(app_id)
-                    has_repo_patch = patch_info is not None
+                # Find un-cached AppIDs
+                uncached_ids = [aid for aid in all_games.keys() if aid not in cached_vndb]
+                if uncached_ids:
+                    fresh_vndb = self.vndb_scanner.check_app_ids(uncached_ids)
+                    cached_vndb.update(fresh_vndb)
+
+                # 4. Filter supported Visual Novels
+                supported = {}
+                for app_id, game_data in all_games.items():
                     vn_info = cached_vndb.get(app_id, {})
+                    game_data["vndb"] = vn_info
+                    has_local_patch = app_id in self.repo.available_patches
                     has_vndb_18_patch = vn_info.get("has_18plus_en_patch", False)
+                    is_installed = bool(game_data.get("is_installed", True)) and bool(game_data.get("path"))
 
-                    if has_repo_patch or has_vndb_18_patch:
-                        is_installed = bool(game_data.get("is_installed", True)) and bool(game_data.get("path"))
-                        is_patched = is_installed and PatchExecutionEngine.get_patch_status(game_data["path"], patch_info, vn_info)
-                        g_copy = game_data.copy()
-                        if vn_info:
-                            g_copy["vndb"] = vn_info
-                            if vn_info.get("vn_title") and (not g_copy.get("name") or g_copy["name"].startswith("Steam App #")):
-                                g_copy["name"] = vn_info["vn_title"]
-                        current_games[app_id] = g_copy
+                    if has_local_patch:
+                        supported[app_id] = game_data
+                    elif has_vndb_18_patch and (not is_installed or (is_installed and vn_info.get("is_vn", False))):
+                        if vn_info.get("is_vn", False):
+                            if not is_installed and vn_info.get("vn_title"):
+                                game_data["name"] = vn_info["vn_title"]
+                            supported[app_id] = game_data
 
-                # Also add uninstalled games from cache that have 18+ patches
-                for app_id, vn_info in cached_vndb.items():
-                    if vn_info.get("has_18plus_en_patch") and app_id not in current_games and app_id in all_owned:
-                        owned_data = all_owned.get(app_id, {})
-                        current_games[app_id] = {
-                            "name": vn_info.get("vn_title") or owned_data.get("name", f"Steam App #{app_id}"),
-                            "path": owned_data.get("path", ""),
-                            "library_path": owned_data.get("library_path", ""),
-                            "is_installed": owned_data.get("is_installed", False),
-                            "vndb": vn_info
-                        }
+                # Pre-compute status & search index for each supported game in background
+                for aid, gdata in supported.items():
+                    gdata["status_info"] = self._compute_status_info(aid, gdata)
 
-                # Also add any games discovered from the patch repository that are in the user's library
-                for app_id, patch_data in self.repo.available_patches.items():
-                    if app_id in all_owned and app_id not in current_games:
-                        vn_info = cached_vndb.get(app_id, {})
-                        owned_data = all_owned.get(app_id, {})
-                        game_name = patch_data.get("game_name") or vn_info.get("vn_title") or owned_data.get("name", f"Steam App #{app_id}")
-                        current_games[app_id] = {
-                            "name": game_name,
-                            "path": owned_data.get("path", ""),
-                            "library_path": owned_data.get("library_path", ""),
-                            "is_installed": owned_data.get("is_installed", False),
-                            "vndb": vn_info
-                        }
+                # Pre-fetch cover arts
+                for app_id, gdata in supported.items():
+                    try:
+                        is_new = self.cover_manager.download_cover(app_id)
+                        if is_new:
+                            self.run_on_main_thread(lambda aid=app_id: self._refresh_banner(aid))
+                    except Exception:
+                        pass
 
-                # Compute cached status and search haystack in background thread
-                for app_id, game_data in current_games.items():
-                    game_data["status_info"] = self._compute_status_info(app_id, game_data)
+                self.run_on_main_thread(lambda: self._populate_game_list(supported))
 
-                # IMMEDIATELY populate UI (< 0.05s) so the user never waits
-                self.run_on_main_thread(self._populate_game_list, current_games.copy())
-
-                # Pre-download cover art for currently displayed games and refresh banners live
-                for app_id in list(current_games.keys()):
-                    if self.cover_manager.download_cover(app_id):
-                        self.run_on_main_thread(self._refresh_banner, app_id)
-
-                # ----------------------------------------------------
-                # PHASE 2: FAST ASYNCHRONOUS SNAPSHOT SYNC (~2-3s)
-                # ----------------------------------------------------
-                self.run_on_main_thread(
-                    lambda: self.lbl_status.configure(text="Checking VNDB for updates...", text_color="gray")
-                )
-
-                synced = self.vndb_scanner.sync_vndb_snapshot()
-                if synced:
-                    updated_vndb = self.vndb_scanner.get_cached_vns()
-                    changed = False
-                    for app_id, vn_info in updated_vndb.items():
-                        if vn_info.get("has_18plus_en_patch") and app_id not in current_games and app_id in all_owned:
-                            owned_data = all_owned.get(app_id, {})
-                            current_games[app_id] = {
-                                "name": vn_info.get("vn_title") or owned_data.get("name", f"Steam App #{app_id}"),
-                                "path": owned_data.get("path", ""),
-                                "library_path": owned_data.get("library_path", ""),
-                                "is_installed": owned_data.get("is_installed", False),
-                                "vndb": vn_info
-                            }
-                            changed = True
-                            if self.cover_manager.download_cover(app_id):
-                                self.run_on_main_thread(self._refresh_banner, app_id)
-
-                    if changed:
-                        for app_id, game_data in current_games.items():
-                            if "status_info" not in game_data:
-                                game_data["status_info"] = self._compute_status_info(app_id, game_data)
-                        self.run_on_main_thread(self._populate_game_list, current_games.copy())
-
-                self.run_on_main_thread(
-                    lambda: self.lbl_status.configure(text="Library sync complete.", text_color="gray")
-                )
             except Exception as e:
-                logger.warning(f"Error during refresh_data: {e}")
-                self.run_on_main_thread(
-                    lambda: self.lbl_status.configure(text="Scan completed with warnings.", text_color="#f87171")
-                )
+                logger.error(f"Error during refresh: {e}", exc_info=True)
+                self.run_on_main_thread(lambda: self.lbl_status.configure(text=f"Error: {e}", text_color="#ff4444"))
             finally:
                 self.run_on_main_thread(self._stop_progress)
 
-        # Run in thread so GUI never freezes
-        threading.Thread(target=_bg_task, daemon=True).start()
+        threading.Thread(target=_worker, daemon=True).start()
 
     def _stop_progress(self):
         self.progress_bar.stop()
-        self.progress_bar.set(1.0)
+        self.progress_bar.configure(mode="determinate")
+        self.progress_bar.set(0)
 
-    def _populate_game_list(self, filtered_games):
-        self._stop_progress()
-        self._all_supported_games = filtered_games or {}
+    def _populate_game_list(self, supported_games: dict):
+        self._all_supported_games = supported_games
         self._apply_filters_and_render()
 
     def _apply_filters_and_render(self):
-        # Cancel any in-flight rendering batches immediately
-        if self._active_render_job is not None:
+        if self._active_render_job:
             try:
                 self.after_cancel(self._active_render_job)
             except Exception:
                 pass
             self._active_render_job = None
 
-        # Clear existing items
         for widget in self.scrollable_games.winfo_children():
             widget.destroy()
 
+        self._card_entries.clear()
+
         if not self._all_supported_games:
-            ctk.CTkLabel(self.scrollable_games, text="No Visual Novels requiring 18+ patches found in your Steam library.", font=ctk.CTkFont(size=14)).pack(pady=40)
+            ctk.CTkLabel(self.scrollable_games, text="No patchable visual novels found.", font=ctk.CTkFont(size=14)).pack(pady=40)
             self.lbl_status.configure(text="Scan complete. No patchable visual novels found.", text_color="gray")
             self.lbl_stats.configure(text="0 Patchable VNs Found")
             return
@@ -576,7 +821,7 @@ class VNPatchManagerApp(ctk.CTk):
                 continue
 
             # Check Status Filter
-            if active_filter == "Available" and (is_patched or not has_local_patch):
+            if active_filter == "Patch Available" and (is_patched or not has_local_patch):
                 continue
             if active_filter == "Patched" and not is_patched:
                 continue
@@ -623,7 +868,7 @@ class VNPatchManagerApp(ctk.CTk):
                 matched_games.items(),
                 key=lambda x: (not x[1].get("is_installed", False), x[1]["name"].lower())
             ))
-        else: # Default: Title (A-Z)
+        else:  # Default: Title (A-Z)
             sorted_games = dict(sorted(matched_games.items(), key=lambda x: x[1]["name"].lower()))
 
         self._banner_widgets.clear()
@@ -700,8 +945,6 @@ class VNPatchManagerApp(ctk.CTk):
                 except Exception:
                     pass
 
-
-
     def _render_badges(self, parent_frame, status_info: dict):
         """Renders status and attribute badges in the provided container."""
         lbl_status_badge = ctk.CTkLabel(
@@ -738,6 +981,7 @@ class VNPatchManagerApp(ctk.CTk):
 
         def render_batch(start_idx, batch_size=10):
             if start_idx >= len(items):
+                self._apply_focus_visuals()
                 return
             end_idx = min(start_idx + batch_size, len(items))
             for idx in range(start_idx, end_idx):
@@ -794,6 +1038,8 @@ class VNPatchManagerApp(ctk.CTk):
                 actions_frame.grid(row=2, column=0, padx=10, pady=(6, 12), sticky="sew")
 
                 patch_data = self.repo.available_patches.get(app_id)
+                card_buttons = []
+                default_btn = None
 
                 if has_local_patch:
                     btn_text = "Verify / Re-apply" if is_patched else "Apply Patch"
@@ -809,6 +1055,8 @@ class VNPatchManagerApp(ctk.CTk):
                     if is_patched:
                         btn_apply.configure(fg_color="transparent", border_width=1)
                     btn_apply.pack(side="left", fill="x", expand=True, padx=(0, 4))
+                    card_buttons.append(btn_apply)
+                    default_btn = btn_apply
 
                     if has_clean_backup:
                         btn_rollback = ctk.CTkButton(
@@ -821,6 +1069,7 @@ class VNPatchManagerApp(ctk.CTk):
                             command=lambda g=game_data: self.run_rollback(g)
                         )
                         btn_rollback.pack(side="left", fill="x", expand=True, padx=2)
+                        card_buttons.append(btn_rollback)
 
                     if is_patched or has_backup:
                         btn_steam = ctk.CTkButton(
@@ -833,6 +1082,7 @@ class VNPatchManagerApp(ctk.CTk):
                             command=lambda g=game_data, p=patch_data: self.run_steam_restore(g, p)
                         )
                         btn_steam.pack(side="left", fill="x", expand=True, padx=(4, 0))
+                        card_buttons.append(btn_steam)
 
                 else:
                     # Missing local patch (has 18+ patch on VNDB)
@@ -847,6 +1097,8 @@ class VNPatchManagerApp(ctk.CTk):
                             command=lambda g=game_data, p=patch_data: self.run_steam_restore(g, p)
                         )
                         btn_steam.pack(side="left", fill="x", expand=True, padx=(0, 4))
+                        card_buttons.append(btn_steam)
+                        default_btn = btn_steam
 
                     vndb_url = vn_info.get("vndb_url") or (f"https://vndb.org/{vn_info.get('vn_id')}" if vn_info.get("vn_id") else None)
                     if vndb_url:
@@ -860,10 +1112,23 @@ class VNPatchManagerApp(ctk.CTk):
                             command=lambda u=vndb_url: webbrowser.open(u)
                         )
                         btn_vndb.pack(side="left", fill="x", expand=True)
+                        card_buttons.append(btn_vndb)
+                        if not default_btn:
+                            default_btn = btn_vndb
+
+                self._card_entries.append({
+                    "card": card,
+                    "app_id": app_id,
+                    "game_data": game_data,
+                    "buttons": card_buttons,
+                    "default_button": default_btn
+                })
+
             if end_idx < len(items):
                 self._active_render_job = self.after(16, lambda: render_batch(end_idx, batch_size))
             else:
                 self._active_render_job = None
+                self._apply_focus_visuals()
         
         render_batch(0)
 
@@ -875,6 +1140,7 @@ class VNPatchManagerApp(ctk.CTk):
 
         def render_batch(start_idx, batch_size=15):
             if start_idx >= len(items):
+                self._apply_focus_visuals()
                 return
             end_idx = min(start_idx + batch_size, len(items))
             for row_idx in range(start_idx, end_idx):
@@ -923,6 +1189,8 @@ class VNPatchManagerApp(ctk.CTk):
                 actions_frame.grid(row=0, column=2, padx=12, pady=8, sticky="e")
 
                 patch_data = self.repo.available_patches.get(app_id)
+                card_buttons = []
+                default_btn = None
 
                 if has_local_patch:
                     btn_text = "Verify / Re-apply" if is_patched else "Apply Patch"
@@ -938,6 +1206,8 @@ class VNPatchManagerApp(ctk.CTk):
                     if is_patched:
                         btn_apply.configure(fg_color="transparent", border_width=1)
                     btn_apply.pack(side="left", padx=(0, 4))
+                    card_buttons.append(btn_apply)
+                    default_btn = btn_apply
 
                     if has_clean_backup:
                         btn_rollback = ctk.CTkButton(
@@ -950,6 +1220,7 @@ class VNPatchManagerApp(ctk.CTk):
                             command=lambda g=game_data: self.run_rollback(g)
                         )
                         btn_rollback.pack(side="left", padx=(0, 4))
+                        card_buttons.append(btn_rollback)
 
                     if is_patched or has_backup:
                         btn_steam = ctk.CTkButton(
@@ -962,9 +1233,10 @@ class VNPatchManagerApp(ctk.CTk):
                             command=lambda g=game_data, p=patch_data: self.run_steam_restore(g, p)
                         )
                         btn_steam.pack(side="left")
+                        card_buttons.append(btn_steam)
 
                 else:
-                    vndb_url = vn_info.get("vndb_url") or f"https://vndb.org/{vn_info.get('vn_id', '')}"
+                    # Missing local patch (has 18+ patch on VNDB)
                     if is_patched:
                         btn_steam = ctk.CTkButton(
                             actions_frame,
@@ -976,24 +1248,39 @@ class VNPatchManagerApp(ctk.CTk):
                             command=lambda g=game_data, p=patch_data: self.run_steam_restore(g, p)
                         )
                         btn_steam.pack(side="left", padx=(0, 4))
+                        card_buttons.append(btn_steam)
+                        default_btn = btn_steam
 
                     vndb_url = vn_info.get("vndb_url") or (f"https://vndb.org/{vn_info.get('vn_id')}" if vn_info.get("vn_id") else None)
                     if vndb_url:
                         btn_vndb = ctk.CTkButton(
                             actions_frame,
                             text="🔗 Open VNDB (Get Patch)",
-                            font=ctk.CTkFont(size=11, weight="bold"),
+                            font=ctk.CTkFont(size=12, weight="bold"),
                             height=30,
                             fg_color="#0284c7",
                             hover_color="#0369a1",
                             command=lambda u=vndb_url: webbrowser.open(u)
                         )
                         btn_vndb.pack(side="left")
+                        card_buttons.append(btn_vndb)
+                        if not default_btn:
+                            default_btn = btn_vndb
+
+                self._card_entries.append({
+                    "card": card,
+                    "app_id": app_id,
+                    "game_data": game_data,
+                    "buttons": card_buttons,
+                    "default_button": default_btn
+                })
+
             if end_idx < len(items):
                 self._active_render_job = self.after(16, lambda: render_batch(end_idx, batch_size))
             else:
                 self._active_render_job = None
-        
+                self._apply_focus_visuals()
+
         render_batch(0)
 
     def run_patch(self, game_data, patch_data):
@@ -1070,4 +1357,3 @@ class VNPatchManagerApp(ctk.CTk):
                 self.run_on_main_thread(lambda: self.lbl_status.configure(text="Steam Restore Failed! Check terminal.", text_color="#ff4444"))
 
         threading.Thread(target=_steam_task, daemon=True).start()
-
