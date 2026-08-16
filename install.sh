@@ -94,7 +94,7 @@ chmod +x "${LAUNCHER}"
 ln -sf "${LAUNCHER}" "${BIN_DIR}/vnpm"
 
 # 6. Create Desktop Shortcuts (.desktop)
-ICON_PATH="${INSTALL_DIR}/assets/steam_icon.jpg"
+ICON_PATH="${INSTALL_DIR}/assets/app_icon.png"
 DESKTOP_FILE="${APPS_DIR}/vnpm.desktop"
 
 cat << EOF > "${DESKTOP_FILE}"

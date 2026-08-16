@@ -5,6 +5,7 @@ import time
 import webbrowser
 from tkinter import messagebox, filedialog
 from pathlib import Path
+from PIL import Image, ImageTk
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,7 @@ class VNPatchManagerApp(ctk.CTk):
         super().__init__()
 
         self.title(f"{APP_NAME} - Steam Deck & Linux Native")
+        self._setup_window_icon()
         
         # Screen-aware responsive geometry (optimized for Steam Deck 1280x800 and handhelds)
         try:
@@ -146,6 +148,24 @@ class VNPatchManagerApp(ctk.CTk):
 
         # Initial Data Load
         self.refresh_data()
+
+    def _setup_window_icon(self):
+        """Sets the high-resolution window titlebar and taskbar icon for Linux/Steam Deck."""
+        try:
+            candidates = [
+                Path(__file__).parent.parent / "assets" / "app_icon.png",
+                Path(__file__).parent / "assets" / "app_icon.png",
+                Path.home() / ".local/share/vnpm/assets/app_icon.png",
+                Path(__file__).parent.parent / "assets" / "steam_icon.jpg",
+            ]
+            for icon_path in candidates:
+                if icon_path.exists():
+                    pil_img = Image.open(icon_path).resize((64, 64), Image.Resampling.LANCZOS)
+                    self._window_icon = ImageTk.PhotoImage(pil_img)
+                    self.iconphoto(True, self._window_icon)
+                    break
+        except Exception as e:
+            logger.debug(f"Failed to set window icon: {e}")
 
     def destroy(self):
         """Cleanly stops background controller listener before closing."""
