@@ -1,0 +1,17 @@
+# Python / Virtual Environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Environment / Config secrets
+.env
+
+# System / IDE
+.DS_Store
+.vscode/
+*.log
+.pytest_cache/
+.coverage
+htmlcov/
+
