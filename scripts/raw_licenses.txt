@@ -1,0 +1,1652 @@
+License packageID 32215:
+ - State   : Active (flags 0x200) - Purchased : Sun Oct  6 13:00:26 2013 in "NZ", CD Key
+ - Apps	: 9350, 9420, 39650, 55110, 55113, 55114,  (6 in total)
+ - Depots   : 9351, 9352, 9353, 9354, 9355, 9356, 9357, 9358, 9359, 9361, 9363, 9364, 9421, 9422, 9423, 9424, 9425, 9426, 9427, 9428, 9429, 9430, 9431, 9433, 9434, 39651, 39652, 39653, 39654, 39655, 55111, 55116, ... (33 in total)
+License packageID 32216:
+ - State   : Active (flags 0x200) - Purchased : Sun Oct  6 13:00:48 2013 in "NZ", CD Key
+ - Apps	: 39690, 50650, 65530, 214870, 215811, 219135, 230010, 230030, 230630,  (9 in total)
+ - Depots   : 39691, 39692, 39693, 39694, 39695, 39696, 39697, 39698, 39699, 50651, 50652, 50653, 50654, 50655, 50656, 50657, 50659, 50660, 50661, 65531, 65532, 65533, 65534, 65535, 65536, 65537, 214871, 214872, 214873, 214874, 214875, 214876, ... (42 in total)
+License packageID 32731:
+ - State   : Active (flags 0x200) - Purchased : Sat Nov 30 06:05:54 2013 in "NZ", PayPal
+ - Apps	: 205636,  (1 in total)
+ - Depots   : 315275,  (1 in total)
+License packageID 32889:
+ - State   : Active (flags 0x200) - Purchased : Wed Dec  4 05:51:41 2013 in "NZ", CD Key
+ - Apps	: 42910, 42914, 42918, 73032, 73115, 325462, 478330,  (7 in total)
+ - Depots   : 42911, 42912, 42913, 42915,  (4 in total)
+License packageID 33130:
+ - State   : Active (flags 0x200) - Purchased : Thu Oct 24 15:48:20 2013 in "NZ", CD Key
+ - Apps	: 18000, 18040, 18050, 18052, 18053, 18060, 18061,  (7 in total)
+ - Depots   : 18042, 18043, 18044, 18045, 18051, 18054, 18055, 18056,  (8 in total)
+License packageID 33476:
+ - State   : Active (flags 0x200) - Purchased : Wed Feb  5 08:57:44 2014 in "NZ", CD Key
+ - Apps	: 244090,  (1 in total)
+ - Depots   : 244091, 244092, 244093,  (3 in total)
+License packageID 33532:
+ - State   : Active (flags 0x200) - Purchased : Wed Dec 18 08:48:21 2013 in "NZ", PayPal
+ - Apps	: 261030,  (1 in total)
+ - Depots   : 261031, 261032, 261033, 261034, 261035, 261036, 261037, 261038, 261039, 261040, 261041, 261042,  (12 in total)
+License packageID 33791:
+ - State   : Active (flags 0x0) - Purchased : Thu Jun 25 02:59:32 2026 in "AU", Credit Card
+ - Apps	: 242700,  (1 in total)
+ - Depots   : 242701,  (1 in total)
+License packageID 33821:
+ - State   : Active (flags 0x200) - Purchased : Mon Nov 18 06:12:35 2013 in "NZ", CD Key
+ - Apps	: 212010, 214910, 232970,  (3 in total)
+ - Depots   : 212011, 214911, 214912, 214913, 214914, 214915, 214916, 214917, 214918, 214919, 232971,  (11 in total)
+License packageID 34341:
+ - State   : Active (flags 0x200) - Purchased : Fri Nov  8 06:01:32 2013 in "NZ", CD Key
+ - Apps	: 260750, 260770, 1283190,  (3 in total)
+ - Depots   : 260751, 260752, 260753, 260754, 260755, 260756, 260757, 260758, 260759, 260760, 260771, 260772, 260773, 260774, 260775, 260776, 260777, 260778, 260779, 260780, 260781, 1283191,  (22 in total)
+License packageID 34473:
+ - State   : Active (flags 0x200) - Purchased : Thu Nov 13 12:43:54 2014 in "NZ", CD Key
+ - Apps	: 227300, 388478, 421800, 1650650, 1948160, 2371170, 2611740, 2932420, 3035040, 3323350, 3323360, 3354860, 3977520,  (13 in total)
+ - Depots   : 227301, 227302, 227303, 227304, 421801, 421802, 1948161, 1948162, 1948163, 1948164,  (10 in total)
+License packageID 35123:
+ - State   : Active (flags 0x200) - Purchased : Fri Dec  6 06:05:07 2013 in "NZ", PayPal
+ - Apps	: 267380,  (1 in total)
+ - Depots   :  (0 in total)
+License packageID 35710:
+ - State   : Active (flags 0x200) - Purchased : Mon Mar 30 00:24:29 2026 in "AU", CD Key
+ - Apps	: 269250,  (1 in total)
+ - Depots   : 269251, 269252, 269253, 269254, 269255,  (5 in total)
+License packageID 36425:
+ - State   : Active (flags 0x200) - Purchased : Tue Jun 28 12:27:29 2016 in "NZ", Guest Pass
+ - Apps	: 271590, 362003, 3240220,  (3 in total)
+ - Depots   : 271591, 271592, 271593, 271594, 271595, 3240221, 3240222, 3240223, 3240224, 3240225,  (10 in total)
+License packageID 37051:
+ - State   : Active (flags 0x200) - Purchased : Thu Feb  6 18:42:22 2014 in "NZ", CD Key
+ - Apps	: 11450, 12710, 12770, 12830, 44340,  (5 in total)
+ - Depots   : 11451, 11452, 11453, 11454, 11455, 11456, 11457, 11458, 11459, 12711, 12712, 12713, 12714, 12715, 12716, 12771, 12772, 12773, 12774, 12775, 12776, 12831, 12832, 12833, 12834, 12835, 44341,  (27 in total)
+License packageID 37052:
+ - State   : Active (flags 0x200) - Purchased : Thu Feb  6 18:42:22 2014 in "NZ", CD Key
+ - Apps	: 12810, 44320, 201700, 321040,  (4 in total)
+ - Depots   : 12811, 12812, 12813, 12814, 12815, 12816, 12817, 12818, 44321, 201701, 201702, 201704, 201705, 201706, 321041, 321042, 321043, 321044,  (18 in total)
+License packageID 37106:
+ - State   : Active (flags 0x200) - Purchased : Thu Nov 13 12:43:54 2014 in "NZ", CD Key
+ - Apps	: 274310,  (1 in total)
+ - Depots   : 274311, 274313, 274314, 274315, 274316,  (5 in total)
+License packageID 37125:
+ - State   : Active (flags 0x200) - Purchased : Thu Nov 13 12:43:55 2014 in "NZ", CD Key
+ - Apps	: 222880, 222890,  (2 in total)
+ - Depots   : 222881, 222882, 222883, 222884,  (4 in total)
+License packageID 38087:
+ - State   : Active (flags 0x200) - Purchased : Wed Nov 22 14:19:16 2023 in "NZ", PayPal
+ - Apps	: 213670,  (1 in total)
+ - Depots   : 213671, 213673, 213674, 213675, 213676, 213677, 213678, 213679, 213680, 213682,  (10 in total)
+License packageID 39996:
+ - State   : Active (flags 0x0) - Purchased : Thu Jul  9 23:25:36 2026 in "AU", Credit Card
+ - Apps	: 287390,  (1 in total)
+ - Depots   : 287391, 287392, 287393, 287394,  (4 in total)
+License packageID 41309:
+ - State   : Active (flags 0x200) - Purchased : Thu Nov 13 12:43:53 2014 in "NZ", CD Key
+ - Apps	: 261510,  (1 in total)
+ - Depots   : 261511, 261512,  (2 in total)
+License packageID 41691:
+ - State   : Active (flags 0x200) - Purchased : Wed Sep 27 10:10:36 2023 in "NZ", PayPal
+ - Apps	: 201810,  (1 in total)
+ - Depots   : 201811, 201812, 201813, 201814, 201815, 201816, 201817, 201818, 201819, 201820, 201821, 201822, 201823, 201824,  (14 in total)
+License packageID 42665:
+ - State   : Active (flags 0x200) - Purchased : Thu Apr 17 19:31:34 2014 in "NZ", Guest Pass
+ - Apps	: 222900, 279100,  (2 in total)
+ - Depots   : 222901, 222902, 222903, 222904, 222905, 222906,  (6 in total)
+License packageID 42674:
+ - State   : Active (flags 0x200) - Purchased : Tue May 27 15:09:26 2014 in "NZ", Guest Pass
+ - Apps	: 245620, 284442,  (2 in total)
+ - Depots   : 245621, 245622, 245623, 245624, 245625, 245626, 245627, 245628, 245629, 245630, 245631, 245633, 245634,  (13 in total)
+License packageID 45429:
+ - State   : Active (flags 0x200) - Purchased : Tue Jun 10 09:24:26 2014 in "NZ", CD Key
+ - Apps	: 306110,  (1 in total)
+ - Depots   :  (0 in total)
+License packageID 45586:
+ - State   : Active (flags 0x200) - Purchased : Tue Jun 10 09:24:23 2014 in "NZ", CD Key
+ - Apps	: 202090, 306650, 480980,  (3 in total)
+ - Depots   : 202091,  (1 in total)
+License packageID 45658:
+ - State   : Active (flags 0x200) - Purchased : Thu Jun  5 07:42:24 2014 in "NZ", Complimentary
+ - Apps	: 63380,  (1 in total)
+ - Depots   : 63381, 63382, 63383, 63384, 63385, 63386, 63387, 63388, 63390, 63393, 63394, 63395,  (12 in total)
+License packageID 46476:
+ - State   : Active (flags 0x200) - Purchased : Mon Nov 30 20:40:50 2015 in "NZ", Guest Pass
+ - Apps	: 310080,  (1 in total)
+ - Depots   : 310081, 310082, 310083,  (3 in total)
+License packageID 47484:
+ - State   : Active (flags 0x200) - Purchased : Wed Sep 10 08:06:29 2014 in "NZ", CD Key
+ - Apps	: 232430, 298720,  (2 in total)
+ - Depots   : 232431, 232432, 232433, 232434, 298721, 298722,  (6 in total)
+License packageID 47503:
+ - State   : Active (flags 0x200) - Purchased : Thu Nov 13 12:56:03 2014 in "NZ", CD Key
+ - Apps	: 238300, 238301, 238302, 238303, 238304, 247290, 247291, 247292, 247293, 247294, 247295, 247296, 247297, 247298, 247299, 247300, 247301, 247302, 247303, 247304, 247305, 247306, 247307, 247308, 247309, 255050, 255580, 266730, 267230,  (29 in total)
+ - Depots   :  (0 in total)
+License packageID 48190:
+ - State   : Active (flags 0x200) - Purchased : Fri Jan 16 01:23:27 2026 in "AU", CD Key
+ - Apps	: 315810,  (1 in total)
+ - Depots   : 315811, 315812,  (2 in total)
+License packageID 48998:
+ - State   : Active (flags 0x200) - Purchased : Sun Sep 28 12:31:40 2014 in "NZ", Complimentary
+ - Apps	: 293500,  (1 in total)
+ - Depots   : 293501, 293502,  (2 in total)
+License packageID 50876:
+ - State   : Active (flags 0x200) - Purchased : Wed Jan  3 22:45:40 2024 in "NZ", PayPal
+ - Apps	: 323190,  (1 in total)
+ - Depots   : 323191, 323192, 323193, 323196,  (4 in total)
+License packageID 51203:
+ - State   : Active (flags 0x200) - Purchased : Wed Jul 11 19:13:30 2018 in "NZ", PayPal
+ - Apps	: 324160,  (1 in total)
+ - Depots   : 324161, 324163,  (2 in total)
+License packageID 52197:
+ - State   : Active (flags 0x200) - Purchased : Wed Aug 13 22:47:18 2025 in "AU", Credit Card
+ - Apps	: 326480,  (1 in total)
+ - Depots   : 326481, 326483, 326484, 326485, 326486, 326487,  (6 in total)
+License packageID 54744:
+ - State   : Active (flags 0x200) - Purchased : Mon Mar 30 00:24:54 2026 in "AU", CD Key
+ - Apps	: 333600,  (1 in total)
+ - Depots   : 333601,  (1 in total)
+License packageID 54862:
+ - State   : Active (flags 0x200) - Purchased : Wed Jan  3 22:45:40 2024 in "NZ", PayPal
+ - Apps	: 282070, 354350,  (2 in total)
+ - Depots   : 282071, 282075, 282076, 282078, 282079, 282080, 282081, 282082, 282083,  (9 in total)
+License packageID 56933:
+ - State   : Active (flags 0x200) - Purchased : Sun Jun  9 00:49:40 2024 in "NZ", Guest Pass
+ - Apps	: 339800,  (1 in total)
+ - Depots   : 339801, 339802, 339803, 339804, 339805, 339806,  (6 in total)
+License packageID 62700:
+ - State   : Active (flags 0x200) - Purchased : Sun Mar 29 20:24:39 2020 in "NZ", PayPal
+ - Apps	: 255710, 346790, 470950,  (3 in total)
+ - Depots   : 255711, 255712, 255713,  (3 in total)
+License packageID 65168:
+ - State   : Active (flags 0x200) - Purchased : Wed Jan  3 22:45:40 2024 in "NZ", PayPal
+ - Apps	: 346680, 362890,  (2 in total)
+ - Depots   : 221145, 346681, 346682, 346683, 362891, 362892, 362894, 362895,  (8 in total)
+License packageID 66703:
+ - State   : Active (flags 0x200) - Purchased : Wed Dec 30 13:01:03 2015 in "NZ", Wallet
+ - Apps	: 265930, 285710, 344450,  (3 in total)
+ - Depots   : 265931, 265932, 265933, 265934, 265935, 285711,  (6 in total)
+License packageID 66845:
+ - State   : Active (flags 0x200) - Purchased : Mon Mar 30 00:24:21 2026 in "AU", CD Key
+ - Apps	: 368160,  (1 in total)
+ - Depots   : 368161, 368162, 368163, 368164, 368165,  (5 in total)
+License packageID 67150:
+ - State   : Active (flags 0x200) - Purchased : Sun Mar 29 20:24:39 2020 in "NZ", PayPal
+ - Apps	: 369150, 470820,  (2 in total)
+ - Depots   :  (0 in total)
+License packageID 71944:
+ - State   : Active (flags 0x200) - Purchased : Fri Jun 14 02:34:52 2024 in "AU", CD Key
+ - Apps	: 383120, 530870,  (2 in total)
+ - Depots   : 383121, 530871,  (2 in total)
+License packageID 72770:
+ - State   : Active (flags 0x200) - Purchased : Mon Mar 30 00:25:02 2026 in "AU", CD Key
+ - Apps	: 385800,  (1 in total)
+ - Depots   : 385801,  (1 in total)
+License packageID 73117:
+ - State   : Active (flags 0x200) - Purchased : Mon Mar 30 00:24:37 2026 in "AU", CD Key
+ - Apps	: 386970,  (1 in total)
+ - Depots   : 386971,  (1 in total)
+License packageID 76550:
+ - State   : Active (flags 0x200) - Purchased : Fri Jan 16 01:24:06 2026 in "AU", CD Key
+ - Apps	: 397030,  (1 in total)
+ - Depots   :  (0 in total)
+License packageID 78533:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:41:26 2026 in "AU", CD Key
+ - Apps	: 402180,  (1 in total)
+ - Depots   : 402181,  (1 in total)
+License packageID 79428:
+ - State   : Active (flags 0x200) - Purchased : Tue Oct  3 10:43:55 2023 in "NZ", Complimentary
+ - Apps	: 404790,  (1 in total)
+ - Depots   : 404791, 404792, 404793, 404794, 404795, 404796, 404797,  (7 in total)
+License packageID 80368:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:41:42 2026 in "AU", CD Key
+ - Apps	: 407330,  (1 in total)
+ - Depots   : 407331,  (1 in total)
+License packageID 82551:
+ - State   : Active (flags 0x200) - Purchased : Tue Nov 28 23:07:29 2023 in "NZ", PayPal
+ - Apps	: 412830,  (1 in total)
+ - Depots   : 412831, 412832, 412833, 412834, 412835,  (5 in total)
+License packageID 82591:
+ - State   : Active (flags 0x200) - Purchased : Tue Oct 24 20:41:36 2023 in "NZ", PayPal
+ - Apps	: 313100, 313101, 313102, 350171, 350172, 356470, 356471, 356472, 356473, 356474, 356620, 367480, 401620, 401621, 401622, 401623, 401624, 401625, 401626, 401627, 401628, 401629, 401630, 401631, 401632, 401633, 401634, 401635, 405030, 405031, 405032, 405033, ... (34 in total)
+ - Depots   :  (0 in total)
+License packageID 82712:
+ - State   : Active (flags 0x200) - Purchased : Sat Oct  7 23:26:07 2023 in "NZ", Credit Card
+ - Apps	: 413150,  (1 in total)
+ - Depots   : 413151, 413152, 413153,  (3 in total)
+License packageID 83242:
+ - State   : Active (flags 0x200) - Purchased : Wed Nov 22 14:19:16 2023 in "NZ", PayPal
+ - Apps	: 225540,  (1 in total)
+ - Depots   : 225541, 225542, 225543, 225546,  (4 in total)
+License packageID 85402:
+ - State   : Active (flags 0x200) - Purchased : Wed Jul 11 19:13:30 2018 in "NZ", PayPal
+ - Apps	: 420100,  (1 in total)
+ - Depots   : 420101,  (1 in total)
+License packageID 85405:
+ - State   : Active (flags 0x200) - Purchased : Mon Mar 30 00:24:47 2026 in "AU", CD Key
+ - Apps	: 420110,  (1 in total)
+ - Depots   : 420111,  (1 in total)
+License packageID 85499:
+ - State   : Active (flags 0x200) - Purchased : Tue Mar 22 17:55:50 2022 in "NZ", PayPal
+ - Apps	: 208650, 356472, 356473, 356474, 356620, 401627, 401634, 405033, 415650, 418930,  (10 in total)
+ - Depots   : 208651, 208652, 208653, 208654, 208655, 208656, 208657, 208658, 208659, 208660, 208661,  (11 in total)
+License packageID 87583:
+ - State   : Active (flags 0x200) - Purchased : Fri Jan  2 17:58:04 2026 in "AU", Credit Card
+ - Apps	: 426000,  (1 in total)
+ - Depots   : 426001, 426002, 426003, 426004,  (4 in total)
+License packageID 89783:
+ - State   : Active (flags 0x200) - Purchased : Sun Oct 28 21:25:10 2018 in "NZ", PayPal
+ - Apps	: 431960, 1790230,  (2 in total)
+ - Depots   : 431961, 431966,  (2 in total)
+License packageID 90033:
+ - State   : Active (flags 0x200) - Purchased : Fri Nov 24 13:26:58 2017 in "NZ", Split
+ - Apps	: 391220, 418680, 418690, 418700, 418710, 418750, 418760, 418770, 418780, 418790, 418800, 418810, 419110, 437800, 505540, 526660, 541750,  (17 in total)
+ - Depots   : 391221, 391222, 391224, 391225, 391226, 391227, 391228, 391229, 391230, 391231, 391232, 391233, 391234, 391235, 391236, 391237, 391238, 391239, 406201, 406202, 406204, 406205, 406206, 406207, 406209, 418682, 418683, 418684, 418685, 418686, 418687, 418688, ... (86 in total)
+License packageID 93759:
+ - State   : Active (flags 0x200) - Purchased : Wed Apr 20 09:31:06 2016 in "NZ", Complimentary
+ - Apps	: 442110,  (1 in total)
+ - Depots   : 442111, 442112, 442113, 442114,  (4 in total)
+License packageID 94404:
+ - State   : Active (flags 0x200) - Purchased : Mon Sep 26 06:02:39 2016 in "NZ", Complimentary
+ - Apps	: 444090, 596350, 598210,  (3 in total)
+ - Depots   : 444091, 444092, 596351, 596352,  (4 in total)
+License packageID 97032:
+ - State   : Active (flags 0x200) - Purchased : Tue Oct 10 23:19:54 2023 in "NZ", PayPal
+ - Apps	: 275850, 2790030,  (2 in total)
+ - Depots   : 275851, 275852,  (2 in total)
+License packageID 100458:
+ - State   : Active (flags 0x200) - Purchased : Tue Oct  7 00:31:43 2025 in "AU", Credit Card
+ - Apps	: 460790,  (1 in total)
+ - Depots   : 460792,  (1 in total)
+License packageID 101274:
+ - State   : Active (flags 0x200) - Purchased : Wed Jul 11 19:13:30 2018 in "NZ", PayPal
+ - Apps	: 462990,  (1 in total)
+ - Depots   : 462991,  (1 in total)
+License packageID 103396:
+ - State   : Active (flags 0x200) - Purchased : Wed Aug 13 22:47:18 2025 in "AU", Credit Card
+ - Apps	: 379720,  (1 in total)
+ - Depots   : 379721, 379722, 379723, 379724, 379725, 379726, 379727, 379728, 379729, 446371, 446372, 446373,  (12 in total)
+License packageID 109836:
+ - State   : Active (flags 0x200) - Purchased : Mon Mar 30 00:25:17 2026 in "AU", CD Key
+ - Apps	: 487430,  (1 in total)
+ - Depots   : 487431,  (1 in total)
+License packageID 110197:
+ - State   : Active (flags 0x200) - Purchased : Mon Mar 30 00:24:05 2026 in "AU", CD Key
+ - Apps	: 488660,  (1 in total)
+ - Depots   : 488661,  (1 in total)
+License packageID 110687:
+ - State   : Active (flags 0x200) - Purchased : Wed Nov 22 14:19:16 2023 in "NZ", PayPal
+ - Apps	: 489830,  (1 in total)
+ - Depots   : 489831, 489832, 489833, 489834, 489835, 489836, 489837, 489838, 489839, 544860, 544861,  (11 in total)
+License packageID 111139:
+ - State   : Active (flags 0x200) - Purchased : Mon Mar 30 00:25:54 2026 in "AU", CD Key
+ - Apps	: 490890,  (1 in total)
+ - Depots   : 490891, 490892,  (2 in total)
+License packageID 111282:
+ - State   : Active (flags 0x200) - Purchased : Sun Nov 19 22:19:48 2023 in "NZ", PayPal
+ - Apps	: 403640,  (1 in total)
+ - Depots   : 531331, 531332, 531333, 531334, 531335, 531336, 531337, 531338, 531339, 531610, 531611, 531612, 531613, 531614,  (14 in total)
+License packageID 115510:
+ - State   : Active (flags 0x200) - Purchased : Sat Nov 18 22:18:53 2023 in "NZ", PayPal
+ - Apps	: 502500,  (1 in total)
+ - Depots   : 502501,  (1 in total)
+License packageID 123215:
+ - State   : Active (flags 0x200) - Purchased : Fri Apr  7 16:39:48 2023 in "NZ", PayPal
+ - Apps	: 289070, 404350, 512030, 597260,  (4 in total)
+ - Depots   : 289071, 289072, 289073, 289074, 289075, 289076, 289077, 289078, 289079, 289080, 289081, 289082, 289083, 289085, 289086, 289089, 404351, 533500, 533501, 533502, 533503, 533504, 533513, 597261,  (24 in total)
+License packageID 124923:
+ - State   : Active (flags 0x200) - Purchased : Thu Jul  5 19:41:10 2018 in "NZ", PayPal
+ - Apps	: 292030, 355880, 370000, 370001, 370002, 370003, 373950, 373951, 376390, 376391, 378640, 378641, 378642, 378643, 378644, 378645, 378646, 378647, 378648, 378649,  (20 in total)
+ - Depots   : 292031, 292032, 292033, 292034, 292035, 292036, 292037, 292038, 292039, 292040, 292041, 292042, 292043, 292044, 292045, 292046, 292047, 292048, 292049, 310611, 310612, 310613, 310614, 310615, 310616, 310617, 310618, 310619, 370007, 370008, 370009, 373952, ... (35 in total)
+License packageID 126326:
+ - State   : Active (flags 0x200) - Purchased : Mon Mar 30 00:24:13 2026 in "AU", CD Key
+ - Apps	: 527190,  (1 in total)
+ - Depots   : 527191, 527192, 782541, 782542, 782543,  (5 in total)
+License packageID 129777:
+ - State   : Active (flags 0x200) - Purchased : Fri Jan 16 01:23:58 2026 in "AU", CD Key
+ - Apps	: 534840,  (1 in total)
+ - Depots   :  (0 in total)
+License packageID 130651:
+ - State   : Active (flags 0x200) - Purchased : Fri Jul 13 09:25:39 2018 in "NZ", CD Key
+ - Apps	: 536220,  (1 in total)
+ - Depots   : 536221, 536223, 536225, 536227, 536228, 613180, 613182,  (7 in total)
+License packageID 135217:
+ - State   : Active (flags 0x200) - Purchased : Sun Mar 29 20:24:39 2020 in "NZ", PayPal
+ - Apps	: 547501, 561380,  (2 in total)
+ - Depots   : 255714, 255715, 255716,  (3 in total)
+License packageID 135220:
+ - State   : Active (flags 0x200) - Purchased : Sun Mar 29 20:24:39 2020 in "NZ", PayPal
+ - Apps	: 547502, 643720,  (2 in total)
+ - Depots   :  (0 in total)
+License packageID 138685:
+ - State   : Active (flags 0x200) - Purchased : Mon Mar 30 00:25:10 2026 in "AU", CD Key
+ - Apps	: 555640,  (1 in total)
+ - Depots   : 555641,  (1 in total)
+License packageID 155279:
+ - State   : Active (flags 0x200) - Purchased : Thu Jan  8 05:50:21 2026 in "AU", CD Key
+ - Apps	: 594650, 770720,  (2 in total)
+ - Depots   : 594651, 594652, 594653, 594654, 770721, 770722, 770723, 770724,  (8 in total)
+License packageID 158159:
+ - State   : Active (flags 0x200) - Purchased : Wed Mar  5 05:38:55 2025 in "AU", CD Key
+ - Apps	: 601840,  (1 in total)
+ - Depots   : 601841, 601842, 601843,  (3 in total)
+License packageID 158402:
+ - State   : Active (flags 0x200) - Purchased : Mon Mar 30 00:26:13 2026 in "AU", CD Key
+ - Apps	: 602520,  (1 in total)
+ - Depots   : 602521,  (1 in total)
+License packageID 164072:
+ - State   : Active (flags 0x200) - Purchased : Wed Sep 27 10:10:36 2023 in "NZ", PayPal
+ - Apps	: 612880, 719980,  (2 in total)
+ - Depots   : 612882, 612883, 612884, 612885, 612886, 612887, 612888, 624626, 624627, 624628, 624629, 624741, 624742, 624743, 624744, 624745, 624746, 624748, 624749, 650413, 650414, 650416,  (22 in total)
+License packageID 164697:
+ - State   : Active (flags 0x200) - Purchased : Mon Mar 30 18:56:16 2020 in "NZ", PayPal
+ - Apps	: 614580, 731280,  (2 in total)
+ - Depots   :  (0 in total)
+License packageID 166412:
+ - State   : Active (flags 0x0) - Purchased : Wed May 27 22:46:51 2026 in "AU", CD Key
+ - Apps	: 619820,  (1 in total)
+ - Depots   : 619821, 619822,  (2 in total)
+License packageID 167713:
+ - State   : Active (flags 0x200) - Purchased : Tue Oct  7 00:31:43 2025 in "AU", Credit Card
+ - Apps	: 623080,  (1 in total)
+ - Depots   : 623081, 623082, 623084, 623085, 623086, 623087, 623088,  (7 in total)
+License packageID 172271:
+ - State   : Active (flags 0x200) - Purchased : Fri Jun 14 02:32:36 2024 in "AU", CD Key
+ - Apps	: 632360,  (1 in total)
+ - Depots   : 632361,  (1 in total)
+License packageID 174719:
+ - State   : Active (flags 0x200) - Purchased : Tue Sep  4 19:57:19 2018 in "NZ", PayPal
+ - Apps	: 635940,  (1 in total)
+ - Depots   : 635941,  (1 in total)
+License packageID 180873:
+ - State   : Active (flags 0x200) - Purchased : Sun Nov 16 21:20:51 2025 in "AU", Credit Card
+ - Apps	: 644560,  (1 in total)
+ - Depots   : 644561, 644562,  (2 in total)
+License packageID 181611:
+ - State   : Active (flags 0x200) - Purchased : Tue Dec 23 19:02:55 2025 in "AU", Credit Card
+ - Apps	: 646570,  (1 in total)
+ - Depots   : 646571, 646572, 646573, 646574,  (4 in total)
+License packageID 202131:
+ - State   : Active (flags 0x200) - Purchased : Mon Mar 30 00:26:00 2026 in "AU", CD Key
+ - Apps	: 701420,  (1 in total)
+ - Depots   : 701421, 701422,  (2 in total)
+License packageID 213249:
+ - State   : Active (flags 0x200) - Purchased : Wed Mar  5 05:32:31 2025 in "AU", CD Key
+ - Apps	: 731040,  (1 in total)
+ - Depots   : 731041,  (1 in total)
+License packageID 213423:
+ - State   : Active (flags 0x200) - Purchased : Fri Jun 27 04:05:10 2025 in "AU", Credit Card
+ - Apps	: 731490,  (1 in total)
+ - Depots   : 731491, 731492,  (2 in total)
+License packageID 215235:
+ - State   : Active (flags 0x200) - Purchased : Fri Jun 14 02:32:55 2024 in "AU", CD Key
+ - Apps	: 736820,  (1 in total)
+ - Depots   : 736821,  (1 in total)
+License packageID 218842:
+ - State   : Active (flags 0x200) - Purchased : Mon Mar 30 00:26:25 2026 in "AU", CD Key
+ - Apps	: 745850,  (1 in total)
+ - Depots   : 745851,  (1 in total)
+License packageID 218881:
+ - State   : Active (flags 0x200) - Purchased : Fri Jan 16 01:22:59 2026 in "AU", CD Key
+ - Apps	: 745960,  (1 in total)
+ - Depots   : 745961, 745962, 745963,  (3 in total)
+License packageID 235874:
+ - State   : Active (flags 0x200) - Purchased : Wed Aug 13 22:47:18 2025 in "AU", Credit Card
+ - Apps	: 782330, 1098290,  (2 in total)
+ - Depots   : 782332, 782333, 782334, 782335, 782336, 782337, 782338, 782339, 1098294,  (9 in total)
+License packageID 237900:
+ - State   : Active (flags 0x200) - Purchased : Sun Jun  9 00:01:50 2024 in "AU", Credit Card
+ - Apps	: 787480,  (1 in total)
+ - Depots   : 787481,  (1 in total)
+License packageID 237910:
+ - State   : Active (flags 0x200) - Purchased : Thu Jul  4 19:50:26 2024 in "AU", CD Key
+ - Apps	: 787510,  (1 in total)
+ - Depots   : 787511,  (1 in total)
+License packageID 238891:
+ - State   : Active (flags 0x200) - Purchased : Thu Jul  4 19:49:58 2024 in "AU", CD Key
+ - Apps	: 789830,  (1 in total)
+ - Depots   : 789831,  (1 in total)
+License packageID 241001:
+ - State   : Active (flags 0x200) - Purchased : Tue Aug  5 23:11:18 2025 in "AU", CD Key
+ - Apps	: 794540,  (1 in total)
+ - Depots   : 794542, 794543,  (2 in total)
+License packageID 242133:
+ - State   : Active (flags 0x200) - Purchased : Wed Nov 22 14:19:16 2023 in "NZ", PayPal
+ - Apps	: 488790, 797320,  (2 in total)
+ - Depots   : 488791, 488792, 488793,  (3 in total)
+License packageID 244422:
+ - State   : Active (flags 0x200) - Purchased : Thu Jul  4 19:48:56 2024 in "AU", CD Key
+ - Apps	: 802880,  (1 in total)
+ - Depots   : 802881, 802882,  (2 in total)
+License packageID 244425:
+ - State   : Active (flags 0x200) - Purchased : Thu Jul  4 19:50:08 2024 in "AU", CD Key
+ - Apps	: 802890,  (1 in total)
+ - Depots   : 802891,  (1 in total)
+License packageID 248847:
+ - State   : Active (flags 0x200) - Purchased : Sun Jun 17 21:43:39 2018 in "NZ", Complimentary
+ - Apps	: 813820, 878760,  (2 in total)
+ - Depots   : 813821, 878761, 878762,  (3 in total)
+License packageID 250968:
+ - State   : Active (flags 0x200) - Purchased : Tue Nov 28 22:26:50 2023 in "NZ", Credit Card
+ - Apps	: 819030,  (1 in total)
+ - Depots   : 819031, 819032, 819033, 819034, 819035,  (5 in total)
+License packageID 253026:
+ - State   : Active (flags 0x200) - Purchased : Tue May 14 08:51:00 2019 in "NZ", PayPal
+ - Apps	: 824270, 1438210,  (2 in total)
+ - Depots   : 824271,  (1 in total)
+License packageID 253535:
+ - State   : Active (flags 0x200) - Purchased : Tue Nov 28 23:07:29 2023 in "NZ", PayPal
+ - Apps	: 825630,  (1 in total)
+ - Depots   : 825631, 825632, 825633, 825634, 825635,  (5 in total)
+License packageID 258535:
+ - State   : Active (flags 0x200) - Purchased : Fri Mar 14 01:41:57 2025 in "AU", Credit Card
+ - Apps	: 834530,  (1 in total)
+ - Depots   : 834531, 834532, 834533, 834535,  (4 in total)
+License packageID 266246:
+ - State   : Active (flags 0x200) - Purchased : Mon Sep 18 15:38:34 2023 in "NZ", PayPal
+ - Apps	: 849165, 849166, 849177, 849260,  (4 in total)
+ - Depots   : 849316, 849317, 905325, 943205, 991368, 991369, 991383, 991401,  (8 in total)
+License packageID 266249:
+ - State   : Active (flags 0x200) - Purchased : Mon Sep 18 15:38:34 2023 in "NZ", PayPal
+ - Apps	: 849167, 849168, 849178, 849179, 849261,  (5 in total)
+ - Depots   : 849318, 849319, 905326, 905327, 943206, 991370, 991371, 991384, 991385, 991402,  (10 in total)
+License packageID 266671:
+ - State   : Active (flags 0x200) - Purchased : Mon Mar 30 18:56:16 2020 in "NZ", PayPal
+ - Apps	: 715191, 855572,  (2 in total)
+ - Depots   :  (0 in total)
+License packageID 268072:
+ - State   : Active (flags 0x200) - Purchased : Mon Sep 18 15:38:34 2023 in "NZ", PayPal
+ - Apps	: 750920, 849165, 849166, 849167, 849168, 849170, 849171, 849176, 849177, 849178, 849179, 849180, 849181, 849186, 849187, 849188, 849260, 849261, 849262, 849300, 849301, 849302, 849303, 849304, 849305, 849306, 849307, 849308, 849309, 849310, 849311, 943200, ... (34 in total)
+ - Depots   : 750921, 750922, 750924, 750925, 750926, 750927, 750928, 750929, 792461, 792462, 792463, 792464, 792465, 792466, 792469, 829775, 829776, 829777, 849194, 849196, 849197, 849198, 849199, 849201, 849202, 849203, 849204, 849205, 849206, 849207, 849264, 849266, ... (114 in total)
+License packageID 272953:
+ - State   : Inactive (flags 0x208) - Purchased : Fri May 18 10:48:30 2018 in "NZ", Complimentary
+ - Apps	: 359550, 461961,  (2 in total)
+ - Depots   : 359551, 359552, 359553, 359554, 359555, 359556, 359557, 359558, 377230, 377231, 377232, 377233, 377234, 377235, 377236, 377237,  (16 in total)
+License packageID 273441:
+ - State   : Active (flags 0x200) - Purchased : Thu Oct 26 00:51:52 2023 in "NZ", PayPal
+ - Apps	: 866800,  (1 in total)
+ - Depots   : 866801, 866802, 866803, 866804, 866805, 866806, 866807, 866808, 866809, 943400, 943403,  (11 in total)
+License packageID 276911:
+ - State   : Active (flags 0x200) - Purchased : Tue Jun 26 17:31:04 2018 in "NZ", Complimentary
+ - Apps	: 611500,  (1 in total)
+ - Depots   : 611501,  (1 in total)
+License packageID 278423:
+ - State   : Active (flags 0x200) - Purchased : Sun Jan 26 04:03:58 2025 in "AU", Credit Card
+ - Apps	: 638970,  (1 in total)
+ - Depots   : 638971, 638972, 638973, 638975,  (4 in total)
+License packageID 283005:
+ - State   : Active (flags 0x200) - Purchased : Tue Oct  7 00:31:43 2025 in "AU", Credit Card
+ - Apps	: 888790,  (1 in total)
+ - Depots   : 888791,  (1 in total)
+License packageID 283597:
+ - State   : Active (flags 0x200) - Purchased : Thu Jul  4 19:49:07 2024 in "AU", CD Key
+ - Apps	: 889700, 1158540,  (2 in total)
+ - Depots   : 889701,  (1 in total)
+License packageID 283600:
+ - State   : Active (flags 0x200) - Purchased : Thu Jul  4 19:49:28 2024 in "AU", CD Key
+ - Apps	: 889710,  (1 in total)
+ - Depots   : 889711,  (1 in total)
+License packageID 285482:
+ - State   : Active (flags 0x200) - Purchased : Tue Aug  5 23:10:11 2025 in "AU", CD Key
+ - Apps	: 894020,  (1 in total)
+ - Depots   : 894021,  (1 in total)
+License packageID 288373:
+ - State   : Active (flags 0x200) - Purchased : Mon Mar 30 00:26:19 2026 in "AU", CD Key
+ - Apps	: 899970,  (1 in total)
+ - Depots   : 899971,  (1 in total)
+License packageID 298291:
+ - State   : Active (flags 0x200) - Purchased : Fri Jan 16 01:22:31 2026 in "AU", CD Key
+ - Apps	: 923810,  (1 in total)
+ - Depots   : 923811, 923812,  (2 in total)
+License packageID 301197:
+ - State   : Active (flags 0x200) - Purchased : Mon Jan  5 17:02:22 2026 in "AU", Credit Card
+ - Apps	: 930210,  (1 in total)
+ - Depots   : 930211, 930212, 930213,  (3 in total)
+License packageID 301508:
+ - State   : Active (flags 0x200) - Purchased : Tue Nov 28 22:26:50 2023 in "NZ", Credit Card
+ - Apps	: 930910,  (1 in total)
+ - Depots   : 930911, 930912, 930913,  (3 in total)
+License packageID 303350:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:40:45 2026 in "AU", CD Key
+ - Apps	: 935070,  (1 in total)
+ - Depots   : 935071,  (1 in total)
+License packageID 306625:
+ - State   : Active (flags 0x200) - Purchased : Sun May 12 15:16:28 2024 in "NZ", CD Key
+ - Apps	: 943370,  (1 in total)
+ - Depots   : 943371,  (1 in total)
+License packageID 306737:
+ - State   : Active (flags 0x200) - Purchased : Sat Sep 13 05:26:49 2025 in "AU", Complimentary
+ - Apps	: 943700,  (1 in total)
+ - Depots   : 943701,  (1 in total)
+License packageID 308288:
+ - State   : Active (flags 0x200) - Purchased : Tue Apr 28 04:08:37 2026 in "AU", Credit Card
+ - Apps	: 947650,  (1 in total)
+ - Depots   :  (0 in total)
+License packageID 309467:
+ - State   : Active (flags 0x200) - Purchased : Tue Nov 21 20:44:40 2023 in "NZ", PayPal
+ - Apps	: 492720,  (1 in total)
+ - Depots   : 492721, 492722, 492723, 492724, 492725, 492726, 492727, 492728, 492729, 881961, 881962, 881963, 881964, 881965,  (14 in total)
+License packageID 309947:
+ - State   : Active (flags 0x0) - Purchased : Thu Jul  9 22:59:22 2026 in "AU", Complimentary
+ - Apps	: 951830,  (1 in total)
+ - Depots   : 951831,  (1 in total)
+License packageID 311997:
+ - State   : Active (flags 0x0) - Purchased : Thu Jul 30 20:32:48 2026 in "AU", Complimentary
+ - Apps	: 270550,  (1 in total)
+ - Depots   : 270551,  (1 in total)
+License packageID 313034:
+ - State   : Active (flags 0x200) - Purchased : Wed Mar  5 05:33:05 2025 in "AU", CD Key
+ - Apps	: 957960,  (1 in total)
+ - Depots   : 957961, 957962,  (2 in total)
+License packageID 316930:
+ - State   : Active (flags 0x0) - Purchased : Wed May 27 23:33:10 2026 in "AU", Complimentary
+ - Apps	: 967420,  (1 in total)
+ - Depots   :  (0 in total)
+License packageID 317479:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:40:31 2026 in "AU", CD Key
+ - Apps	: 968950,  (1 in total)
+ - Depots   : 968951,  (1 in total)
+License packageID 327341:
+ - State   : Active (flags 0x200) - Purchased : Sat Jul 19 05:08:56 2025 in "AU", Credit Card
+ - Apps	: 993090,  (1 in total)
+ - Depots   : 993091, 993092,  (2 in total)
+License packageID 339705:
+ - State   : Active (flags 0x200) - Purchased : Fri Dec 15 12:16:29 2023 in "NZ", PayPal
+ - Apps	: 524220, 580600, 580610, 583990, 583991, 583992, 583993, 583994, 1017430,  (9 in total)
+ - Depots   : 524221,  (1 in total)
+License packageID 345917:
+ - State   : Active (flags 0x200) - Purchased : Fri Jan 16 01:22:37 2026 in "AU", CD Key
+ - Apps	: 1038710,  (1 in total)
+ - Depots   :  (0 in total)
+License packageID 348063:
+ - State   : Active (flags 0x200) - Purchased : Fri Jan 16 01:23:08 2026 in "AU", CD Key
+ - Apps	: 1044490,  (1 in total)
+ - Depots   : 1044491, 1044492,  (2 in total)
+License packageID 353051:
+ - State   : Active (flags 0x200) - Purchased : Tue Sep 30 20:33:10 2025 in "AU", Credit Card
+ - Apps	: 1057090,  (1 in total)
+ - Depots   : 1057091,  (1 in total)
+License packageID 355687:
+ - State   : Active (flags 0x200) - Purchased : Fri Mar 14 01:41:57 2025 in "AU", Credit Card
+ - Apps	: 927380, 3717340,  (2 in total)
+ - Depots   : 927381, 927382, 3717341,  (3 in total)
+License packageID 355978:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:40:24 2026 in "AU", CD Key
+ - Apps	: 1064130,  (1 in total)
+ - Depots   : 1064131,  (1 in total)
+License packageID 359033:
+ - State   : Active (flags 0x0) - Purchased : Mon May  4 23:06:17 2026 in "AU", CD Key
+ - Apps	: 1071130,  (1 in total)
+ - Depots   : 1071131, 1071132, 1071133,  (3 in total)
+License packageID 364243:
+ - State   : Active (flags 0x200) - Purchased : Wed Mar  5 05:35:08 2025 in "AU", CD Key
+ - Apps	: 1084160,  (1 in total)
+ - Depots   : 1084161, 1084162,  (2 in total)
+License packageID 364647:
+ - State   : Active (flags 0x200) - Purchased : Wed Jul  3 02:54:14 2024 in "AU", CD Key
+ - Apps	: 1085220,  (1 in total)
+ - Depots   : 1085221,  (1 in total)
+License packageID 366109:
+ - State   : Active (flags 0x200) - Purchased : Fri Mar 14 01:41:57 2025 in "AU", Credit Card
+ - Apps	: 1088710,  (1 in total)
+ - Depots   : 1088711, 1088712,  (2 in total)
+License packageID 367653:
+ - State   : Active (flags 0x200) - Purchased : Thu Dec 10 16:39:54 2020 in "NZ", PayPal
+ - Apps	: 1091500, 1495710,  (2 in total)
+ - Depots   : 1091501, 1091502, 1091503, 1091504, 1091505, 1091506, 1091507, 1091508, 1091509, 1460470, 1460471, 1460472, 1460473, 1460474, 1460475, 1460476, 1460477, 1460478, 1460479, 2060311, 2060312, 2060313, 2060314,  (23 in total)
+License packageID 368994:
+ - State   : Active (flags 0x200) - Purchased : Mon Mar 30 00:25:47 2026 in "AU", CD Key
+ - Apps	: 1094930,  (1 in total)
+ - Depots   : 1094931,  (1 in total)
+License packageID 371141:
+ - State   : Active (flags 0x200) - Purchased : Thu Oct 31 23:19:15 2024 in "AU", CD Key
+ - Apps	: 1099640,  (1 in total)
+ - Depots   : 1099641, 1099642,  (2 in total)
+License packageID 373423:
+ - State   : Active (flags 0x200) - Purchased : Fri Mar 14 01:41:57 2025 in "AU", Credit Card
+ - Apps	: 1105500,  (1 in total)
+ - Depots   : 1105501, 1105502,  (2 in total)
+License packageID 373426:
+ - State   : Active (flags 0x200) - Purchased : Fri Mar 14 01:41:57 2025 in "AU", Credit Card
+ - Apps	: 1105510,  (1 in total)
+ - Depots   : 1105511, 1105512,  (2 in total)
+License packageID 376282:
+ - State   : Active (flags 0x200) - Purchased : Tue Dec 23 19:02:55 2025 in "AU", Credit Card
+ - Apps	: 976730, 1064220, 1064221, 1064270, 1064271, 1064272, 1064273, 1080080, 1097220, 1097222, 1097223, 1097224, 1108760, 1108761, 1108762, 1108763, 1109620, 1109621, 1532190, 1613450, 1695790, 1695791, 1695792, 1695793, 1695794, 1695795,  (26 in total)
+ - Depots   : 976731, 976733, 976734, 976735, 976736, 976737, 976738, 976739, 1064222, 1064223, 1064224, 1064225, 1064226, 1064227, 1064228, 1064229, 1064274, 1064275, 1064276, 1532191, 1613451, 1695799, 1701231, 1701250, 1701260, 1701270, 1701280,  (27 in total)
+License packageID 378547:
+ - State   : Active (flags 0x200) - Purchased : Mon Jan  1 22:38:58 2024 in "NZ", PayPal
+ - Apps	: 1118010,  (1 in total)
+ - Depots   :  (0 in total)
+License packageID 389543:
+ - State   : Active (flags 0x200) - Purchased : Tue Oct  7 00:58:53 2025 in "AU", Credit Card
+ - Apps	: 1144400,  (1 in total)
+ - Depots   : 1144401,  (1 in total)
+License packageID 395020:
+ - State   : Active (flags 0x200) - Purchased : Mon Sep 30 21:52:35 2024 in "AU", CD Key
+ - Apps	: 1158160,  (1 in total)
+ - Depots   : 1158161,  (1 in total)
+License packageID 397900:
+ - State   : Active (flags 0x200) - Purchased : Wed Mar  5 05:37:49 2025 in "AU", CD Key
+ - Apps	: 1164940,  (1 in total)
+ - Depots   : 1164944,  (1 in total)
+License packageID 399011:
+ - State   : Active (flags 0x200) - Purchased : Fri Nov 15 01:48:29 2024 in "AU", CD Key
+ - Apps	: 1167750, 2473901,  (2 in total)
+ - Depots   : 1167751,  (1 in total)
+License packageID 400936:
+ - State   : Active (flags 0x200) - Purchased : Mon Sep 18 15:38:34 2023 in "NZ", PayPal
+ - Apps	: 849170, 849171, 849176, 849180, 849181, 849186, 849187, 849188, 849262, 849300, 849301, 849302, 849303, 849304, 849305, 849306, 849307, 849308, 849309, 849310, 849311, 943200, 1058360, 1109290,  (24 in total)
+ - Depots   : 849266, 849267, 849316, 849317, 849318, 849319, 890033, 890034, 890039, 905321, 905322, 905323, 905324, 905325, 905326, 905327, 905328, 905329, 930445, 930446, 930447, 943205, 943206, 943207, 943208, 943209, 991330, 991331, 991332, 991333, 991361, 991362, ... (66 in total)
+License packageID 401407:
+ - State   : Active (flags 0x200) - Purchased : Tue Oct 10 23:14:14 2023 in "NZ", Complimentary
+ - Apps	: 1172470,  (1 in total)
+ - Depots   : 1172471, 1172472, 1172473, 1172474, 1172475, 1172476, 1172477, 1172478, 1172479, 1311105, 1311106,  (11 in total)
+License packageID 401585:
+ - State   : Active (flags 0x200) - Purchased : Wed Jan  3 22:45:40 2024 in "NZ", PayPal
+ - Apps	: 1172380, 1179142,  (2 in total)
+ - Depots   : 1172381, 1172382, 1172383, 1172384, 1172385, 1172386, 1172387, 1172388, 1172389, 1178731, 1178732, 1178733, 1178734, 1178735,  (14 in total)
+License packageID 402134:
+ - State   : Active (flags 0x200) - Purchased : Sun Jan 29 10:34:43 2023 in "NZ", PayPal
+ - Apps	: 1174180,  (1 in total)
+ - Depots   : 1174181, 1174182, 1174183, 1174184, 1174185, 1174186,  (6 in total)
+License packageID 405536:
+ - State   : Active (flags 0x200) - Purchased : Mon Jan  1 22:38:58 2024 in "NZ", PayPal
+ - Apps	: 582010,  (1 in total)
+ - Depots   : 582011,  (1 in total)
+License packageID 413295:
+ - State   : Active (flags 0x200) - Purchased : Thu Jun 27 21:20:09 2024 in "AU", Credit Card
+ - Apps	: 678960,  (1 in total)
+ - Depots   : 678961,  (1 in total)
+License packageID 414278:
+ - State   : Active (flags 0x0) - Purchased : Thu Jul  9 23:25:36 2026 in "AU", Credit Card
+ - Apps	: 1200720,  (1 in total)
+ - Depots   : 1200721,  (1 in total)
+License packageID 414973:
+ - State   : Active (flags 0x200) - Purchased : Wed Jul  3 02:53:30 2024 in "AU", CD Key
+ - Apps	: 1202130,  (1 in total)
+ - Depots   : 1202131, 1202132,  (2 in total)
+License packageID 415054:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:41:32 2026 in "AU", CD Key
+ - Apps	: 1202310,  (1 in total)
+ - Depots   : 1202311,  (1 in total)
+License packageID 415372:
+ - State   : Active (flags 0x200) - Purchased : Sat May  4 14:15:59 2024 in "NZ", Split
+ - Apps	: 1145360,  (1 in total)
+ - Depots   : 1145361, 1145363, 1145364,  (3 in total)
+License packageID 423337:
+ - State   : Active (flags 0x0) - Purchased : Thu Jul  9 23:25:36 2026 in "AU", Credit Card
+ - Apps	: 1222140,  (1 in total)
+ - Depots   : 1222141,  (1 in total)
+License packageID 432912:
+ - State   : Active (flags 0x200) - Purchased : Mon Sep 18 15:31:02 2023 in "NZ", PayPal
+ - Apps	: 1237970, 1288681, 1288682, 1288683, 1288684, 1288685,  (6 in total)
+ - Depots   : 1237971, 1237972, 1237973, 1237974, 1237975, 1237976, 1237977, 1237978, 1237979, 1238106, 1238107, 1238108,  (12 in total)
+License packageID 436045:
+ - State   : Active (flags 0x200) - Purchased : Tue Dec 23 19:02:55 2025 in "AU", Credit Card
+ - Apps	: 1237950, 1253170,  (2 in total)
+ - Depots   : 1237951, 1237952, 1237953, 1237954, 1237955, 1237956, 1237957, 1237958, 1237959, 1237961, 1237962, 1237963,  (12 in total)
+License packageID 437971:
+ - State   : Active (flags 0x0) - Purchased : Thu Jul  9 23:25:36 2026 in "AU", Credit Card
+ - Apps	: 1260820,  (1 in total)
+ - Depots   : 1260821, 1260822,  (2 in total)
+License packageID 438170:
+ - State   : Active (flags 0x200) - Purchased : Fri May 24 04:21:58 2024 in "NZ", Complimentary
+ - Apps	: 1261270,  (1 in total)
+ - Depots   :  (0 in total)
+License packageID 440408:
+ - State   : Active (flags 0x200) - Purchased : Tue Apr  5 16:43:31 2022 in "NZ", PayPal
+ - Apps	: 1245620,  (1 in total)
+ - Depots   : 1245621, 1245624,  (2 in total)
+License packageID 441713:
+ - State   : Active (flags 0x200) - Purchased : Wed Aug  7 03:23:19 2024 in "AU", CD Key
+ - Apps	: 1269300,  (1 in total)
+ - Depots   : 1269301,  (1 in total)
+License packageID 441978:
+ - State   : Active (flags 0x0) - Purchased : Mon May  4 23:06:27 2026 in "AU", CD Key
+ - Apps	: 1269950,  (1 in total)
+ - Depots   : 1269951,  (1 in total)
+License packageID 442913:
+ - State   : Active (flags 0x200) - Purchased : Wed Apr  2 03:59:19 2025 in "AU", CD Key
+ - Apps	: 1272320,  (1 in total)
+ - Depots   : 1272321,  (1 in total)
+License packageID 443187:
+ - State   : Active (flags 0x200) - Purchased : Wed Mar  5 05:36:43 2025 in "AU", CD Key
+ - Apps	: 1272840,  (1 in total)
+ - Depots   : 1272841,  (1 in total)
+License packageID 444648:
+ - State   : Inactive (flags 0x208) - Purchased : Fri Mar 27 11:39:25 2020 in "NZ", Complimentary
+ - Apps	: 255710,  (1 in total)
+ - Depots   : 255711, 255712, 255713,  (3 in total)
+License packageID 446213:
+ - State   : Active (flags 0x200) - Purchased : Wed Aug  7 03:22:43 2024 in "AU", CD Key
+ - Apps	: 1280930, 4509190,  (2 in total)
+ - Depots   : 1280931, 1280932, 1280933, 4509191, 4509192, 4509193,  (6 in total)
+License packageID 446764:
+ - State   : Active (flags 0x200) - Purchased : Mon Sep 30 21:52:50 2024 in "AU", CD Key
+ - Apps	: 1282150,  (1 in total)
+ - Depots   : 1282151,  (1 in total)
+License packageID 446858:
+ - State   : Active (flags 0x200) - Purchased : Fri Apr  3 03:59:44 2026 in "AU", CD Key
+ - Apps	: 1282410,  (1 in total)
+ - Depots   : 1282411,  (1 in total)
+License packageID 447635:
+ - State   : Active (flags 0x200) - Purchased : Fri Nov 15 01:48:16 2024 in "AU", CD Key
+ - Apps	: 1113000,  (1 in total)
+ - Depots   : 1113001,  (1 in total)
+License packageID 450463:
+ - State   : Active (flags 0x0) - Purchased : Thu Jul  9 03:27:23 2026 in "AU", Complimentary
+ - Apps	: 1291390,  (1 in total)
+ - Depots   : 1291391, 1291392,  (2 in total)
+License packageID 451928:
+ - State   : Active (flags 0x200) - Purchased : Fri Jun 14 02:33:27 2024 in "AU", CD Key
+ - Apps	: 1295500,  (1 in total)
+ - Depots   : 1295501, 1295502,  (2 in total)
+License packageID 452052:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:39:08 2026 in "AU", CD Key
+ - Apps	: 1295730,  (1 in total)
+ - Depots   : 1295731,  (1 in total)
+License packageID 452176:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:40:10 2026 in "AU", CD Key
+ - Apps	: 1296260,  (1 in total)
+ - Depots   : 1296261,  (1 in total)
+License packageID 456029:
+ - State   : Active (flags 0x200) - Purchased : Wed Aug  7 03:22:56 2024 in "AU", CD Key
+ - Apps	: 1306970,  (1 in total)
+ - Depots   : 1306971, 1306972,  (2 in total)
+License packageID 463043:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:41:20 2026 in "AU", CD Key
+ - Apps	: 1326000,  (1 in total)
+ - Depots   : 1326001,  (1 in total)
+License packageID 464066:
+ - State   : Active (flags 0x200) - Purchased : Wed Jan  3 22:45:40 2024 in "NZ", PayPal
+ - Apps	: 1328670, 1393160,  (2 in total)
+ - Depots   : 1328671, 1328672, 1328673, 1328674, 1328675, 1328676, 1328677, 1328678, 1328679,  (9 in total)
+License packageID 467043:
+ - State   : Inactive (flags 0x208) - Purchased : Fri Jul 10 17:47:45 2020 in "NZ", Complimentary
+ - Apps	: 492720,  (1 in total)
+ - Depots   : 492721, 492722, 492723, 492724, 492725, 492726, 492727, 492728, 492729, 881961, 881962, 881963, 881964, 881965,  (14 in total)
+License packageID 467393:
+ - State   : Active (flags 0x200) - Purchased : Sun May 12 15:12:39 2024 in "NZ", CD Key
+ - Apps	: 1235140,  (1 in total)
+ - Depots   : 1235141, 1235142, 1235143, 1235144,  (4 in total)
+License packageID 467975:
+ - State   : Active (flags 0x200) - Purchased : Thu Oct 31 23:19:55 2024 in "AU", CD Key
+ - Apps	: 1338580,  (1 in total)
+ - Depots   : 1338581, 1338582, 1338583,  (3 in total)
+License packageID 469378:
+ - State   : Active (flags 0x200) - Purchased : Thu Jul  4 19:49:48 2024 in "AU", CD Key
+ - Apps	: 1342410,  (1 in total)
+ - Depots   : 1342411,  (1 in total)
+License packageID 469720:
+ - State   : Active (flags 0x200) - Purchased : Sat Jan  6 23:52:00 2024 in "NZ", Complimentary
+ - Apps	: 1343370,  (1 in total)
+ - Depots   : 1343371, 1343374,  (2 in total)
+License packageID 469729:
+ - State   : Active (flags 0x200) - Purchased : Wed Nov 10 18:58:59 2021 in "NZ", Complimentary
+ - Apps	: 1343400,  (1 in total)
+ - Depots   : 1343401, 1343402,  (2 in total)
+License packageID 472504:
+ - State   : Active (flags 0x200) - Purchased : Mon Jan  5 17:02:22 2026 in "AU", Credit Card
+ - Apps	: 1350650,  (1 in total)
+ - Depots   : 1350651,  (1 in total)
+License packageID 472756:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:40:17 2026 in "AU", CD Key
+ - Apps	: 1351370,  (1 in total)
+ - Depots   : 1351371,  (1 in total)
+License packageID 474076:
+ - State   : Active (flags 0x200) - Purchased : Wed Mar  5 05:30:54 2025 in "AU", CD Key
+ - Apps	: 1353230,  (1 in total)
+ - Depots   : 1353231,  (1 in total)
+License packageID 480438:
+ - State   : Active (flags 0x200) - Purchased : Sun Apr 26 19:32:13 2026 in "AU", Credit Card
+ - Apps	: 1369790,  (1 in total)
+ - Depots   : 1369791,  (1 in total)
+License packageID 487278:
+ - State   : Active (flags 0x200) - Purchased : Fri Mar 14 01:41:57 2025 in "AU", Credit Card
+ - Apps	: 1388590,  (1 in total)
+ - Depots   : 1388591,  (1 in total)
+License packageID 493420:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:40:52 2026 in "AU", CD Key
+ - Apps	: 1406020,  (1 in total)
+ - Depots   : 1406021,  (1 in total)
+License packageID 493784:
+ - State   : Active (flags 0x200) - Purchased : Mon Mar 30 00:26:07 2026 in "AU", CD Key
+ - Apps	: 1406990,  (1 in total)
+ - Depots   : 1406991,  (1 in total)
+License packageID 493816:
+ - State   : Active (flags 0x200) - Purchased : Thu Jul  4 19:49:37 2024 in "AU", CD Key
+ - Apps	: 1407090,  (1 in total)
+ - Depots   : 1407091,  (1 in total)
+License packageID 493819:
+ - State   : Active (flags 0x200) - Purchased : Thu Jul  4 19:49:19 2024 in "AU", CD Key
+ - Apps	: 1407100,  (1 in total)
+ - Depots   : 1407101,  (1 in total)
+License packageID 494564:
+ - State   : Active (flags 0x200) - Purchased : Wed Jul  3 02:54:38 2024 in "AU", CD Key
+ - Apps	: 1409200,  (1 in total)
+ - Depots   : 1409201, 1409202,  (2 in total)
+License packageID 497280:
+ - State   : Active (flags 0x200) - Purchased : Tue Aug  5 23:11:30 2025 in "AU", CD Key
+ - Apps	: 1416960,  (1 in total)
+ - Depots   : 1416961, 1416962, 1416963,  (3 in total)
+License packageID 500653:
+ - State   : Active (flags 0x200) - Purchased : Fri Jan 16 01:24:34 2026 in "AU", CD Key
+ - Apps	: 1425730,  (1 in total)
+ - Depots   : 1425731,  (1 in total)
+License packageID 500812:
+ - State   : Active (flags 0x200) - Purchased : Tue Mar 18 01:53:49 2025 in "AU", Credit Card
+ - Apps	: 1426210, 1426390,  (2 in total)
+ - Depots   : 1426211, 1426212, 1426213, 1426214, 1426215, 1426216, 1426217, 1426218, 1426219, 1503450, 1503451, 1503452, 1503453,  (13 in total)
+License packageID 504085:
+ - State   : Active (flags 0x200) - Purchased : Wed Jul  3 02:54:02 2024 in "AU", CD Key
+ - Apps	: 1434540,  (1 in total)
+ - Depots   : 1434541, 1434543,  (2 in total)
+License packageID 510928:
+ - State   : Active (flags 0x200) - Purchased : Fri Jan 16 01:23:16 2026 in "AU", CD Key
+ - Apps	: 1451940,  (1 in total)
+ - Depots   : 1451941, 1451942,  (2 in total)
+License packageID 514802:
+ - State   : Active (flags 0x0) - Purchased : Fri Jun 12 02:13:53 2026 in "AU", Credit Card
+ - Apps	: 1462040,  (1 in total)
+ - Depots   : 1462041, 1462043,  (2 in total)
+License packageID 516446:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:40:38 2026 in "AU", CD Key
+ - Apps	: 1466680,  (1 in total)
+ - Depots   : 1466681,  (1 in total)
+License packageID 516449:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:40:59 2026 in "AU", CD Key
+ - Apps	: 1466690,  (1 in total)
+ - Depots   : 1466691,  (1 in total)
+License packageID 516858:
+ - State   : Active (flags 0x200) - Purchased : Fri Jun 14 02:34:38 2024 in "AU", CD Key
+ - Apps	: 1467920,  (1 in total)
+ - Depots   : 1467921, 1467923, 1467924, 1467925,  (4 in total)
+License packageID 529426:
+ - State   : Active (flags 0x200) - Purchased : Wed Apr  2 03:59:08 2025 in "AU", CD Key
+ - Apps	: 1501610,  (1 in total)
+ - Depots   : 1501611, 1501612,  (2 in total)
+License packageID 532185:
+ - State   : Active (flags 0x200) - Purchased : Thu Jan  8 05:51:11 2026 in "AU", CD Key
+ - Apps	: 1509510,  (1 in total)
+ - Depots   : 1509511, 1509512,  (2 in total)
+License packageID 532820:
+ - State   : Active (flags 0x200) - Purchased : Mon Sep 30 21:55:29 2024 in "AU", CD Key
+ - Apps	: 1511460,  (1 in total)
+ - Depots   : 1511461, 1511462,  (2 in total)
+License packageID 536115:
+ - State   : Active (flags 0x200) - Purchased : Wed Mar  5 05:37:05 2025 in "AU", CD Key
+ - Apps	: 1521070,  (1 in total)
+ - Depots   : 1521071,  (1 in total)
+License packageID 537916:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:40:02 2026 in "AU", CD Key
+ - Apps	: 1524650,  (1 in total)
+ - Depots   : 1524651,  (1 in total)
+License packageID 540474:
+ - State   : Active (flags 0x200) - Purchased : Wed Apr  2 03:59:53 2025 in "AU", CD Key
+ - Apps	: 1531540,  (1 in total)
+ - Depots   : 1531541, 1531542,  (2 in total)
+License packageID 540929:
+ - State   : Active (flags 0x200) - Purchased : Wed Aug  7 03:22:31 2024 in "AU", CD Key
+ - Apps	: 1532690,  (1 in total)
+ - Depots   : 1532691,  (1 in total)
+License packageID 551011:
+ - State   : Active (flags 0x200) - Purchased : Mon Mar 30 00:25:41 2026 in "AU", CD Key
+ - Apps	: 1559760,  (1 in total)
+ - Depots   : 1559761,  (1 in total)
+License packageID 551786:
+ - State   : Active (flags 0x200) - Purchased : Thu Oct 31 23:18:34 2024 in "AU", CD Key
+ - Apps	: 1382330,  (1 in total)
+ - Depots   : 1382331,  (1 in total)
+License packageID 557569:
+ - State   : Active (flags 0x200) - Purchased : Sat Oct 21 19:39:20 2023 in "NZ", PayPal
+ - Apps	: 627270, 704810, 721260, 721270, 721280, 721290, 727980, 727990, 731170, 731171, 731172, 734281, 734282, 734283, 747800, 759580, 759581, 779400, 779401, 814250, 976310, 1051620, 1054480, 1054873, 1095030, 1095031, 1102090, 1116620, 1116621, 1116622, 1160240, 1160241, ... (57 in total)
+ - Depots   : 627271, 976311, 976312, 976313,  (4 in total)
+License packageID 560103:
+ - State   : Active (flags 0x200) - Purchased : Thu May 23 22:08:49 2024 in "NZ", Complimentary
+ - Apps	: 1582890,  (1 in total)
+ - Depots   : 1582891,  (1 in total)
+License packageID 560221:
+ - State   : Active (flags 0x200) - Purchased : Tue Nov 28 22:26:50 2023 in "NZ", Credit Card
+ - Apps	: 1583230,  (1 in total)
+ - Depots   : 1583231,  (1 in total)
+License packageID 561547:
+ - State   : Active (flags 0x200) - Purchased : Thu Oct  9 04:00:03 2025 in "AU", CD Key
+ - Apps	: 1582650,  (1 in total)
+ - Depots   : 1582651,  (1 in total)
+License packageID 563217:
+ - State   : Active (flags 0x200) - Purchased : Thu Jan  8 05:51:00 2026 in "AU", CD Key
+ - Apps	: 1590760,  (1 in total)
+ - Depots   : 1590761,  (1 in total)
+License packageID 563869:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:39:39 2026 in "AU", CD Key
+ - Apps	: 1592640,  (1 in total)
+ - Depots   : 1592641,  (1 in total)
+License packageID 564166:
+ - State   : Active (flags 0x200) - Purchased : Fri Sep 16 18:38:54 2022 in "NZ", PayPal
+ - Apps	: 1593500,  (1 in total)
+ - Depots   : 1593501,  (1 in total)
+License packageID 570389:
+ - State   : Active (flags 0x0) - Purchased : Mon May  4 23:05:57 2026 in "AU", CD Key
+ - Apps	: 1608230,  (1 in total)
+ - Depots   : 1608231,  (1 in total)
+License packageID 577952:
+ - State   : Active (flags 0x200) - Purchased : Wed Aug  7 03:23:07 2024 in "AU", CD Key
+ - Apps	: 1627840,  (1 in total)
+ - Depots   : 1627841, 1627842, 1627843,  (3 in total)
+License packageID 578896:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:39:55 2026 in "AU", CD Key
+ - Apps	: 1630490,  (1 in total)
+ - Depots   : 1630491,  (1 in total)
+License packageID 584520:
+ - State   : Active (flags 0x200) - Purchased : Sun May 12 15:15:30 2024 in "NZ", CD Key
+ - Apps	: 1644940,  (1 in total)
+ - Depots   : 1644941, 1644942,  (2 in total)
+License packageID 584813:
+ - State   : Active (flags 0x200) - Purchased : Mon Sep 18 15:40:30 2023 in "NZ", PayPal
+ - Apps	: 1088850, 1651480,  (2 in total)
+ - Depots   : 1088851, 1088852, 1088854, 1088855, 1088856, 1088857, 1088858, 1088859, 1507730, 1507731, 1507732, 1507733, 1507734, 1507735, 1507736, 1507737,  (16 in total)
+License packageID 585985:
+ - State   : Active (flags 0x200) - Purchased : Fri Jun 14 02:33:46 2024 in "AU", CD Key
+ - Apps	: 1649010,  (1 in total)
+ - Depots   : 1649011,  (1 in total)
+License packageID 586945:
+ - State   : Active (flags 0x200) - Purchased : Wed Mar  5 05:38:42 2025 in "AU", CD Key
+ - Apps	: 1651560,  (1 in total)
+ - Depots   : 1651561,  (1 in total)
+License packageID 590567:
+ - State   : Active (flags 0x200) - Purchased : Fri Nov 15 01:49:13 2024 in "AU", CD Key
+ - Apps	: 1661630,  (1 in total)
+ - Depots   : 1661631,  (1 in total)
+License packageID 591841:
+ - State   : Active (flags 0x200) - Purchased : Wed Mar  5 05:33:59 2025 in "AU", CD Key
+ - Apps	: 1665190,  (1 in total)
+ - Depots   : 1665191, 1665192, 1665193,  (3 in total)
+License packageID 591847:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:39:48 2026 in "AU", CD Key
+ - Apps	: 1665210,  (1 in total)
+ - Depots   : 1665211,  (1 in total)
+License packageID 596084:
+ - State   : Active (flags 0x200) - Purchased : Wed Apr  2 03:58:55 2025 in "AU", CD Key
+ - Apps	: 1675830,  (1 in total)
+ - Depots   : 1675831,  (1 in total)
+License packageID 601219:
+ - State   : Active (flags 0x200) - Purchased : Wed Jan  3 22:45:40 2024 in "NZ", PayPal
+ - Apps	: 1687950,  (1 in total)
+ - Depots   : 1687951, 1687952, 1687953, 1687954, 1687955, 1687956, 1687957, 1687958, 1687959, 1753980,  (10 in total)
+License packageID 602351:
+ - State   : Active (flags 0x0) - Purchased : Wed May 27 22:47:19 2026 in "AU", CD Key
+ - Apps	: 1691190,  (1 in total)
+ - Depots   : 1691191,  (1 in total)
+License packageID 607941:
+ - State   : Active (flags 0x200) - Purchased : Tue Oct  7 00:58:53 2025 in "AU", Credit Card
+ - Apps	: 1702900,  (1 in total)
+ - Depots   :  (0 in total)
+License packageID 608049:
+ - State   : Active (flags 0x0) - Purchased : Thu Jul  9 23:25:36 2026 in "AU", Credit Card
+ - Apps	: 1703220,  (1 in total)
+ - Depots   : 1703221, 1703222,  (2 in total)
+License packageID 619046:
+ - State   : Active (flags 0x200) - Purchased : Sun Nov 21 16:33:36 2021 in "NZ", Complimentary
+ - Apps	: 1240440, 1708090,  (2 in total)
+ - Depots   : 1240441, 1240442, 1240443, 1240444, 1240445, 1240446, 1240447, 1240448, 1240449, 1521610, 1521611, 1521622,  (12 in total)
+License packageID 622347:
+ - State   : Active (flags 0x0) - Purchased : Thu Jul  9 23:25:36 2026 in "AU", Credit Card
+ - Apps	: 1737100,  (1 in total)
+ - Depots   : 1737101, 1737102, 1737103, 1737104, 1737105, 1737106, 1737107, 1737108, 1737109, 3556190, 3556191, 3556192, 3556193, 3556194, 3556195, 3556196, 3556197, 3556198,  (18 in total)
+License packageID 629702:
+ - State   : Active (flags 0x200) - Purchased : Mon Sep 30 21:53:18 2024 in "AU", CD Key
+ - Apps	: 1755830,  (1 in total)
+ - Depots   : 1755831,  (1 in total)
+License packageID 630703:
+ - State   : Active (flags 0x200) - Purchased : Wed Feb 25 18:44:24 2026 in "AU", CD Key
+ - Apps	: 976590,  (1 in total)
+ - Depots   : 976591, 976592, 976593, 976594, 976595, 976596, 976597, 976598, 976599, 1485721, 1485722, 1485723, 1485724, 1485725, 1485726,  (15 in total)
+License packageID 632500:
+ - State   : Active (flags 0x200) - Purchased : Fri Apr  3 03:58:50 2026 in "AU", CD Key
+ - Apps	: 1763250,  (1 in total)
+ - Depots   : 1763251, 3160691,  (2 in total)
+License packageID 635699:
+ - State   : Active (flags 0x200) - Purchased : Wed May 29 01:36:33 2024 in "AU", Credit Card
+ - Apps	: 1771700,  (1 in total)
+ - Depots   : 1771701,  (1 in total)
+License packageID 642312:
+ - State   : Active (flags 0x200) - Purchased : Wed Feb 25 18:43:29 2026 in "AU", CD Key
+ - Apps	: 1621690, 1963720,  (2 in total)
+ - Depots   : 1621691, 1621692, 1963721, 1963722,  (4 in total)
+License packageID 644402:
+ - State   : Active (flags 0x200) - Purchased : Mon Jun 30 05:00:05 2025 in "AU", Credit Card
+ - Apps	: 1794680,  (1 in total)
+ - Depots   : 1794681, 1794684, 1794685,  (3 in total)
+License packageID 644659:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:41:06 2026 in "AU", CD Key
+ - Apps	: 1795430,  (1 in total)
+ - Depots   : 1795431,  (1 in total)
+License packageID 648086:
+ - State   : Active (flags 0x200) - Purchased : Wed Mar  5 05:35:40 2025 in "AU", CD Key
+ - Apps	: 1803400,  (1 in total)
+ - Depots   : 1803401,  (1 in total)
+License packageID 653391:
+ - State   : Active (flags 0x200) - Purchased : Fri Aug 26 18:15:23 2022 in "NZ", PayPal
+ - Apps	: 1817070,  (1 in total)
+ - Depots   : 1817071, 1817072, 1817074, 1817075, 1817076, 1817077, 1817078, 1817079, 1829890, 1829891, 1829892, 1829893, 1829894, 1829895,  (14 in total)
+License packageID 654025:
+ - State   : Active (flags 0x200) - Purchased : Wed May 29 15:14:35 2024 in "AU", Complimentary
+ - Apps	: 1818750,  (1 in total)
+ - Depots   : 1818751,  (1 in total)
+License packageID 661937:
+ - State   : Active (flags 0x200) - Purchased : Sun May 12 15:16:06 2024 in "NZ", CD Key
+ - Apps	: 1839880,  (1 in total)
+ - Depots   : 1839881,  (1 in total)
+License packageID 674005:
+ - State   : Active (flags 0x200) - Purchased : Sat Jan  6 23:50:46 2024 in "NZ", Complimentary
+ - Apps	: 578080, 622590, 813000,  (3 in total)
+ - Depots   : 578081, 578082, 622591, 622592, 813001,  (5 in total)
+License packageID 678944:
+ - State   : Active (flags 0x200) - Purchased : Thu Oct  9 03:59:17 2025 in "AU", CD Key
+ - Apps	: 1885110,  (1 in total)
+ - Depots   : 1885111,  (1 in total)
+License packageID 685144:
+ - State   : Active (flags 0x200) - Purchased : Wed Aug 23 14:40:27 2023 in "NZ", Complimentary
+ - Apps	: 1902490,  (1 in total)
+ - Depots   : 1902491, 1902492, 1902493,  (3 in total)
+License packageID 689939:
+ - State   : Active (flags 0x200) - Purchased : Fri Nov 15 01:49:40 2024 in "AU", CD Key
+ - Apps	: 1915380,  (1 in total)
+ - Depots   : 1915381,  (1 in total)
+License packageID 691907:
+ - State   : Active (flags 0x200) - Purchased : Fri Jun 14 02:34:02 2024 in "AU", CD Key
+ - Apps	: 1920780,  (1 in total)
+ - Depots   : 1920781,  (1 in total)
+License packageID 692499:
+ - State   : Active (flags 0x200) - Purchased : Fri Feb 28 00:41:31 2025 in "AU", Split
+ - Apps	: 1922290,  (1 in total)
+ - Depots   : 1922291,  (1 in total)
+License packageID 693280:
+ - State   : Active (flags 0x0) - Purchased : Fri Jun 26 03:20:33 2026 in "AU", Credit Card
+ - Apps	: 1924480,  (1 in total)
+ - Depots   : 1924481,  (1 in total)
+License packageID 695169:
+ - State   : Active (flags 0x0) - Purchased : Fri Jun 26 03:20:33 2026 in "AU", Credit Card
+ - Apps	: 1929620,  (1 in total)
+ - Depots   :  (0 in total)
+License packageID 695257:
+ - State   : Active (flags 0x200) - Purchased : Wed Apr  2 04:00:06 2025 in "AU", CD Key
+ - Apps	: 1929870,  (1 in total)
+ - Depots   : 1929871,  (1 in total)
+License packageID 695934:
+ - State   : Active (flags 0x200) - Purchased : Wed Mar  5 05:35:55 2025 in "AU", CD Key
+ - Apps	: 1931730,  (1 in total)
+ - Depots   : 1931731, 1931732,  (2 in total)
+License packageID 695944:
+ - State   : Active (flags 0x200) - Purchased : Fri Apr  3 03:58:36 2026 in "AU", CD Key
+ - Apps	: 1931770,  (1 in total)
+ - Depots   : 1931771,  (1 in total)
+License packageID 699833:
+ - State   : Active (flags 0x200) - Purchased : Tue Sep 30 20:33:10 2025 in "AU", Credit Card
+ - Apps	: 1942280,  (1 in total)
+ - Depots   : 1942281, 1942282, 1942283,  (3 in total)
+License packageID 708155:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:41:13 2026 in "AU", CD Key
+ - Apps	: 1961390,  (1 in total)
+ - Depots   : 1961391,  (1 in total)
+License packageID 708279:
+ - State   : Active (flags 0x200) - Purchased : Mon Mar 30 00:25:33 2026 in "AU", CD Key
+ - Apps	: 1961760,  (1 in total)
+ - Depots   : 1961761,  (1 in total)
+License packageID 710000:
+ - State   : Active (flags 0x200) - Purchased : Thu Oct 31 23:19:39 2024 in "AU", CD Key
+ - Apps	: 1916310,  (1 in total)
+ - Depots   : 1916311, 1916312,  (2 in total)
+License packageID 713860:
+ - State   : Active (flags 0x200) - Purchased : Thu Oct 31 23:18:50 2024 in "AU", CD Key
+ - Apps	: 1977170,  (1 in total)
+ - Depots   : 1977171,  (1 in total)
+License packageID 728542:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:38:57 2026 in "AU", CD Key
+ - Apps	: 2017640,  (1 in total)
+ - Depots   : 2017641,  (1 in total)
+License packageID 729264:
+ - State   : Active (flags 0x200) - Purchased : Wed Mar  5 05:36:08 2025 in "AU", CD Key
+ - Apps	: 2019810,  (1 in total)
+ - Depots   : 2019811,  (1 in total)
+License packageID 729915:
+ - State   : Active (flags 0x200) - Purchased : Sun May 12 15:14:53 2024 in "NZ", CD Key
+ - Apps	: 1283400,  (1 in total)
+ - Depots   : 1283401,  (1 in total)
+License packageID 729935:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:38:48 2026 in "AU", CD Key
+ - Apps	: 2021690,  (1 in total)
+ - Depots   : 2021691,  (1 in total)
+License packageID 729941:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:39:15 2026 in "AU", CD Key
+ - Apps	: 2021710,  (1 in total)
+ - Depots   : 2021711,  (1 in total)
+License packageID 733245:
+ - State   : Active (flags 0x0) - Purchased : Thu Jul  9 23:25:36 2026 in "AU", Credit Card
+ - Apps	: 2052410,  (1 in total)
+ - Depots   : 2052411,  (1 in total)
+License packageID 735323:
+ - State   : Active (flags 0x200) - Purchased : Thu Mar 20 23:10:41 2025 in "AU", Credit Card
+ - Apps	: 2058180,  (1 in total)
+ - Depots   : 2058181, 2058182, 2058183, 2058184, 2058185, 2058186, 2058187, 2058188, 2058189,  (9 in total)
+License packageID 735326:
+ - State   : Active (flags 0x200) - Purchased : Thu May  8 02:39:23 2025 in "AU", Credit Card
+ - Apps	: 2058190,  (1 in total)
+ - Depots   : 2058191, 2058192, 2058193, 2058194, 2058195, 2058196, 2058197, 2058198, 2058199,  (9 in total)
+License packageID 736035:
+ - State   : Active (flags 0x0) - Purchased : Sun Jun  7 22:42:08 2026 in "AU", Complimentary
+ - Apps	: 2060310,  (1 in total)
+ - Depots   :  (0 in total)
+License packageID 740938:
+ - State   : Active (flags 0x200) - Purchased : Mon Aug 11 02:58:52 2025 in "AU", Complimentary
+ - Apps	: 2073850,  (1 in total)
+ - Depots   : 2073851,  (1 in total)
+License packageID 744774:
+ - State   : Active (flags 0x200) - Purchased : Thu Oct  9 03:59:28 2025 in "AU", CD Key
+ - Apps	: 2084000,  (1 in total)
+ - Depots   : 2084001, 2084002, 2084003,  (3 in total)
+License packageID 746810:
+ - State   : Active (flags 0x200) - Purchased : Thu Jan  8 13:52:35 2026 in "AU", Complimentary
+ - Apps	: 2089730,  (1 in total)
+ - Depots   :  (0 in total)
+License packageID 746819:
+ - State   : Active (flags 0x200) - Purchased : Thu Jan  8 13:52:46 2026 in "AU", Complimentary
+ - Apps	: 2089733,  (1 in total)
+ - Depots   :  (0 in total)
+License packageID 746859:
+ - State   : Active (flags 0x200) - Purchased : Thu Jan  8 13:52:57 2026 in "AU", Complimentary
+ - Apps	: 2089840,  (1 in total)
+ - Depots   :  (0 in total)
+License packageID 749319:
+ - State   : Active (flags 0x0) - Purchased : Wed May 27 22:46:33 2026 in "AU", CD Key
+ - Apps	: 2096610,  (1 in total)
+ - Depots   : 2096611,  (1 in total)
+License packageID 749671:
+ - State   : Active (flags 0x200) - Purchased : Wed Feb 25 18:43:41 2026 in "AU", CD Key
+ - Apps	: 2097570,  (1 in total)
+ - Depots   : 2097571, 2097572,  (2 in total)
+License packageID 752382:
+ - State   : Active (flags 0x200) - Purchased : Wed Jan  3 22:45:40 2024 in "NZ", PayPal
+ - Apps	: 1496790, 2074431,  (2 in total)
+ - Depots   : 1496791, 1496792,  (2 in total)
+License packageID 754039:
+ - State   : Active (flags 0x200) - Purchased : Thu Jan  8 05:49:58 2026 in "AU", CD Key
+ - Apps	: 1237320,  (1 in total)
+ - Depots   : 1237321,  (1 in total)
+License packageID 756488:
+ - State   : Active (flags 0x200) - Purchased : Wed Mar  5 05:35:25 2025 in "AU", CD Key
+ - Apps	: 2114740,  (1 in total)
+ - Depots   : 2114741, 2114742,  (2 in total)
+License packageID 763640:
+ - State   : Active (flags 0x200) - Purchased : Wed Feb 25 18:44:14 2026 in "AU", CD Key
+ - Apps	: 2134770,  (1 in total)
+ - Depots   : 2134771,  (1 in total)
+License packageID 764995:
+ - State   : Active (flags 0x200) - Purchased : Wed Aug  7 03:22:15 2024 in "AU", CD Key
+ - Apps	: 2138710,  (1 in total)
+ - Depots   : 2138711,  (1 in total)
+License packageID 770867:
+ - State   : Active (flags 0x200) - Purchased : Wed Sep 27 10:10:36 2023 in "NZ", PayPal
+ - Apps	: 2270, 9010, 1873030,  (3 in total)
+ - Depots   : 2271, 9011, 1873031,  (3 in total)
+License packageID 777061:
+ - State   : Active (flags 0x200) - Purchased : Thu Oct 31 23:19:02 2024 in "AU", CD Key
+ - Apps	: 1637320,  (1 in total)
+ - Depots   : 1637321, 1637322, 1637323,  (3 in total)
+License packageID 778254:
+ - State   : Active (flags 0x0) - Purchased : Thu Jul  9 23:25:36 2026 in "AU", Credit Card
+ - Apps	: 2173800,  (1 in total)
+ - Depots   : 2173801,  (1 in total)
+License packageID 780486:
+ - State   : Active (flags 0x200) - Purchased : Wed Jul  3 02:52:53 2024 in "AU", CD Key
+ - Apps	: 1182900,  (1 in total)
+ - Depots   : 1182901,  (1 in total)
+License packageID 781086:
+ - State   : Active (flags 0x200) - Purchased : Wed Jul  3 02:54:26 2024 in "AU", CD Key
+ - Apps	: 2181610,  (1 in total)
+ - Depots   : 2181611,  (1 in total)
+License packageID 782856:
+ - State   : Active (flags 0x200) - Purchased : Tue Aug  5 23:09:41 2025 in "AU", CD Key
+ - Apps	: 2186680,  (1 in total)
+ - Depots   : 2186681, 2186682,  (2 in total)
+License packageID 782948:
+ - State   : Active (flags 0x200) - Purchased : Thu Aug 31 13:42:32 2023 in "NZ", Complimentary
+ - Apps	: 1222670, 1240380,  (2 in total)
+ - Depots   : 1222671, 1222672, 1222673, 1222674, 1222675, 1222676, 1222677, 1222678, 1222679, 1235723, 1235724, 1235725, 1235726, 1235727, 1235728, 1235729, 1235735, 1235736, 1235737,  (19 in total)
+License packageID 785279:
+ - State   : Active (flags 0x200) - Purchased : Thu Jan  8 05:51:21 2026 in "AU", CD Key
+ - Apps	: 2193540,  (1 in total)
+ - Depots   : 2193541,  (1 in total)
+License packageID 791024:
+ - State   : Active (flags 0x0) - Purchased : Mon May  4 23:05:18 2026 in "AU", CD Key
+ - Apps	: 2208920, 2216804, 2251610,  (3 in total)
+ - Depots   : 2208921, 2208922, 2208923, 2208924, 2208925, 2208926, 2208927, 2208928, 2208929, 2210143, 2210144, 2210145,  (12 in total)
+License packageID 797404:
+ - State   : Active (flags 0x0) - Purchased : Mon May  4 23:06:06 2026 in "AU", CD Key
+ - Apps	: 2224640,  (1 in total)
+ - Depots   : 2224641,  (1 in total)
+License packageID 803430:
+ - State   : Active (flags 0x200) - Purchased : Fri Jan 16 01:22:50 2026 in "AU", CD Key
+ - Apps	: 2240790,  (1 in total)
+ - Depots   : 2240791,  (1 in total)
+License packageID 807591:
+ - State   : Active (flags 0x200) - Purchased : Fri Nov 15 01:48:04 2024 in "AU", CD Key
+ - Apps	: 1361210,  (1 in total)
+ - Depots   : 1361211, 1361212, 1361213,  (3 in total)
+License packageID 809225:
+ - State   : Active (flags 0x200) - Purchased : Sun May 12 15:13:06 2024 in "NZ", CD Key
+ - Apps	: 1817230,  (1 in total)
+ - Depots   : 1817231, 1817232,  (2 in total)
+License packageID 811775:
+ - State   : Active (flags 0x200) - Purchased : Fri Jan 16 01:24:26 2026 in "AU", CD Key
+ - Apps	: 2262610,  (1 in total)
+ - Depots   : 2262611, 2262612, 2262613,  (3 in total)
+License packageID 815172:
+ - State   : Active (flags 0x200) - Purchased : Thu Oct 31 23:19:26 2024 in "AU", CD Key
+ - Apps	: 2272400,  (1 in total)
+ - Depots   : 2272401,  (1 in total)
+License packageID 822363:
+ - State   : Active (flags 0x200) - Purchased : Wed Oct  1 21:15:28 2025 in "AU", Credit Card
+ - Apps	: 990080, 1880830,  (2 in total)
+ - Depots   : 990081, 990082, 990083, 990084, 990085, 990086, 990087, 990088, 990089,  (9 in total)
+License packageID 824636:
+ - State   : Active (flags 0x200) - Purchased : Wed Apr  2 03:58:28 2025 in "AU", CD Key
+ - Apps	: 1562430,  (1 in total)
+ - Depots   : 1562431, 1562432,  (2 in total)
+License packageID 826819:
+ - State   : Active (flags 0x200) - Purchased : Wed Jul  3 02:53:50 2024 in "AU", CD Key
+ - Apps	: 2303350,  (1 in total)
+ - Depots   : 2303351, 2303352,  (2 in total)
+License packageID 827687:
+ - State   : Active (flags 0x200) - Purchased : Tue Aug  5 23:09:58 2025 in "AU", CD Key
+ - Apps	: 2305840,  (1 in total)
+ - Depots   : 2305841, 2305842,  (2 in total)
+License packageID 828966:
+ - State   : Active (flags 0x200) - Purchased : Thu Jan  8 05:50:34 2026 in "AU", CD Key
+ - Apps	: 1868170,  (1 in total)
+ - Depots   : 1868171,  (1 in total)
+License packageID 828986:
+ - State   : Active (flags 0x200) - Purchased : Fri Apr  3 03:59:01 2026 in "AU", CD Key
+ - Apps	: 1810820,  (1 in total)
+ - Depots   : 1810821,  (1 in total)
+License packageID 839751:
+ - State   : Active (flags 0x200) - Purchased : Wed Mar  5 05:34:42 2025 in "AU", CD Key
+ - Apps	: 1336490,  (1 in total)
+ - Depots   : 1336491,  (1 in total)
+License packageID 840026:
+ - State   : Active (flags 0x200) - Purchased : Mon Sep 30 21:53:04 2024 in "AU", CD Key
+ - Apps	: 1580520,  (1 in total)
+ - Depots   : 1580521,  (1 in total)
+License packageID 841514:
+ - State   : Active (flags 0x200) - Purchased : Thu Oct  9 03:59:43 2025 in "AU", CD Key
+ - Apps	: 1214470,  (1 in total)
+ - Depots   : 1214471,  (1 in total)
+License packageID 843505:
+ - State   : Active (flags 0x0) - Purchased : Thu Jul 30 21:31:36 2026 in "AU", Complimentary
+ - Apps	: 2348120,  (1 in total)
+ - Depots   : 2348121,  (1 in total)
+License packageID 847084:
+ - State   : Active (flags 0x200) - Purchased : Fri Aug 11 12:42:08 2023 in "NZ", Complimentary
+ - Apps	: 2357570,  (1 in total)
+ - Depots   : 2357571, 2357572, 2357573, 2357574, 2357575, 2357576, 2357577, 2357578, 2357579, 2437281, 2437282, 2437283, 2437284, 2437285, 2437286, 2437287, 2437288,  (17 in total)
+License packageID 847557:
+ - State   : Active (flags 0x200) - Purchased : Sat Nov 18 22:26:13 2023 in "NZ", PayPal
+ - Apps	: 2060870,  (1 in total)
+ - Depots   : 2060871,  (1 in total)
+License packageID 853995:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:39:23 2026 in "AU", CD Key
+ - Apps	: 2375080,  (1 in total)
+ - Depots   : 2375081,  (1 in total)
+License packageID 862479:
+ - State   : Active (flags 0x200) - Purchased : Wed Feb 25 18:44:34 2026 in "AU", CD Key
+ - Apps	: 2397250,  (1 in total)
+ - Depots   : 2397251,  (1 in total)
+License packageID 863133:
+ - State   : Active (flags 0x200) - Purchased : Tue Oct  7 00:31:43 2025 in "AU", Credit Card
+ - Apps	: 2399220,  (1 in total)
+ - Depots   : 2399221,  (1 in total)
+License packageID 863768:
+ - State   : Active (flags 0x200) - Purchased : Wed Apr  2 03:58:44 2025 in "AU", CD Key
+ - Apps	: 1150440,  (1 in total)
+ - Depots   : 1150441, 1150443,  (2 in total)
+License packageID 863943:
+ - State   : Active (flags 0x200) - Purchased : Fri Nov 15 01:48:44 2024 in "AU", CD Key
+ - Apps	: 1321440,  (1 in total)
+ - Depots   : 1321441, 1321442,  (2 in total)
+License packageID 865424:
+ - State   : Active (flags 0x200) - Purchased : Fri Jun 14 02:33:11 2024 in "AU", CD Key
+ - Apps	: 1451810, 2353080, 2353082, 2353083, 2353140, 2353144, 2353151, 2353153, 2353155,  (9 in total)
+ - Depots   : 1451811,  (1 in total)
+License packageID 874096:
+ - State   : Active (flags 0x200) - Purchased : Wed Mar  5 05:38:00 2025 in "AU", CD Key
+ - Apps	: 1937780, 1937790, 2951630, 2951670,  (4 in total)
+ - Depots   : 1937781, 1937782, 1937783, 1937784, 1937785, 1937786, 1937787, 1937788, 1937789, 1937791, 2366641, 2366642, 2366643, 2366644, 2366645, 2366646, 2366647, 2366648, 2366649, 2457180, 2457181, 2457182, 2457183, 2457184, 2457185, 2457186, 2457187, 2457188, 2457189, 2951631, 2951632, 2951633, ... (58 in total)
+License packageID 875004:
+ - State   : Active (flags 0x200) - Purchased : Tue Sep 30 20:33:10 2025 in "AU", Credit Card
+ - Apps	: 2375550,  (1 in total)
+ - Depots   : 2375551,  (1 in total)
+License packageID 880683:
+ - State   : Active (flags 0x200) - Purchased : Tue Nov 28 22:26:50 2023 in "NZ", Credit Card
+ - Apps	: 2447000,  (1 in total)
+ - Depots   :  (0 in total)
+License packageID 891004:
+ - State   : Active (flags 0x200) - Purchased : Fri Nov 15 01:48:58 2024 in "AU", CD Key
+ - Apps	: 1432100,  (1 in total)
+ - Depots   : 1432101, 1432102,  (2 in total)
+License packageID 895240:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:39:32 2026 in "AU", CD Key
+ - Apps	: 2487490,  (1 in total)
+ - Depots   : 2487491,  (1 in total)
+License packageID 902779:
+ - State   : Active (flags 0x200) - Purchased : Tue Oct  7 00:31:43 2025 in "AU", Credit Card
+ - Apps	: 2510770,  (1 in total)
+ - Depots   : 2510771,  (1 in total)
+License packageID 905045:
+ - State   : Active (flags 0x200) - Purchased : Wed Sep 27 11:01:34 2023 in "NZ", Complimentary
+ - Apps	: 1203220,  (1 in total)
+ - Depots   : 1203221,  (1 in total)
+License packageID 906370:
+ - State   : Active (flags 0x0) - Purchased : Wed May 27 22:47:53 2026 in "AU", CD Key
+ - Apps	: 2521630,  (1 in total)
+ - Depots   : 2521631,  (1 in total)
+License packageID 906999:
+ - State   : Active (flags 0x200) - Purchased : Wed Mar  5 05:39:13 2025 in "AU", CD Key
+ - Apps	: 1652250,  (1 in total)
+ - Depots   : 1652251,  (1 in total)
+License packageID 907539:
+ - State   : Active (flags 0x200) - Purchased : Wed Nov 22 14:19:16 2023 in "NZ", PayPal
+ - Apps	: 1086940, 2934770,  (2 in total)
+ - Depots   : 1086941, 1086942, 1086943, 1086944, 1086945, 1086946, 1086947, 1086948, 1086949, 1419650, 1419651, 1419652, 1419653, 1419657, 1419658, 1419659, 1419660, 1419661, 1419662, 1419663, 1419664, 1419665, 1419666, 1419667, 1419668, 1419669, 2330350, 2330351, 2330352, 2330353, 2330354, 2330355, ... (53 in total)
+License packageID 908297:
+ - State   : Active (flags 0x200) - Purchased : Mon Mar 30 00:25:24 2026 in "AU", CD Key
+ - Apps	: 2527450,  (1 in total)
+ - Depots   : 2527451,  (1 in total)
+License packageID 913953:
+ - State   : Active (flags 0x200) - Purchased : Mon Jan  5 17:02:22 2026 in "AU", Credit Card
+ - Apps	: 2544090,  (1 in total)
+ - Depots   : 2544091,  (1 in total)
+License packageID 917099:
+ - State   : Active (flags 0x200) - Purchased : Sun Jul  6 19:43:48 2025 in "AU", Credit Card
+ - Apps	: 1260320,  (1 in total)
+ - Depots   : 1260321,  (1 in total)
+License packageID 923068:
+ - State   : Active (flags 0x200) - Purchased : Fri Nov 15 01:49:27 2024 in "AU", CD Key
+ - Apps	: 1356810,  (1 in total)
+ - Depots   : 1356811, 1356812,  (2 in total)
+License packageID 930281:
+ - State   : Active (flags 0x200) - Purchased : Tue Aug  5 23:10:40 2025 in "AU", CD Key
+ - Apps	: 1150530,  (1 in total)
+ - Depots   : 1150531,  (1 in total)
+License packageID 930435:
+ - State   : Active (flags 0x200) - Purchased : Tue Nov 11 03:58:23 2025 in "AU", Credit Card
+ - Apps	: 2592160,  (1 in total)
+ - Depots   : 2592161,  (1 in total)
+License packageID 937862:
+ - State   : Active (flags 0x200) - Purchased : Tue Oct  7 00:31:43 2025 in "AU", Credit Card
+ - Apps	: 2614070,  (1 in total)
+ - Depots   : 2614071,  (1 in total)
+License packageID 938169:
+ - State   : Active (flags 0x200) - Purchased : Tue Sep 26 19:50:47 2023 in "NZ", PayPal
+ - Apps	: 2138330,  (1 in total)
+ - Depots   : 2138331, 2138332, 2138333, 2138334, 2138335, 2138336, 2138337, 2138338, 2138339, 2224070, 2224071, 2224072, 2224073, 2224074, 2224075, 2224076, 2224077, 2224078, 2224079, 2224080, 2224089,  (21 in total)
+License packageID 942257:
+ - State   : Active (flags 0x200) - Purchased : Mon Sep 30 21:56:05 2024 in "AU", CD Key
+ - Apps	: 837880,  (1 in total)
+ - Depots   : 837881,  (1 in total)
+License packageID 943350:
+ - State   : Active (flags 0x200) - Purchased : Thu Jul  4 19:50:17 2024 in "AU", CD Key
+ - Apps	: 2630300,  (1 in total)
+ - Depots   : 2630301,  (1 in total)
+License packageID 948577:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:38:14 2026 in "AU", CD Key
+ - Apps	: 2646050,  (1 in total)
+ - Depots   : 2646051,  (1 in total)
+License packageID 952172:
+ - State   : Active (flags 0x200) - Purchased : Mon Jan  5 17:02:22 2026 in "AU", Credit Card
+ - Apps	: 2657120,  (1 in total)
+ - Depots   : 2657121,  (1 in total)
+License packageID 955945:
+ - State   : Active (flags 0x200) - Purchased : Tue Mar  3 22:36:55 2026 in "AU", Complimentary
+ - Apps	: 2668080,  (1 in total)
+ - Depots   : 2668081,  (1 in total)
+License packageID 965364:
+ - State   : Active (flags 0x200) - Purchased : Sat Nov 18 10:36:36 2023 in "NZ", Complimentary
+ - Apps	: 70, 254430, 635640,  (3 in total)
+ - Depots   : 0, 254431,  (2 in total)
+License packageID 969050:
+ - State   : Active (flags 0x200) - Purchased : Mon Jan  1 11:59:01 2024 in "NZ", Complimentary
+ - Apps	: 1235753,  (1 in total)
+ - Depots   : 1242240, 1242241, 1242242, 1242243, 1242244, 1242245, 1242246, 1242247, 1242248, 1242249, 1242250, 1242251, 1242252, 1242253, 1242254, 1242255, 1242256, 1242257,  (18 in total)
+License packageID 969463:
+ - State   : Active (flags 0x200) - Purchased : Tue Aug 20 19:57:55 2024 in "AU", CD Key
+ - Apps	: 2072450, 2562820,  (2 in total)
+ - Depots   : 2072451,  (1 in total)
+License packageID 977646:
+ - State   : Active (flags 0x200) - Purchased : Tue Aug  5 23:10:27 2025 in "AU", CD Key
+ - Apps	: 1167450,  (1 in total)
+ - Depots   : 1167451,  (1 in total)
+License packageID 989230:
+ - State   : Active (flags 0x200) - Purchased : Fri Dec  6 17:14:30 2024 in "AU", Complimentary
+ - Apps	: 2767030, 4406010,  (2 in total)
+ - Depots   : 2767031, 4406011,  (2 in total)
+License packageID 996217:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:38:04 2026 in "AU", CD Key
+ - Apps	: 2788150,  (1 in total)
+ - Depots   : 2788151,  (1 in total)
+License packageID 996220:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:38:40 2026 in "AU", CD Key
+ - Apps	: 2788160,  (1 in total)
+ - Depots   : 2788161,  (1 in total)
+License packageID 1007281:
+ - State   : Active (flags 0x0) - Purchased : Wed May 27 22:48:36 2026 in "AU", CD Key
+ - Apps	: 1875830,  (1 in total)
+ - Depots   : 1875831,  (1 in total)
+License packageID 1011065:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:38:25 2026 in "AU", CD Key
+ - Apps	: 2832790,  (1 in total)
+ - Depots   : 2832791,  (1 in total)
+License packageID 1016841:
+ - State   : Active (flags 0x200) - Purchased : Tue Oct  7 00:31:43 2025 in "AU", Credit Card
+ - Apps	: 2850310,  (1 in total)
+ - Depots   : 2850311,  (1 in total)
+License packageID 1019100:
+ - State   : Active (flags 0x200) - Purchased : Fri Jun 21 01:29:14 2024 in "AU", CD Key
+ - Apps	: 2778580, 2855530,  (2 in total)
+ - Depots   :  (0 in total)
+License packageID 1020058:
+ - State   : Active (flags 0x200) - Purchased : Sat Sep  7 14:11:08 2024 in "AU", CD Key
+ - Apps	: 1446780, 1880360,  (2 in total)
+ - Depots   : 1446781,  (1 in total)
+License packageID 1021170:
+ - State   : Active (flags 0x0) - Purchased : Thu Jul  9 23:25:36 2026 in "AU", Credit Card
+ - Apps	: 2863160,  (1 in total)
+ - Depots   : 2863161,  (1 in total)
+License packageID 1029715:
+ - State   : Active (flags 0x200) - Purchased : Fri May 17 21:37:15 2024 in "NZ", Complimentary
+ - Apps	: 282800,  (1 in total)
+ - Depots   : 282801, 282802, 282803, 282804,  (4 in total)
+License packageID 1044747:
+ - State   : Active (flags 0x0) - Purchased : Mon May  4 23:05:41 2026 in "AU", CD Key
+ - Apps	: 2933130, 3349480,  (2 in total)
+ - Depots   : 2933131, 3349481,  (2 in total)
+License packageID 1061633:
+ - State   : Active (flags 0x200) - Purchased : Mon Jan  5 17:02:22 2026 in "AU", Credit Card
+ - Apps	: 2983350,  (1 in total)
+ - Depots   : 2983351,  (1 in total)
+License packageID 1062854:
+ - State   : Active (flags 0x200) - Purchased : Wed Jul  3 02:53:07 2024 in "AU", CD Key
+ - Apps	: 2144740,  (1 in total)
+ - Depots   : 2144741,  (1 in total)
+License packageID 1063478:
+ - State   : Active (flags 0x200) - Purchased : Fri May 17 21:37:34 2024 in "NZ", Complimentary
+ - Apps	: 289130, 297650, 297651, 718570,  (4 in total)
+ - Depots   : 289131, 289132, 289133, 289134, 289139, 289142, 289143, 289144, 289145,  (9 in total)
+License packageID 1067469:
+ - State   : Active (flags 0x200) - Purchased : Wed Mar  5 05:40:06 2025 in "AU", CD Key
+ - Apps	: 2328750,  (1 in total)
+ - Depots   : 2328751, 2328752,  (2 in total)
+License packageID 1070196:
+ - State   : Active (flags 0x200) - Purchased : Sun Jun  9 00:08:44 2024 in "AU", Complimentary
+ - Apps	: 1180660, 1238430, 1266670,  (3 in total)
+ - Depots   : 1180661,  (1 in total)
+License packageID 1072560:
+ - State   : Active (flags 0x200) - Purchased : Wed May 29 00:09:27 2024 in "NZ", Complimentary
+ - Apps	: 489630,  (1 in total)
+ - Depots   : 489631, 489632, 489633,  (3 in total)
+License packageID 1076756:
+ - State   : Active (flags 0x0) - Purchased : Wed May 27 22:47:08 2026 in "AU", CD Key
+ - Apps	: 3028310,  (1 in total)
+ - Depots   : 3028311, 3028312, 3028313,  (3 in total)
+License packageID 1088136:
+ - State   : Active (flags 0x200) - Purchased : Tue Oct  7 00:31:43 2025 in "AU", Credit Card
+ - Apps	: 3061810,  (1 in total)
+ - Depots   : 3061811,  (1 in total)
+License packageID 1090184:
+ - State   : Active (flags 0x200) - Purchased : Fri Apr  3 03:59:35 2026 in "AU", CD Key
+ - Apps	: 1359090,  (1 in total)
+ - Depots   : 1359091,  (1 in total)
+License packageID 1094812:
+ - State   : Active (flags 0x200) - Purchased : Sun Aug 10 01:08:19 2025 in "AU", Complimentary
+ - Apps	: 3081410,  (1 in total)
+ - Depots   : 3081411,  (1 in total)
+License packageID 1099127:
+ - State   : Active (flags 0x200) - Purchased : Tue Oct  7 00:31:43 2025 in "AU", Credit Card
+ - Apps	: 3094010,  (1 in total)
+ - Depots   : 3094011, 3094012,  (2 in total)
+License packageID 1136752:
+ - State   : Active (flags 0x200) - Purchased : Thu May 15 02:57:14 2025 in "AU", Complimentary
+ - Apps	: 3205720,  (1 in total)
+ - Depots   : 3205721,  (1 in total)
+License packageID 1141295:
+ - State   : Active (flags 0x200) - Purchased : Thu Oct 31 23:18:12 2024 in "AU", CD Key
+ - Apps	: 1282100,  (1 in total)
+ - Depots   : 1282101,  (1 in total)
+License packageID 1143144:
+ - State   : Active (flags 0x200) - Purchased : Thu Jul  3 21:50:32 2025 in "AU", Complimentary
+ - Apps	: 3224770,  (1 in total)
+ - Depots   : 3224771,  (1 in total)
+License packageID 1147942:
+ - State   : Active (flags 0x200) - Purchased : Tue Aug  5 23:11:45 2025 in "AU", CD Key
+ - Apps	: 1982340,  (1 in total)
+ - Depots   : 1982346,  (1 in total)
+License packageID 1148607:
+ - State   : Active (flags 0x0) - Purchased : Mon Jul 27 23:38:32 2026 in "AU", CD Key
+ - Apps	: 3240500,  (1 in total)
+ - Depots   : 3240501,  (1 in total)
+License packageID 1180975:
+ - State   : Active (flags 0x200) - Purchased : Thu Oct  9 03:58:34 2025 in "AU", CD Key
+ - Apps	: 1604030, 1829350,  (2 in total)
+ - Depots   : 1604031, 1604032, 1829351,  (3 in total)
+License packageID 1186615:
+ - State   : Active (flags 0x200) - Purchased : Fri Feb 14 03:34:28 2025 in "AU", Complimentary
+ - Apps	: 3352550,  (1 in total)
+ - Depots   : 3352551,  (1 in total)
+License packageID 1202844:
+ - State   : Active (flags 0x0) - Purchased : Wed May 27 22:47:37 2026 in "AU", CD Key
+ - Apps	: 3400000,  (1 in total)
+ - Depots   : 3400001,  (1 in total)
+License packageID 1204600:
+ - State   : Active (flags 0x200) - Purchased : Mon Oct  6 03:46:14 2025 in "AU", Credit Card
+ - Apps	: 3405340,  (1 in total)
+ - Depots   : 3405341, 3405342,  (2 in total)
+License packageID 1209556:
+ - State   : Active (flags 0x200) - Purchased : Sat Feb 22 20:47:07 2025 in "AU", Complimentary
+ - Apps	: 1245430,  (1 in total)
+ - Depots   : 1245431,  (1 in total)
+License packageID 1219520:
+ - State   : Active (flags 0x200) - Purchased : Mon Jun 30 05:00:33 2025 in "AU", Complimentary
+ - Apps	: 3451100,  (1 in total)
+ - Depots   : 3451101, 3451102, 3451103,  (3 in total)
+License packageID 1223646:
+ - State   : Active (flags 0x200) - Purchased : Fri Feb  7 15:18:47 2025 in "AU", Complimentary
+ - Apps	: 220700,  (1 in total)
+ - Depots   : 220701, 220702, 220703, 220704, 220706, 220707, 220708, 220709,  (8 in total)
+License packageID 1228745:
+ - State   : Active (flags 0x0) - Purchased : Fri Jun 26 03:20:33 2026 in "AU", Credit Card
+ - Apps	: 3478650,  (1 in total)
+ - Depots   : 3478651, 3478652, 3478653,  (3 in total)
+License packageID 1240369:
+ - State   : Active (flags 0x200) - Purchased : Tue May  6 18:45:37 2025 in "AU", Complimentary
+ - Apps	: 3513350,  (1 in total)
+ - Depots   : 3513351,  (1 in total)
+License packageID 1245027:
+ - State   : Active (flags 0x200) - Purchased : Sat Aug 30 20:56:27 2025 in "AU", Credit Card
+ - Apps	: 3527290,  (1 in total)
+ - Depots   : 3527291,  (1 in total)
+License packageID 1245978:
+ - State   : Active (flags 0x200) - Purchased : Wed Feb 25 18:42:54 2026 in "AU", CD Key
+ - Apps	: 1196590,  (1 in total)
+ - Depots   : 1196591, 1196593,  (2 in total)
+License packageID 1250479:
+ - State   : Active (flags 0x200) - Purchased : Wed Apr  2 03:57:55 2025 in "AU", CD Key
+ - Apps	: 2478970,  (1 in total)
+ - Depots   : 2478971,  (1 in total)
+License packageID 1257830:
+ - State   : Active (flags 0x200) - Purchased : Mon Nov 24 04:26:33 2025 in "AU", Complimentary
+ - Apps	: 3564740,  (1 in total)
+ - Depots   : 3564741,  (1 in total)
+License packageID 1261257:
+ - State   : Active (flags 0x200) - Purchased : Wed Apr 16 06:17:22 2025 in "AU", Complimentary
+ - Apps	: 286690,  (1 in total)
+ - Depots   : 286691, 286692, 286693, 286694,  (4 in total)
+License packageID 1306654:
+ - State   : Active (flags 0x0) - Purchased : Thu Jul  9 23:25:36 2026 in "AU", Credit Card
+ - Apps	: 3711590,  (1 in total)
+ - Depots   : 3711591,  (1 in total)
+License packageID 1318746:
+ - State   : Active (flags 0x200) - Purchased : Thu Jan  8 05:50:48 2026 in "AU", CD Key
+ - Apps	: 2393160,  (1 in total)
+ - Depots   : 2393161,  (1 in total)
+License packageID 1323504:
+ - State   : Active (flags 0x200) - Purchased : Sat Jun  7 15:42:04 2025 in "AU", Complimentary
+ - Apps	: 1608450,  (1 in total)
+ - Depots   : 1608451,  (1 in total)
+License packageID 1323522:
+ - State   : Active (flags 0x200) - Purchased : Wed Feb 25 18:43:18 2026 in "AU", CD Key
+ - Apps	: 2201320,  (1 in total)
+ - Depots   : 2201321, 2201322,  (2 in total)
+License packageID 1331345:
+ - State   : Active (flags 0x200) - Purchased : Thu Jan  8 05:50:08 2026 in "AU", CD Key
+ - Apps	: 2525380,  (1 in total)
+ - Depots   : 2525381,  (1 in total)
+License packageID 1361905:
+ - State   : Active (flags 0x0) - Purchased : Mon May  4 23:05:49 2026 in "AU", CD Key
+ - Apps	: 1574820,  (1 in total)
+ - Depots   : 1574821, 1574822,  (2 in total)
+License packageID 1365417:
+ - State   : Active (flags 0x200) - Purchased : Thu Oct  9 03:59:06 2025 in "AU", CD Key
+ - Apps	: 1392960,  (1 in total)
+ - Depots   : 1392961, 1392962,  (2 in total)
+License packageID 1366210:
+ - State   : Active (flags 0x200) - Purchased : Wed Feb 25 18:43:54 2026 in "AU", CD Key
+ - Apps	: 2067050,  (1 in total)
+ - Depots   : 2067051,  (1 in total)
+License packageID 1367573:
+ - State   : Active (flags 0x0) - Purchased : Thu Jul  9 03:27:02 2026 in "AU", Complimentary
+ - Apps	: 3890480,  (1 in total)
+ - Depots   : 3890481,  (1 in total)
+License packageID 1368416:
+ - State   : Active (flags 0x200) - Purchased : Thu Oct  9 03:58:53 2025 in "AU", CD Key
+ - Apps	: 482400,  (1 in total)
+ - Depots   : 482401,  (1 in total)
+License packageID 1377309:
+ - State   : Active (flags 0x200) - Purchased : Fri Apr  3 03:59:40 2026 in "AU", CD Key
+ - Apps	: 768200, 808040,  (2 in total)
+ - Depots   : 768201, 768202, 768203, 768204, 808042, 808044,  (6 in total)
+License packageID 1390055:
+ - State   : Active (flags 0x0) - Purchased : Mon May  4 23:05:30 2026 in "AU", CD Key
+ - Apps	: 1342490, 3766450,  (2 in total)
+ - Depots   : 1342491,  (1 in total)
+License packageID 1427649:
+ - State   : Active (flags 0x200) - Purchased : Thu Oct  9 03:58:41 2025 in "AU", CD Key
+ - Apps	: 668580,  (1 in total)
+ - Depots   : 668581,  (1 in total)
+License packageID 1431283:
+ - State   : Active (flags 0x200) - Purchased : Sat Nov 22 04:29:42 2025 in "AU", Complimentary
+ - Apps	: 552500, 866060,  (2 in total)
+ - Depots   : 552501, 552502, 552503, 552505, 866061, 2448251, 2448252, 2448253,  (8 in total)
+License packageID 1550041:
+ - State   : Active (flags 0x200) - Purchased : Fri Apr  3 03:59:29 2026 in "AU", CD Key
+ - Apps	: 1607680,  (1 in total)
+ - Depots   : 1607681, 1607682,  (2 in total)
+License packageID 1558680:
+ - State   : Active (flags 0x200) - Purchased : Fri Apr  3 03:58:30 2026 in "AU", CD Key
+ - Apps	: 1486920,  (1 in total)
+ - Depots   : 1486921,  (1 in total)
