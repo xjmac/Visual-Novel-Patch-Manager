@@ -82,11 +82,15 @@ class VNPatchManagerApp(ctk.CTk):
 
         # Controller & Spatial Focus State
         self._card_entries = []  # List of rendered card dictionaries
-        self._focused_zone = "LIBRARY"  # "LIBRARY", "TOOLBAR", "SETTINGS"
+        self._focused_zone = "LIBRARY"  # "LIBRARY", "TOOLBAR", "TABS", "SETTINGS"
+        self._focused_tab_idx = 0  # 0: Games Library, 1: Settings
         self._focused_card_idx = 0
         self._focused_btn_idx = -1  # -1 = whole card, >= 0 = specific button in card
         self._focused_toolbar_idx = 0  # 0: Search, 1: Filter, 2: Sort, 3: View, 4: Scan
         self._search_frame = None
+        self._filter_frame = None
+        self._sort_frame = None
+        self._view_frame = None
 
         # Trace search input with debounce
         self.search_var.trace_add("write", self._on_search_changed)
@@ -401,9 +405,19 @@ class VNPatchManagerApp(ctk.CTk):
         )
         self.btn_clear_search.grid(row=0, column=2, padx=(2, 6), pady=2)
 
-        # Status Filter
-        self.opt_filter = ctk.CTkSegmentedButton(
+        # Status Filter Container
+        filter_frame = ctk.CTkFrame(
             toolbar_frame,
+            fg_color="#18181b",
+            border_color="#3f3f46",
+            border_width=1,
+            corner_radius=8
+        )
+        filter_frame.grid(row=0, column=1, padx=(0, 10))
+        self._filter_frame = filter_frame
+
+        self.opt_filter = ctk.CTkSegmentedButton(
+            filter_frame,
             values=["All", "Patch Available", "Patched", "Missing 18+ (VNDB)", "Backed Up"],
             variable=self.filter_var,
             command=lambda v: self._apply_filters_and_render(),
@@ -413,11 +427,21 @@ class VNPatchManagerApp(ctk.CTk):
             unselected_hover_color="#1e1e1e",
             text_color="#f1f5f9"
         )
-        self.opt_filter.grid(row=0, column=1, padx=(0, 10))
+        self.opt_filter.pack(padx=2, pady=2)
 
-        # Sort Dropdown
-        self.opt_sort = ctk.CTkOptionMenu(
+        # Sort Dropdown Container
+        sort_frame = ctk.CTkFrame(
             toolbar_frame,
+            fg_color="#18181b",
+            border_color="#3f3f46",
+            border_width=1,
+            corner_radius=8
+        )
+        sort_frame.grid(row=0, column=2, padx=(0, 10))
+        self._sort_frame = sort_frame
+
+        self.opt_sort = ctk.CTkOptionMenu(
+            sort_frame,
             values=["Title (A-Z)", "Title (Z-A)", "VNDB Rating", "Status Priority", "Installed First"],
             variable=self.sort_var,
             command=lambda v: self._apply_filters_and_render(),
@@ -427,11 +451,21 @@ class VNPatchManagerApp(ctk.CTk):
             button_hover_color="#27272a",
             text_color="#f1f5f9"
         )
-        self.opt_sort.grid(row=0, column=2, padx=(0, 10))
+        self.opt_sort.pack(padx=2, pady=2)
 
-        # View Mode Toggle
-        self.opt_view = ctk.CTkSegmentedButton(
+        # View Mode Toggle Container
+        view_frame = ctk.CTkFrame(
             toolbar_frame,
+            fg_color="#18181b",
+            border_color="#3f3f46",
+            border_width=1,
+            corner_radius=8
+        )
+        view_frame.grid(row=0, column=3)
+        self._view_frame = view_frame
+
+        self.opt_view = ctk.CTkSegmentedButton(
+            view_frame,
             values=["Grid", "List"],
             variable=self.view_var,
             command=lambda v: self._apply_filters_and_render(),
@@ -441,7 +475,7 @@ class VNPatchManagerApp(ctk.CTk):
             unselected_hover_color="#1e1e1e",
             text_color="#f1f5f9"
         )
-        self.opt_view.grid(row=0, column=3)
+        self.opt_view.pack(padx=2, pady=2)
 
         # Scrollable Game Area - OLED Pure Black Surface
         self.scrollable_games = ctk.CTkScrollableFrame(
@@ -487,11 +521,13 @@ class VNPatchManagerApp(ctk.CTk):
         # 1. Global Tab Switching (L1 / R1)
         if action == ACTION_PREV_TAB:
             self.tabview.set("Games Library")
+            self._focused_tab_idx = 0
             self._focused_zone = "LIBRARY"
             self._apply_focus_visuals()
             return
         elif action == ACTION_NEXT_TAB:
             self.tabview.set("Settings")
+            self._focused_tab_idx = 1
             self._focused_zone = "SETTINGS"
             self._apply_focus_visuals()
             return
@@ -499,6 +535,7 @@ class VNPatchManagerApp(ctk.CTk):
         # 2. Global Quick Search (Y Button)
         if action == ACTION_SEARCH:
             self.tabview.set("Games Library")
+            self._focused_tab_idx = 0
             self._focused_zone = "TOOLBAR"
             self._focused_toolbar_idx = 0
             self.entry_search.focus_set()
@@ -520,9 +557,53 @@ class VNPatchManagerApp(ctk.CTk):
                 pass
             return
 
-        # 4. Zone: TOOLBAR
-        if self._focused_zone == "TOOLBAR":
+        # 4. Zone: TABS (Top Tab Bar)
+        if self._focused_zone == "TABS":
             if action == ACTION_LEFT:
+                self._focused_tab_idx = 0
+                self.tabview.set("Games Library")
+                self._apply_focus_visuals()
+            elif action == ACTION_RIGHT:
+                self._focused_tab_idx = 1
+                self.tabview.set("Settings")
+                self._apply_focus_visuals()
+            elif action == ACTION_SELECT:
+                if self._focused_tab_idx == 0:
+                    self.tabview.set("Games Library")
+                    self._focused_zone = "TOOLBAR"
+                    self._focused_toolbar_idx = 0
+                else:
+                    self.tabview.set("Settings")
+                    self._focused_zone = "SETTINGS"
+                self._apply_focus_visuals()
+            elif action == ACTION_DOWN:
+                if self.tabview.get() == "Games Library":
+                    self._focused_zone = "TOOLBAR"
+                    self._focused_toolbar_idx = 0
+                else:
+                    self._focused_zone = "SETTINGS"
+                self._apply_focus_visuals()
+            elif action == ACTION_BACK:
+                if self.tabview.get() == "Games Library":
+                    self._focused_zone = "LIBRARY"
+                else:
+                    self._focused_zone = "SETTINGS"
+                self._apply_focus_visuals()
+            return
+
+        # 5. Zone: TOOLBAR
+        if self._focused_zone == "TOOLBAR":
+            filter_options = ["All", "Patch Available", "Patched", "Missing 18+ (VNDB)", "Backed Up"]
+            sort_options = ["Title (A-Z)", "Title (Z-A)", "VNDB Rating", "Status Priority", "Installed First"]
+            view_options = ["Grid", "List"]
+
+            if action == ACTION_UP:
+                self._focused_zone = "TABS"
+                self._focused_tab_idx = 0
+                self.focus_set()
+                SteamOSHelper.hide_onscreen_keyboard()
+                self._apply_focus_visuals()
+            elif action == ACTION_LEFT:
                 self._focused_toolbar_idx = (self._focused_toolbar_idx - 1) % 5
                 self._apply_focus_visuals()
             elif action == ACTION_RIGHT:
@@ -539,13 +620,52 @@ class VNPatchManagerApp(ctk.CTk):
                 if self._focused_toolbar_idx == 0:  # Search
                     self.entry_search.focus_set()
                     SteamOSHelper.show_onscreen_keyboard()
+                elif self._focused_toolbar_idx == 1:  # Filter
+                    curr_filter = self.filter_var.get()
+                    curr_idx = filter_options.index(curr_filter) if curr_filter in filter_options else 0
+                    next_idx = (curr_idx + 1) % len(filter_options)
+                    self.filter_var.set(filter_options[next_idx])
+                    self._apply_filters_and_render()
+                elif self._focused_toolbar_idx == 2:  # Sort
+                    curr_sort = self.sort_var.get()
+                    curr_idx = sort_options.index(curr_sort) if curr_sort in sort_options else 0
+                    next_idx = (curr_idx + 1) % len(sort_options)
+                    self.sort_var.set(sort_options[next_idx])
+                    self._apply_filters_and_render()
+                elif self._focused_toolbar_idx == 3:  # View
+                    curr_view = self.view_var.get()
+                    curr_idx = view_options.index(curr_view) if curr_view in view_options else 0
+                    next_idx = (curr_idx + 1) % len(view_options)
+                    self.view_var.set(view_options[next_idx])
+                    self._apply_filters_and_render()
                 elif self._focused_toolbar_idx == 4:  # Refresh
                     self.refresh_data()
             elif action == ACTION_BACK:
                 self._on_search_submit()
             return
 
-        # 5. Zone: LIBRARY
+        # 6. Zone: SETTINGS
+        if self._focused_zone == "SETTINGS":
+            if action == ACTION_UP:
+                self._focused_zone = "TABS"
+                self._focused_tab_idx = 1
+                self._apply_focus_visuals()
+            elif action == ACTION_LEFT:
+                self.var_mode.set("local")
+                self._toggle_settings_fields("local")
+            elif action == ACTION_RIGHT:
+                self.var_mode.set("smb")
+                self._toggle_settings_fields("smb")
+            elif action == ACTION_SELECT or action == ACTION_QUICK_ACTION:
+                self.save_settings()
+            elif action == ACTION_BACK:
+                self.tabview.set("Games Library")
+                self._focused_zone = "LIBRARY"
+                self._focused_tab_idx = 0
+                self._apply_focus_visuals()
+            return
+
+        # 7. Zone: LIBRARY
         if self._focused_zone == "LIBRARY":
             num_cards = len(self._card_entries)
             if num_cards == 0:
@@ -632,14 +752,54 @@ class VNPatchManagerApp(ctk.CTk):
 
     def _apply_focus_visuals(self):
         """Updates high-contrast OLED visual focus borders across all UI components."""
-        # 1. Reset Toolbar Focus Highlights
+        # 1. Update Tabview and Toolbar Focus Highlights
+        is_tabs_focused = (self._focused_zone == "TABS")
+        if hasattr(self, 'tabview') and self.tabview.winfo_exists():
+            self.tabview.configure(
+                border_color="#3b82f6" if is_tabs_focused else "#27272a",
+                border_width=2 if is_tabs_focused else 1
+            )
+
+        if hasattr(self, 'btn_save') and self.btn_save.winfo_exists():
+            is_settings_focused = (self._focused_zone == "SETTINGS")
+            self.btn_save.configure(
+                border_color="#60a5fa" if is_settings_focused else "#1d4ed8",
+                border_width=2 if is_settings_focused else 0
+            )
+
         if self._search_frame and self._search_frame.winfo_exists():
-            self._search_frame.configure(border_color="#3b82f6" if (self._focused_zone == "TOOLBAR" and self._focused_toolbar_idx == 0) else "#3f3f46", border_width=2 if (self._focused_zone == "TOOLBAR" and self._focused_toolbar_idx == 0) else 1)
+            is_search_focused = (self._focused_zone == "TOOLBAR" and self._focused_toolbar_idx == 0)
+            self._search_frame.configure(
+                border_color="#3b82f6" if is_search_focused else "#3f3f46",
+                border_width=2 if is_search_focused else 1
+            )
+
+        if hasattr(self, '_filter_frame') and self._filter_frame and self._filter_frame.winfo_exists():
+            is_filter_focused = (self._focused_zone == "TOOLBAR" and self._focused_toolbar_idx == 1)
+            self._filter_frame.configure(
+                border_color="#3b82f6" if is_filter_focused else "#3f3f46",
+                border_width=2 if is_filter_focused else 1
+            )
+
+        if hasattr(self, '_sort_frame') and self._sort_frame and self._sort_frame.winfo_exists():
+            is_sort_focused = (self._focused_zone == "TOOLBAR" and self._focused_toolbar_idx == 2)
+            self._sort_frame.configure(
+                border_color="#3b82f6" if is_sort_focused else "#3f3f46",
+                border_width=2 if is_sort_focused else 1
+            )
+
+        if hasattr(self, '_view_frame') and self._view_frame and self._view_frame.winfo_exists():
+            is_view_focused = (self._focused_zone == "TOOLBAR" and self._focused_toolbar_idx == 3)
+            self._view_frame.configure(
+                border_color="#3b82f6" if is_view_focused else "#3f3f46",
+                border_width=2 if is_view_focused else 1
+            )
 
         if hasattr(self, 'btn_refresh') and self.btn_refresh.winfo_exists():
+            is_refresh_focused = (self._focused_zone == "TOOLBAR" and self._focused_toolbar_idx == 4)
             self.btn_refresh.configure(
-                border_color="#60a5fa" if (self._focused_zone == "TOOLBAR" and self._focused_toolbar_idx == 4) else "#1d4ed8",
-                border_width=2 if (self._focused_zone == "TOOLBAR" and self._focused_toolbar_idx == 4) else 0
+                border_color="#60a5fa" if is_refresh_focused else "#1d4ed8",
+                border_width=2 if is_refresh_focused else 0
             )
 
         # 2. Update Card Focus Highlights

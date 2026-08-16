@@ -1,3 +1,4 @@
+import time
 import pytest
 from unittest.mock import patch, MagicMock
 import customtkinter as ctk
@@ -889,4 +890,386 @@ def test_controller_quick_action_x_button(app_instance, mock_steam_structure, mo
     with patch.object(app_instance, "run_patch") as mock_run:
         app_instance._handle_controller_action(ACTION_QUICK_ACTION)
         mock_run.assert_called_once()
+
+
+def test_gui_run_patch_uninstalled_and_execution_flows(app_instance, mock_steam_structure, mock_patch_repo):
+    from vnpatchmanager.patch_execution import PatchExecutionEngine
+
+    # 1. Uninstalled Game -> Warning
+    uninstalled_game = {"name": "Uninstalled VN", "path": "", "is_installed": False}
+    with patch("tkinter.messagebox.showwarning") as mock_warn:
+        app_instance.run_patch(uninstalled_game, {})
+        mock_warn.assert_called_once()
+        assert "Game not installed" in app_instance.lbl_status.cget("text")
+
+    # 2. Installed Game -> Background Thread Success
+    installed_game = {
+        "name": "Synthetic VN Alpha",
+        "path": str(mock_steam_structure["game1"]["path"]),
+        "is_installed": True
+    }
+    patch_data = mock_patch_repo["patch1_manifest"]
+
+    with patch.object(PatchExecutionEngine, "apply_patch") as mock_apply:
+        app_instance.run_patch(installed_game, patch_data)
+        time.sleep(0.1)
+        app_instance.update()
+        mock_apply.assert_called_once()
+
+    # 3. Installed Game -> Background Thread Exception
+    with patch.object(PatchExecutionEngine, "apply_patch", side_effect=RuntimeError("Disk full")):
+        app_instance.run_patch(installed_game, patch_data)
+        time.sleep(0.1)
+        app_instance.update()
+        assert "Patch Failed" in app_instance.lbl_status.cget("text")
+
+
+def test_gui_run_rollback_uninstalled_and_execution_flows(app_instance, mock_steam_structure):
+    from vnpatchmanager.patch_execution import PatchExecutionEngine
+
+    # 1. Uninstalled Game -> Warning
+    uninstalled_game = {"name": "Uninstalled VN", "path": "", "is_installed": False}
+    with patch("tkinter.messagebox.showwarning") as mock_warn:
+        app_instance.run_rollback(uninstalled_game)
+        mock_warn.assert_called_once()
+
+    # 2. Installed Game -> Success
+    installed_game = {
+        "name": "Synthetic VN Alpha",
+        "path": str(mock_steam_structure["game1"]["path"]),
+        "is_installed": True
+    }
+    with patch.object(PatchExecutionEngine, "rollback_patch") as mock_rb:
+        app_instance.run_rollback(installed_game)
+        time.sleep(0.1)
+        app_instance.update()
+        mock_rb.assert_called_once()
+
+    # 3. Installed Game -> Exception
+    with patch.object(PatchExecutionEngine, "rollback_patch", side_effect=RuntimeError("Rollback error")):
+        app_instance.run_rollback(installed_game)
+        time.sleep(0.1)
+        app_instance.update()
+        assert "Rollback Failed" in app_instance.lbl_status.cget("text")
+
+
+def test_gui_run_steam_restore_uninstalled_and_execution_flows(app_instance, mock_steam_structure):
+    from vnpatchmanager.patch_execution import PatchExecutionEngine
+
+    # 1. Uninstalled Game -> Warning
+    uninstalled_game = {"name": "Uninstalled VN", "path": "", "is_installed": False}
+    with patch("tkinter.messagebox.showwarning") as mock_warn:
+        app_instance.run_steam_restore(uninstalled_game, {})
+        mock_warn.assert_called_once()
+
+    # 2. Installed Game -> Success
+    installed_game = {
+        "name": "Synthetic VN Alpha",
+        "path": str(mock_steam_structure["game1"]["path"]),
+        "is_installed": True
+    }
+    with patch.object(PatchExecutionEngine, "restore_via_steam") as mock_sr:
+        app_instance.run_steam_restore(installed_game, {})
+        time.sleep(0.1)
+        app_instance.update()
+        mock_sr.assert_called_once()
+
+    # 3. Installed Game -> Exception
+    with patch.object(PatchExecutionEngine, "restore_via_steam", side_effect=RuntimeError("Steam API failed")):
+        app_instance.run_steam_restore(installed_game, {})
+        time.sleep(0.1)
+        app_instance.update()
+        assert "Steam Restore Failed" in app_instance.lbl_status.cget("text")
+
+
+def test_gui_settings_tab_toggle_and_save(app_instance, tmp_path):
+    # Test toggling between local and smb modes
+    app_instance._toggle_settings_fields("smb")
+    app_instance.var_mode.set("smb")
+    app_instance.entry_local_path.delete(0, "end")
+    app_instance.entry_local_path.insert(0, str(tmp_path / "custom_patches"))
+    app_instance.smb_entries["smb_server"].delete(0, "end")
+    app_instance.smb_entries["smb_server"].insert(0, "192.168.1.200")
+
+    with patch.object(app_instance, "refresh_data"):
+        app_instance.save_settings()
+        assert app_instance.config_manager.config["mode"] == "smb"
+        assert app_instance.config_manager.config["smb_server"] == "192.168.1.200"
+
+    app_instance._toggle_settings_fields("local")
+    app_instance.var_mode.set("local")
+    with patch.object(app_instance, "refresh_data"):
+        app_instance.save_settings()
+        assert app_instance.config_manager.config["mode"] == "local"
+
+
+def test_gui_controller_toolbar_and_button_navigation(app_instance, mock_steam_structure, mock_patch_repo):
+    from vnpatchmanager.controller_manager import (
+        ACTION_LEFT,
+        ACTION_RIGHT,
+        ACTION_UP,
+        ACTION_DOWN,
+        ACTION_SELECT,
+        ACTION_BACK,
+        ACTION_SCROLL_UP,
+        ACTION_SCROLL_DOWN
+    )
+
+    app_instance.repo.available_patches = {"900001": mock_patch_repo["patch1_manifest"]}
+    games = {
+        "900001": {
+            "name": "Synthetic VN Alpha",
+            "path": mock_steam_structure["game1"]["path"],
+            "library_path": mock_steam_structure["game1"]["library_path"],
+            "is_installed": True
+        }
+    }
+    app_instance.view_var.set("List")
+    app_instance._populate_game_list(games)
+    app_instance.update()
+
+    # Fast Scroll test
+    app_instance._handle_controller_action(ACTION_SCROLL_UP)
+    app_instance._handle_controller_action(ACTION_SCROLL_DOWN)
+
+    # 1. Start in Toolbar
+    app_instance._focused_zone = "TOOLBAR"
+    app_instance._focused_toolbar_idx = 0
+    app_instance._apply_focus_visuals()
+
+    # Toolbar Right traversal
+    app_instance._handle_controller_action(ACTION_RIGHT)
+    assert app_instance._focused_toolbar_idx == 1
+    app_instance._handle_controller_action(ACTION_LEFT)
+    assert app_instance._focused_toolbar_idx == 0
+
+    # Down into Library
+    app_instance._handle_controller_action(ACTION_DOWN)
+    assert app_instance._focused_zone == "LIBRARY"
+    assert app_instance._focused_card_idx == 0
+    assert app_instance._focused_btn_idx == -1
+
+    # Down into card action button row
+    app_instance._handle_controller_action(ACTION_DOWN)
+    assert app_instance._focused_btn_idx == 0
+
+    # Select active button
+    with patch.object(app_instance, "run_patch") as mock_p:
+        app_instance._handle_controller_action(ACTION_SELECT)
+        mock_p.assert_called_once()
+
+    # Up back to card level
+    app_instance._handle_controller_action(ACTION_UP)
+    assert app_instance._focused_btn_idx == -1
+
+    # Back action
+    app_instance._handle_controller_action(ACTION_BACK)
+
+
+def test_gui_controller_grid_multi_card_navigation(app_instance, mock_steam_structure, mock_patch_repo):
+    from vnpatchmanager.controller_manager import (
+        ACTION_LEFT,
+        ACTION_RIGHT,
+        ACTION_UP,
+        ACTION_DOWN,
+        ACTION_SELECT,
+        ACTION_BACK
+    )
+
+    app_instance.repo.available_patches = {
+        "900001": mock_patch_repo["patch1_manifest"],
+        "900002": mock_patch_repo["patch2_manifest"],
+        "900003": mock_patch_repo["patch3_manifest"]
+    }
+    games = {
+        "900001": {"name": "Synthetic VN Alpha", "path": mock_steam_structure["game1"]["path"], "library_path": mock_steam_structure["game1"]["library_path"], "is_installed": True},
+        "900002": {"name": "Synthetic VN Beta", "path": mock_steam_structure["game2"]["path"], "library_path": mock_steam_structure["game2"]["library_path"], "is_installed": True},
+        "900003": {"name": "Synthetic VN Gamma", "path": mock_steam_structure["game1"]["path"], "library_path": mock_steam_structure["game1"]["library_path"], "is_installed": True},
+        "900004": {"name": "Synthetic VN Delta", "path": mock_steam_structure["game2"]["path"], "library_path": mock_steam_structure["game2"]["library_path"], "is_installed": True}
+    }
+    app_instance.view_var.set("Grid")
+    app_instance._populate_game_list(games)
+    app_instance.update()
+
+    # 1. Start at card 0
+    app_instance._focused_zone = "LIBRARY"
+    app_instance._focused_card_idx = 0
+    app_instance._focused_btn_idx = -1
+    app_instance._apply_focus_visuals()
+
+    # Move right to card 1
+    app_instance._handle_controller_action(ACTION_RIGHT)
+    assert app_instance._focused_card_idx == 1
+
+    # Move down to card 3 (in row 1)
+    app_instance._handle_controller_action(ACTION_DOWN)
+    assert app_instance._focused_btn_idx == 0
+    app_instance._handle_controller_action(ACTION_DOWN)
+    assert app_instance._focused_card_idx == 3
+    assert app_instance._focused_btn_idx == -1
+
+    # Move up back to card 1
+    app_instance._handle_controller_action(ACTION_UP)
+    assert app_instance._focused_card_idx == 1
+
+    # Move up from card 1 to Toolbar
+    app_instance._handle_controller_action(ACTION_UP)
+    assert app_instance._focused_zone == "TOOLBAR"
+
+
+def test_gui_refresh_banner_and_search_handlers(app_instance, mock_steam_structure):
+    games = {
+        "900001": {"name": "Synthetic VN Alpha", "path": mock_steam_structure["game1"]["path"], "library_path": mock_steam_structure["game1"]["library_path"], "is_installed": True}
+    }
+    app_instance._populate_game_list(games)
+    app_instance.update()
+
+    # 1. Test _refresh_banner
+    app_instance._refresh_banner("900001")
+
+    # 2. Test search focus and submit handlers
+    with patch("vnpatchmanager.steamos_helper.SteamOSHelper.show_onscreen_keyboard") as mock_show:
+        app_instance._on_search_focused()
+        assert app_instance._focused_zone == "TOOLBAR"
+        assert app_instance._focused_toolbar_idx == 0
+        mock_show.assert_called_once()
+
+    with patch("vnpatchmanager.steamos_helper.SteamOSHelper.hide_onscreen_keyboard") as mock_hide:
+        app_instance._on_search_submit()
+        assert app_instance._focused_zone == "LIBRARY"
+        mock_hide.assert_called_once()
+
+
+def test_gui_destroy_and_refresh_error_handling(app_instance):
+    # Test destroy stopping controller manager
+    app_instance.destroy()
+    assert app_instance.controller_manager._running is False
+
+
+def test_gui_controller_filter_and_sort_selection(app_instance, mock_steam_structure):
+    from vnpatchmanager.controller_manager import (
+        ACTION_LEFT,
+        ACTION_RIGHT,
+        ACTION_SELECT
+    )
+
+    games = {
+        "900001": {"name": "Synthetic VN Alpha", "path": mock_steam_structure["game1"]["path"], "library_path": mock_steam_structure["game1"]["library_path"], "is_installed": True}
+    }
+    app_instance._populate_game_list(games)
+    app_instance.update()
+
+    # 1. Focus on Filter (Toolbar idx 1)
+    app_instance._focused_zone = "TOOLBAR"
+    app_instance._focused_toolbar_idx = 1
+    app_instance._apply_focus_visuals()
+
+    # Verify visual focus outline on filter
+    assert app_instance._filter_frame.cget("border_width") == 2
+    assert app_instance._filter_frame.cget("border_color") == "#3b82f6"
+
+    # Press A (SELECT) to cycle filter: "All" -> "Patch Available"
+    assert app_instance.filter_var.get() == "All"
+    app_instance._handle_controller_action(ACTION_SELECT)
+    assert app_instance.filter_var.get() == "Patch Available"
+
+    # Press A (SELECT) again -> "Patched"
+    app_instance._handle_controller_action(ACTION_SELECT)
+    assert app_instance.filter_var.get() == "Patched"
+
+    # 2. Move Right to Sort (Toolbar idx 2)
+    app_instance._handle_controller_action(ACTION_RIGHT)
+    assert app_instance._focused_toolbar_idx == 2
+    assert app_instance._sort_frame.cget("border_width") == 2
+    assert app_instance._sort_frame.cget("border_color") == "#3b82f6"
+
+    # Press A (SELECT) to cycle sort
+    assert app_instance.sort_var.get() == "Title (A-Z)"
+    app_instance._handle_controller_action(ACTION_SELECT)
+    assert app_instance.sort_var.get() == "Title (Z-A)"
+
+    # 3. Move Right to View Mode (Toolbar idx 3)
+    app_instance._handle_controller_action(ACTION_RIGHT)
+    assert app_instance._focused_toolbar_idx == 3
+    assert app_instance._view_frame.cget("border_width") == 2
+    assert app_instance._view_frame.cget("border_color") == "#3b82f6"
+
+    # Press A (SELECT) to toggle view mode
+    assert app_instance.view_var.get() == "Grid"
+    app_instance._handle_controller_action(ACTION_SELECT)
+    assert app_instance.view_var.get() == "List"
+
+
+def test_gui_controller_tab_bar_spatial_navigation(app_instance, mock_steam_structure):
+    from vnpatchmanager.controller_manager import (
+        ACTION_LEFT,
+        ACTION_RIGHT,
+        ACTION_UP,
+        ACTION_DOWN,
+        ACTION_SELECT,
+        ACTION_BACK
+    )
+
+    games = {
+        "900001": {"name": "Synthetic VN Alpha", "path": mock_steam_structure["game1"]["path"], "library_path": mock_steam_structure["game1"]["library_path"], "is_installed": True}
+    }
+    app_instance._populate_game_list(games)
+    app_instance.update()
+
+    # 1. Start on Search in Toolbar
+    app_instance._focused_zone = "TOOLBAR"
+    app_instance._focused_toolbar_idx = 0
+    app_instance._apply_focus_visuals()
+
+    # Move UP into TABS zone
+    app_instance._handle_controller_action(ACTION_UP)
+    assert app_instance._focused_zone == "TABS"
+    assert app_instance._focused_tab_idx == 0
+    assert app_instance.tabview.get() == "Games Library"
+    assert app_instance.tabview.cget("border_width") == 2
+    assert app_instance.tabview.cget("border_color") == "#3b82f6"
+
+    # Press RIGHT in TABS -> switches to Settings tab
+    app_instance._handle_controller_action(ACTION_RIGHT)
+    assert app_instance._focused_tab_idx == 1
+    assert app_instance.tabview.get() == "Settings"
+
+    # Press LEFT in TABS -> switches back to Games Library
+    app_instance._handle_controller_action(ACTION_LEFT)
+    assert app_instance._focused_tab_idx == 0
+    assert app_instance.tabview.get() == "Games Library"
+
+    # Press DOWN from TABS -> enters Toolbar Search
+    app_instance._handle_controller_action(ACTION_DOWN)
+    assert app_instance._focused_zone == "TOOLBAR"
+    assert app_instance._focused_toolbar_idx == 0
+    assert app_instance.tabview.cget("border_width") == 1
+
+    # Move UP again into TABS, switch to Settings, and press DOWN into Settings
+    app_instance._handle_controller_action(ACTION_UP)
+    app_instance._handle_controller_action(ACTION_RIGHT)
+    assert app_instance.tabview.get() == "Settings"
+    app_instance._handle_controller_action(ACTION_DOWN)
+    assert app_instance._focused_zone == "SETTINGS"
+
+    # In Settings, press UP -> returns to TABS on Settings tab
+    app_instance._handle_controller_action(ACTION_UP)
+    assert app_instance._focused_zone == "TABS"
+    assert app_instance._focused_tab_idx == 1
+
+    # In Settings, toggle mode left/right
+    app_instance._handle_controller_action(ACTION_DOWN)
+    app_instance._handle_controller_action(ACTION_RIGHT)
+    assert app_instance.var_mode.get() == "smb"
+    app_instance._handle_controller_action(ACTION_LEFT)
+    assert app_instance.var_mode.get() == "local"
+
+    # In Settings, press BACK -> returns to Games Library
+    app_instance._handle_controller_action(ACTION_BACK)
+    assert app_instance.tabview.get() == "Games Library"
+    assert app_instance._focused_zone == "LIBRARY"
+
+
+
+
 

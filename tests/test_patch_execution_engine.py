@@ -10,13 +10,47 @@ from vnpatchmanager import PatchExecutionEngine, ConfigManager, SteamScanner, Ba
 
 
 def test_get_patch_status(tmp_path):
+    # 1. Nonexistent / empty
+    assert not PatchExecutionEngine.get_patch_status(None)
+    assert not PatchExecutionEngine.get_patch_status(tmp_path / "Nonexistent")
+
     game_dir = tmp_path / "Game"
     game_dir.mkdir()
     assert not PatchExecutionEngine.get_patch_status(game_dir)
 
+    # 2. Tracking file
     tracking_file = game_dir / ".patch_applied.json"
     tracking_file.write_text("{}")
     assert PatchExecutionEngine.get_patch_status(game_dir)
+    tracking_file.unlink()
+
+    # 3. Known Ren'Py patch signature
+    game_sub = game_dir / "game"
+    game_sub.mkdir()
+    (game_sub / "r18.rpa").write_bytes(b"rpa")
+    assert PatchExecutionEngine.get_patch_status(game_dir)
+    (game_sub / "r18.rpa").unlink()
+
+    # 4. CatSystem2 patch1.noa
+    (game_dir / "patch1.noa").write_bytes(b"noa")
+    assert PatchExecutionEngine.get_patch_status(game_dir)
+    (game_dir / "patch1.noa").unlink()
+
+    # 5. BGI ReadMe
+    (game_dir / "ReadMe-Install Instruction.txt").write_text("patch")
+    assert PatchExecutionEngine.get_patch_status(game_dir)
+    (game_dir / "ReadMe-Install Instruction.txt").unlink()
+
+    # 6. Status check via patch_data actions
+    patch_dir = tmp_path / "PatchSource"
+    patch_dir.mkdir()
+    (patch_dir / "patch_file.bin").write_bytes(b"data")
+    (game_dir / "patch_file.bin").write_bytes(b"data")
+    patch_data = {
+        "patch_source_dir": str(patch_dir),
+        "actions": [{"type": "copy_file", "source": "patch_file.bin", "destination": "{game_dir}/"}]
+    }
+    assert PatchExecutionEngine.get_patch_status(game_dir, patch_data=patch_data)
 
 
 def test_find_proton_executable(mock_steam_structure, tmp_path):
@@ -740,6 +774,135 @@ def test_apply_patch_subprocess_timeouts(temp_config_dir, mock_steam_structure, 
          patch.object(SteamScanner, "get_steam_root", return_value=mock_steam_structure["steam_root"]):
         with pytest.raises(ProtonExecutionError, match="timed out"):
             PatchExecutionEngine.apply_patch(game_data, patch_data, cm, lambda m: None)
+
+
+def test_apply_patch_archive_tools_and_fallbacks(temp_config_dir, tmp_path):
+    from vnpatchmanager.exceptions import PatchExtractionError, ProtonExecutionError
+
+    cm = ConfigManager()
+    cm.config["mode"] = "local"
+
+    game_dir = tmp_path / "Game"
+    game_dir.mkdir()
+    source_dir = tmp_path / "Patches"
+    source_dir.mkdir()
+
+    game_data = {"name": "Synthetic VN", "path": game_dir, "library_path": tmp_path / "Steam"}
+
+    # 1. Missing archive file
+    patch_missing = {
+        "steam_app_id": 900001,
+        "patch_source_dir": str(source_dir),
+        "actions": [{"type": "extract_archive", "source": "missing.zip", "destination": "{game_dir}/"}]
+    }
+    with pytest.raises(PatchExtractionError, match="Archive file not found"):
+        PatchExecutionEngine.apply_patch(game_data, patch_missing, cm, lambda m: None)
+
+    # 2. .7z extraction tool found
+    (source_dir / "patch.7z").write_bytes(b"dummy 7z")
+    patch_7z = {
+        "steam_app_id": 900001,
+        "patch_source_dir": str(source_dir),
+        "actions": [{"type": "extract_archive", "source": "patch.7z", "destination": "{game_dir}/"}]
+    }
+    with patch("shutil.which", return_value="/usr/bin/7z"), \
+         patch("subprocess.run") as mock_run:
+        PatchExecutionEngine.apply_patch(game_data, patch_7z, cm, lambda m: None)
+        mock_run.assert_called_once()
+
+    # 3. .7z extraction tool missing
+    with patch("shutil.which", return_value=None):
+        with pytest.raises(PatchExtractionError, match="7z tool not found"):
+            PatchExecutionEngine.apply_patch(game_data, patch_7z, cm, lambda m: None)
+
+    # 4. .rar extraction with unrar
+    (source_dir / "patch.rar").write_bytes(b"dummy rar")
+    patch_rar = {
+        "steam_app_id": 900001,
+        "patch_source_dir": str(source_dir),
+        "actions": [{"type": "extract_archive", "source": "patch.rar", "destination": "{game_dir}/"}]
+    }
+    with patch("shutil.which", side_effect=lambda x: "/usr/bin/unrar" if x == "unrar" else None), \
+         patch("subprocess.run") as mock_run:
+        PatchExecutionEngine.apply_patch(game_data, patch_rar, cm, lambda m: None)
+        mock_run.assert_called_once()
+
+    # 5. .rar extraction with 7z fallback
+    with patch("shutil.which", side_effect=lambda x: "/usr/bin/7z" if x == "7z" else None), \
+         patch("subprocess.run") as mock_run:
+        PatchExecutionEngine.apply_patch(game_data, patch_rar, cm, lambda m: None)
+        mock_run.assert_called_once()
+
+    # 6. .rar extraction with no tools
+    with patch("shutil.which", return_value=None):
+        with pytest.raises(PatchExtractionError, match="unrar or 7z tool not found"):
+            PatchExecutionEngine.apply_patch(game_data, patch_rar, cm, lambda m: None)
+
+    # 7. Missing proton executable file check
+    patch_missing_exe = {
+        "steam_app_id": 900001,
+        "patch_source_dir": str(source_dir),
+        "actions": [{"type": "run_proton_executable", "source": "missing_installer.exe"}]
+    }
+    with pytest.raises(ProtonExecutionError, match="File not found"):
+        PatchExecutionEngine.apply_patch(game_data, patch_missing_exe, cm, lambda m: None)
+
+
+def test_restore_via_steam_all_branches(tmp_path):
+    game_dir = tmp_path / "Game"
+    game_dir.mkdir()
+    tracking_file = game_dir / ".patch_applied.json"
+    tracking_file.write_text("{}")
+    patch_file = game_dir / "patch.rpa"
+    patch_file.write_bytes(b"data")
+
+    backup_dir = game_dir / BackupManager.BACKUP_DIR_NAME
+    backup_dir.mkdir()
+
+    game_data = {"name": "Synthetic VN", "path": game_dir, "steam_app_id": 900001}
+    patch_data = {
+        "steam_app_id": 900001,
+        "actions": [{"type": "copy_file", "source": "patch.rpa", "destination": "{game_dir}/patch.rpa"}]
+    }
+
+    # 1. Success via steam binary
+    with patch("subprocess.Popen") as mock_popen:
+        assert PatchExecutionEngine.restore_via_steam(game_data, patch_data, lambda m: None) is True
+        assert not tracking_file.exists()
+        assert not patch_file.exists()
+        assert not backup_dir.exists()
+        mock_popen.assert_called_once_with(["steam", "steam://validate/900001"])
+
+    # 2. Fallback to xdg-open when steam command fails
+    def popen_side_effect(cmd):
+        if cmd[0] == "steam":
+            raise OSError("steam not in PATH")
+        return MagicMock()
+
+    with patch("subprocess.Popen", side_effect=popen_side_effect):
+        assert PatchExecutionEngine.restore_via_steam(game_data, patch_data, lambda m: None) is True
+
+    # 3. Both steam and xdg-open fail
+    with patch("subprocess.Popen", side_effect=OSError("No launcher")):
+        assert PatchExecutionEngine.restore_via_steam(game_data, patch_data, lambda m: None) is False
+
+
+def test_find_proton_experimental_and_custom_sorting(mock_steam_structure):
+    steam_root = mock_steam_structure["steam_root"]
+    common_dir = steam_root / "steamapps" / "common"
+    
+    # Create Proton Experimental
+    exp_dir = common_dir / "Proton - Experimental"
+    exp_dir.mkdir(parents=True, exist_ok=True)
+    (exp_dir / "proton").write_text("#!/bin/sh\n")
+    (exp_dir / "proton").chmod(0o755)
+
+    with patch.object(SteamScanner, "get_steam_root", return_value=steam_root):
+        proton_bin = PatchExecutionEngine._find_proton_executable()
+        assert proton_bin is not None
+        assert "Experimental" in str(proton_bin)
+
+
 
 
 

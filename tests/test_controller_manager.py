@@ -108,3 +108,43 @@ def test_init_event_ignored():
     mgr._handle_raw_event(1, JS_EVENT_BUTTON | JS_EVENT_INIT, 0)
     mgr._handle_raw_event(30000, JS_EVENT_AXIS | JS_EVENT_INIT, 0)
     assert len(emitted) == 0
+
+
+def test_axis_hold_repeat_timing():
+    emitted = []
+    mgr = GamepadControllerManager(action_callback=lambda act: emitted.append(act))
+
+    # Push Left Stick Down
+    mgr._handle_raw_event(28000, JS_EVENT_AXIS, 1)
+    assert emitted == [ACTION_DOWN]
+
+    # Advance time slightly before repeat delay -> should not repeat
+    with patch("time.time", return_value=mgr._last_repeat + 0.1):
+        mgr._process_repeat()
+        assert len(emitted) == 1
+
+    # Advance time past repeat delay -> should emit second repeat
+    with patch("time.time", return_value=mgr._last_repeat + 0.35):
+        mgr._process_repeat()
+        assert len(emitted) == 2
+        assert emitted[-1] == ACTION_DOWN
+
+
+def test_find_joystick_device():
+    with patch("glob.glob", return_value=["/dev/input/js0", "/dev/input/js1"]):
+        mgr = GamepadControllerManager()
+        assert mgr._find_joystick_device() == "/dev/input/js0"
+
+    with patch("glob.glob", return_value=[]):
+        mgr = GamepadControllerManager()
+        assert mgr._find_joystick_device() is None
+
+
+def test_emit_callback_exception_handling():
+    def exploding_callback(action):
+        raise RuntimeError("Callback crashed")
+
+    mgr = GamepadControllerManager(action_callback=exploding_callback)
+    # Should not raise exception
+    mgr._emit(ACTION_SELECT)
+

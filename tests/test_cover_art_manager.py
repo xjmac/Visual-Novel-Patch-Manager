@@ -119,3 +119,44 @@ def test_download_cover_store_item_assets_fallback(tmp_path):
         result = mgr.download_cover("900099")
         assert result is True
         assert (tmp_path / "900099.jpg").read_bytes() == b"modern header bytes"
+
+
+def test_invalidate_memory_cache_and_corrupt_disk_image(tmp_path):
+    mgr = CoverArtManager(cache_dir=tmp_path)
+
+    # 1. Populate memory cache
+    real_img = Image.new("RGB", (300, 150), color=(100, 150, 200))
+    real_img.save(tmp_path / "900001.jpg")
+    img1 = mgr.get_cover_image("900001", size=(280, 130))
+    assert ("900001", (280, 130)) in mgr._image_cache
+
+    # Invalidate specific app_id
+    mgr.invalidate_memory_cache("900001")
+    assert ("900001", (280, 130)) not in mgr._image_cache
+
+    # Repopulate and invalidate all
+    mgr.get_cover_image("900001", size=(280, 130))
+    mgr.invalidate_memory_cache(None)
+    assert len(mgr._image_cache) == 0
+
+    # 2. Corrupt disk image handling -> falls back to generator
+    (tmp_path / "900002.jpg").write_bytes(b"corrupted not an image")
+    fallback_img = mgr.get_cover_image("900002", title="Corrupt Game", size=(280, 130))
+    assert isinstance(fallback_img, ctk.CTkImage)
+
+
+def test_memory_cache_eviction_on_max_size(tmp_path):
+    mgr = CoverArtManager(cache_dir=tmp_path)
+    mgr.MAX_CACHE_SIZE = 2
+
+    real_img = Image.new("RGB", (100, 50), color=(50, 50, 50))
+    (tmp_path / "1.jpg").write_bytes(b"")
+    real_img.save(tmp_path / "1.jpg")
+    real_img.save(tmp_path / "2.jpg")
+    real_img.save(tmp_path / "3.jpg")
+
+    mgr.get_cover_image("1", size=(50, 50))
+    mgr.get_cover_image("2", size=(50, 50))
+    mgr.get_cover_image("3", size=(50, 50))
+
+    assert len(mgr._image_cache) <= 2
