@@ -134,6 +134,7 @@ def register_shortcut(
         portrait_src = assets_dir / "steam_grid_portrait.jpg"
         landscape_src = assets_dir / "steam_grid_landscape.jpg"
         hero_src = assets_dir / "steam_hero.jpg"
+        logo_src = assets_dir / "steam_logo.png"
         icon_src = assets_dir / "steam_icon.jpg"
 
         if portrait_src.exists():
@@ -142,6 +143,8 @@ def register_shortcut(
             shutil.copy2(landscape_src, grid_dir / f"{appid_32}.jpg")
         if hero_src.exists():
             shutil.copy2(hero_src, grid_dir / f"{appid_32}_hero.jpg")
+        if logo_src.exists():
+            shutil.copy2(logo_src, grid_dir / f"{appid_32}_logo.png")
         if icon_src.exists():
             shutil.copy2(icon_src, grid_dir / f"{appid_32}_icon.jpg")
 
