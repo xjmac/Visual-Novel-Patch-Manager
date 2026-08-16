@@ -39,16 +39,30 @@ def test_steam_deck_screen_aware_geometry(app_instance):
 
 
 def test_toggle_settings_fields(app_instance):
+    from vnpatchmanager.gui import MODE_LOCAL_DISPLAY, MODE_SMB_DISPLAY
     # Test local mode: frame_local is visible, frame_smb is hidden
     app_instance._toggle_settings_fields("local")
-    app_instance._toggle_settings_fields("smb")
-    app_instance._toggle_settings_fields("local")
+    app_instance._toggle_settings_fields(MODE_SMB_DISPLAY)
+    app_instance._toggle_settings_fields(MODE_LOCAL_DISPLAY)
+
+
+def test_browse_local_path(app_instance):
+    from unittest.mock import patch
+
+    with patch("tkinter.filedialog.askdirectory", return_value="/selected/custom/path"):
+        app_instance._browse_local_path()
+        assert app_instance.entry_local_path.get() == "/selected/custom/path"
+
+    # User cancels dialog -> path unchanged
+    with patch("tkinter.filedialog.askdirectory", return_value=""):
+        app_instance._browse_local_path()
+        assert app_instance.entry_local_path.get() == "/selected/custom/path"
 
 
 def test_save_settings(app_instance, temp_config_dir):
     cfg_dir, cfg_file = temp_config_dir
 
-    app_instance.var_mode.set("smb")
+    app_instance.var_mode.set("🌐 Network Share (NAS)")
     app_instance.entry_local_path.delete(0, "end")
     app_instance.entry_local_path.insert(0, "/custom/local/path")
 
@@ -1259,11 +1273,12 @@ def test_gui_controller_tab_bar_spatial_navigation(app_instance, mock_steam_stru
     assert app_instance._focused_tab_idx == 1
 
     # In Settings, toggle mode left/right
+    from vnpatchmanager.gui import MODE_LOCAL_DISPLAY, MODE_SMB_DISPLAY
     app_instance._handle_controller_action(ACTION_DOWN)
     app_instance._handle_controller_action(ACTION_RIGHT)
-    assert app_instance.var_mode.get() == "smb"
+    assert app_instance.var_mode.get() == MODE_SMB_DISPLAY
     app_instance._handle_controller_action(ACTION_LEFT)
-    assert app_instance.var_mode.get() == "local"
+    assert app_instance.var_mode.get() == MODE_LOCAL_DISPLAY
 
     # In Settings, press BACK -> returns to Games Library
     app_instance._handle_controller_action(ACTION_BACK)
