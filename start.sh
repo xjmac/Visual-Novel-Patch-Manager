@@ -40,3 +40,9 @@ fi
 
 echo "Launching application..."
 "$VENV_DIR/bin/python" "$MAIN_SCRIPT" "$@"
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -ne 0 ]; then
+    echo "ERROR: Application exited with code $EXIT_CODE."
+    exit $EXIT_CODE
+fi
