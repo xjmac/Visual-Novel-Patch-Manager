@@ -15,6 +15,8 @@ from .vndb_scanner import VNDBScanner
 from .patch_execution import PatchExecutionEngine
 from .steamos_helper import SteamOSHelper
 from .controller_manager import GamepadControllerManager
+from .non_steam_manager import NonSteamManager, calculate_shortcut_appid
+from .codec_fixer import CodecFixer
 from .version import get_version
 from .gui import VNPatchManagerApp, APP_NAME, APP_VERSION
 
@@ -32,6 +34,9 @@ __all__ = [
     "PatchExecutionEngine",
     "SteamOSHelper",
     "GamepadControllerManager",
+    "NonSteamManager",
+    "calculate_shortcut_appid",
+    "CodecFixer",
     "VNPatchManagerApp",
     "APP_NAME",
     "APP_VERSION",

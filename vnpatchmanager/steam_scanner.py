@@ -111,6 +111,37 @@ class SteamScanner:
         except Exception as e:
             logger.error(f"Error reading libraryfolders.vdf: {e}")
 
+        # Parse non-Steam shortcuts from userdata/*/config/shortcuts.vdf
+        userdata_dir = steam_root / "userdata"
+        if userdata_dir.exists():
+            for user_folder in userdata_dir.iterdir():
+                if not user_folder.is_dir() or not user_folder.name.isdigit():
+                    continue
+                shortcuts_file = user_folder / "config" / "shortcuts.vdf"
+                if shortcuts_file.exists():
+                    try:
+                        with open(shortcuts_file, "rb") as f:
+                            s_data = vdf.binary_loads(f.read())
+                            shortcuts = s_data.get("shortcuts", {})
+                            for s_entry in shortcuts.values():
+                                app_name = s_entry.get("AppName")
+                                exe = s_entry.get("Exe", "").strip('"')
+                                if app_name and exe:
+                                    from .non_steam_manager import calculate_shortcut_appid
+                                    _, appid_32 = calculate_shortcut_appid(exe, app_name)
+                                    aid_str = str(appid_32)
+                                    if aid_str not in installed_games:
+                                        exe_path = Path(exe)
+                                        installed_games[aid_str] = {
+                                            "name": app_name,
+                                            "path": exe_path.parent if exe_path.is_file() else exe_path,
+                                            "library_path": exe_path.parent,
+                                            "is_installed": exe_path.exists(),
+                                            "is_non_steam": True
+                                        }
+                    except Exception as e:
+                        logger.debug(f"Error parsing shortcuts.vdf in {user_folder}: {e}")
+
         return installed_games
 
     @staticmethod

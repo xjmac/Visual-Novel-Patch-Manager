@@ -31,7 +31,10 @@ class ConfigManager:
             "smb_share": "",
             "smb_path": "",
             "smb_username": "",
-            "smb_password": ""
+            "smb_password": "",
+            "steamgriddb_api_key": "",
+            "steamgriddb_nsfw": True,
+            "steamgriddb_animated": True
         }
         self.load_config()
 

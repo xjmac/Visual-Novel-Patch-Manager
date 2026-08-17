@@ -12,7 +12,7 @@ import re
 import subprocess
 from typing import Optional
 
-DEFAULT_VERSION = "0.1.0"
+DEFAULT_VERSION = "0.2.0"
 
 
 def get_version(repo_root: Optional[Path] = None) -> str:
@@ -34,7 +34,7 @@ def get_version(repo_root: Optional[Path] = None) -> str:
                 check=False
             )
             if res.returncode == 0 and res.stdout.strip():
-                # Format: v0.1.0-3-g7628ea9
+                # Format: v0.2.0-3-g7628ea9
                 out = res.stdout.strip()
                 match = re.match(r"^v?(\d+)\.(\d+)\.(\d+)-(\d+)-g[0-9a-f]+$", out)
                 if match:
@@ -53,9 +53,9 @@ def get_version(repo_root: Optional[Path] = None) -> str:
             )
             if res_count.returncode == 0 and res_count.stdout.strip().isdigit():
                 count = int(res_count.stdout.strip())
-                # First commit is 0.1.0, 2nd commit is 0.1.1, etc.
+                # Base is 0.2.0
                 patch_num = max(0, count - 1)
-                return f"0.1.{patch_num}"
+                return f"0.2.{patch_num}"
     except Exception:
         pass
 

@@ -61,7 +61,7 @@ def test_get_version_commit_count_fallback():
     with patch("subprocess.run", side_effect=mock_run), \
          patch("pathlib.Path.exists", return_value=True):
         ver = get_version(repo_root=Path("/fake/repo"))
-        assert ver == "0.1.4"
+        assert ver == "0.2.4"
 
 
 def test_get_version_non_git_package_fallback():
