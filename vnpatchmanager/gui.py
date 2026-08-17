@@ -1,11 +1,13 @@
+import io
 import logging
 import threading
 import queue
 import time
 import webbrowser
+import requests
 from tkinter import messagebox, filedialog
 from pathlib import Path
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageSequence
 
 logger = logging.getLogger(__name__)
 
