@@ -82,10 +82,24 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export PYTHONPATH="${SCRIPT_DIR}:${PYTHONPATH}"
 cd "${SCRIPT_DIR}"
 
+# Locate Python 3 in virtual environment or create it if missing
+PYTHON_BIN="${SCRIPT_DIR}/venv/bin/python3"
+if [ ! -x "${PYTHON_BIN}" ]; then
+    PYTHON_BIN="${SCRIPT_DIR}/.venv/bin/python3"
+fi
+
+if [ ! -x "${PYTHON_BIN}" ]; then
+    echo "Virtual environment missing in ${SCRIPT_DIR}. Initializing..."
+    python3 -m venv "${SCRIPT_DIR}/venv"
+    "${SCRIPT_DIR}/venv/bin/pip" install --upgrade pip --quiet
+    "${SCRIPT_DIR}/venv/bin/pip" install customtkinter vdf smbprotocol pillow requests --quiet
+    PYTHON_BIN="${SCRIPT_DIR}/venv/bin/python3"
+fi
+
 if [ -t 1 ]; then
-    exec "${SCRIPT_DIR}/venv/bin/python3" -m vnpatchmanager "$@"
+    exec "${PYTHON_BIN}" -m vnpatchmanager "$@"
 else
-    exec "${SCRIPT_DIR}/venv/bin/python3" -m vnpatchmanager "$@" >> "${SCRIPT_DIR}/vnpm.log" 2>&1
+    exec "${PYTHON_BIN}" -m vnpatchmanager "$@" >> "${SCRIPT_DIR}/vnpm.log" 2>&1
 fi
 EOF
 chmod +x "${LAUNCHER}"
