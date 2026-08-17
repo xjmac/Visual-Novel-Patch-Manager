@@ -148,3 +148,55 @@ def test_emit_callback_exception_handling():
     # Should not raise exception
     mgr._emit(ACTION_SELECT)
 
+
+def test_modal_controller_stack_delegation():
+    # Test modal stack mechanics in isolation
+    stack = []
+    main_window_calls = []
+    modal1_calls = []
+    modal2_calls = []
+
+    def main_handler(act):
+        main_window_calls.append(act)
+
+    def modal1_handler(act):
+        modal1_calls.append(act)
+
+    def modal2_handler(act):
+        modal2_calls.append(act)
+
+    def dispatch(act):
+        if stack:
+            stack[-1](act)
+        else:
+            main_handler(act)
+
+    # 1. No modal active -> dispatches to main window
+    dispatch(ACTION_SELECT)
+    assert main_window_calls == [ACTION_SELECT]
+    assert modal1_calls == []
+
+    # 2. Push Modal 1 -> dispatches to Modal 1
+    stack.append(modal1_handler)
+    dispatch(ACTION_NEXT_TAB)
+    dispatch(ACTION_DOWN)
+    assert modal1_calls == [ACTION_NEXT_TAB, ACTION_DOWN]
+    assert main_window_calls == [ACTION_SELECT]
+
+    # 3. Push Modal 2 -> dispatches to Modal 2
+    stack.append(modal2_handler)
+    dispatch(ACTION_UP)
+    assert modal2_calls == [ACTION_UP]
+    assert modal1_calls == [ACTION_NEXT_TAB, ACTION_DOWN]
+
+    # 4. Pop Modal 2 -> dispatches back to Modal 1
+    stack.pop()
+    dispatch(ACTION_BACK)
+    assert modal1_calls == [ACTION_NEXT_TAB, ACTION_DOWN, ACTION_BACK]
+
+    # 5. Pop Modal 1 -> dispatches back to main window
+    stack.pop()
+    dispatch(ACTION_PREV_TAB)
+    assert main_window_calls == [ACTION_SELECT, ACTION_PREV_TAB]
+
+

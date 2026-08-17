@@ -1308,7 +1308,13 @@ def test_gui_controller_header_scan_button_navigation(app_instance):
         app_instance._handle_controller_action(ACTION_SELECT)
         mock_refresh.assert_called_once()
 
-    # Press LEFT in HEADER -> returns to TABS
+    # Press LEFT in HEADER -> moves from Scan button (idx 1) to Add Non-Steam button (idx 0)
+    app_instance._handle_controller_action(ACTION_LEFT)
+    assert app_instance._focused_zone == "HEADER"
+    assert app_instance._focused_header_idx == 0
+    assert app_instance.btn_add_non_steam.cget("border_width") == 2
+
+    # Press LEFT again in HEADER -> returns to TABS
     app_instance._handle_controller_action(ACTION_LEFT)
     assert app_instance._focused_zone == "TABS"
     assert app_instance.btn_refresh.cget("border_width") == 0

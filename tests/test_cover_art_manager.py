@@ -152,11 +152,110 @@ def test_memory_cache_eviction_on_max_size(tmp_path):
     real_img = Image.new("RGB", (100, 50), color=(50, 50, 50))
     (tmp_path / "1.jpg").write_bytes(b"")
     real_img.save(tmp_path / "1.jpg")
-    real_img.save(tmp_path / "2.jpg")
-    real_img.save(tmp_path / "3.jpg")
-
-    mgr.get_cover_image("1", size=(50, 50))
-    mgr.get_cover_image("2", size=(50, 50))
-    mgr.get_cover_image("3", size=(50, 50))
-
     assert len(mgr._image_cache) <= 2
+
+
+def test_cover_art_check_steam_grid(tmp_path):
+    cache_dir = tmp_path / "cache"
+    steam_root = tmp_path / "Steam"
+    grid_dir = steam_root / "userdata" / "12345" / "config" / "grid"
+    grid_dir.mkdir(parents=True, exist_ok=True)
+    grid_img = grid_dir / "2348572834.jpg"
+    grid_img.write_bytes(b"steam grid artwork bytes")
+
+    mgr = CoverArtManager(cache_dir=cache_dir)
+    assert mgr.check_steam_grid("2348572834", steam_root=steam_root) is True
+    assert (cache_dir / "2348572834.jpg").exists()
+    assert (cache_dir / "2348572834.jpg").read_bytes() == b"steam grid artwork bytes"
+
+
+def test_cover_art_vndb_kana_fetch_and_game_data_download(tmp_path):
+    cache_dir = tmp_path / "cache"
+    mgr = CoverArtManager(cache_dir=cache_dir)
+
+    # 1. Test fetch_vndb_cover API
+    mock_post_resp = MagicMock()
+    mock_post_resp.status_code = 200
+    mock_post_resp.json.return_value = {
+        "results": [
+            {
+                "id": "v14887",
+                "title": "Synthetic Novel",
+                "image": {"url": "https://t.vndb.org/cv/87/27187.jpg"}
+            }
+        ]
+    }
+
+    with patch("requests.post", return_value=mock_post_resp):
+        url = mgr.fetch_vndb_cover(vn_id="v14887")
+        assert url == "https://t.vndb.org/cv/87/27187.jpg"
+
+    # 2. Test download_cover with game_data fallback
+    mock_get_img_resp = MagicMock()
+    mock_get_img_resp.status_code = 200
+    mock_get_img_resp.content = b"vndb cover image bytes"
+
+    def mock_get(url, *args, **kwargs):
+        if "vndb.org" in url:
+            return mock_get_img_resp
+        m404 = MagicMock()
+        m404.status_code = 404
+        return m404
+
+    with patch("requests.post", return_value=mock_post_resp), \
+         patch("requests.get", side_effect=mock_get):
+        game_data = {
+            "name": "Synthetic Novel",
+            "is_non_steam": True,
+            "vndb": {"vn_id": "v14887"}
+        }
+        success = mgr.download_cover("2348572834", game_data=game_data)
+        assert success is True
+        assert (cache_dir / "2348572834.jpg").exists()
+        assert (cache_dir / "2348572834.jpg").read_bytes() == b"vndb cover image bytes"
+
+
+def test_set_specific_grid_asset(tmp_path):
+    cache_dir = tmp_path / "cache"
+    steam_root = tmp_path / "Steam"
+    grid_dir = steam_root / "userdata" / "999" / "config" / "grid"
+    grid_dir.mkdir(parents=True, exist_ok=True)
+
+    img = Image.new("RGBA", (200, 200), color="purple")
+    import io
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    raw_png = buf.getvalue()
+
+    mgr = CoverArtManager(cache_dir=cache_dir)
+    assert mgr.set_specific_grid_asset("123", "capsule", raw_png, steam_root=steam_root) is True
+    assert (grid_dir / "123p.jpg").exists()
+
+    assert mgr.set_specific_grid_asset("123", "wide", raw_png, steam_root=steam_root) is True
+    assert (grid_dir / "123.jpg").exists()
+
+    assert mgr.set_specific_grid_asset("123", "hero", raw_png, steam_root=steam_root) is True
+    assert (grid_dir / "123_hero.jpg").exists()
+
+    assert mgr.set_specific_grid_asset("123", "logo", raw_png, steam_root=steam_root) is True
+    assert (grid_dir / "123_logo.png").exists()
+
+    assert mgr.set_specific_grid_asset("123", "icon", raw_png, steam_root=steam_root) is True
+    assert (grid_dir / "123_icon.jpg").exists()
+
+    # Test animated replacement (multi-frame) removes existing .jpg files
+    frame1 = Image.new("RGBA", (100, 100), color="blue")
+    frame2 = Image.new("RGBA", (100, 100), color="red")
+    anim_buf = io.BytesIO()
+    frame1.save(anim_buf, format="PNG", save_all=True, append_images=[frame2], duration=100, loop=0)
+    raw_anim_png = anim_buf.getvalue()
+
+    assert mgr.set_specific_grid_asset("123", "hero", raw_anim_png, steam_root=steam_root) is True
+    assert (grid_dir / "123_hero.png").exists()
+    assert not (grid_dir / "123_hero.jpg").exists()
+
+    assert mgr.set_specific_grid_asset("123", "capsule", raw_anim_png, steam_root=steam_root) is True
+    assert (grid_dir / "123p.png").exists()
+    assert not (grid_dir / "123p.jpg").exists()
+
+

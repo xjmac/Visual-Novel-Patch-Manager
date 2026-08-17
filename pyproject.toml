@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vnpatchmanager"
-version = "0.1.0"
+version = "0.2.0"
 description = "A lightweight, automated Visual Novel patch manager for Linux and Steam Deck."
 readme = "README.md"
 license = { text = "MIT" }
