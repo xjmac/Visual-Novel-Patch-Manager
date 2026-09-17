@@ -202,3 +202,92 @@ def test_modal_controller_stack_delegation():
     assert main_window_calls == [ACTION_SELECT, ACTION_PREV_TAB]
 
 
+def test_find_all_joystick_devices():
+    mgr = GamepadControllerManager()
+    with patch("glob.glob", return_value=["/dev/input/js1", "/dev/input/js0"]), \
+         patch("os.access", side_effect=lambda p, mode: True):
+        devices = mgr._find_all_joystick_devices()
+        assert devices == ["/dev/input/js0", "/dev/input/js1"]
+
+    with patch("glob.glob", return_value=["/dev/input/js0", "/dev/input/js1"]), \
+         patch("os.access", side_effect=lambda p, mode: p == "/dev/input/js1"):
+        devices = mgr._find_all_joystick_devices()
+        assert devices == ["/dev/input/js1"]
+
+
+def test_refresh_devices_and_close_device():
+    mgr = GamepadControllerManager()
+    with patch.object(mgr, "_find_all_joystick_devices", return_value=["/dev/input/js0", "/dev/input/js1"]), \
+         patch("os.open", side_effect=[100, 101]) as mock_open, \
+         patch("os.close") as mock_close:
+        mgr._refresh_devices()
+        assert mgr._open_devices == {"/dev/input/js0": 100, "/dev/input/js1": 101}
+        assert mgr._fd_to_path == {100: "/dev/input/js0", 101: "/dev/input/js1"}
+        assert mock_open.call_count == 2
+
+        with patch.object(mgr, "_find_all_joystick_devices", return_value=["/dev/input/js1"]):
+            mgr._refresh_devices()
+            assert "/dev/input/js0" not in mgr._open_devices
+            assert 100 not in mgr._fd_to_path
+            assert mgr._open_devices == {"/dev/input/js1": 101}
+            mock_close.assert_called_with(100)
+
+        mgr._close_device("/dev/input/js1")
+        assert len(mgr._open_devices) == 0
+        assert len(mgr._fd_to_path) == 0
+
+
+def test_digital_dpad_buttons():
+    emitted = []
+    mgr = GamepadControllerManager(action_callback=lambda act: emitted.append(act))
+
+    # Button 11 (D-Pad Up)
+    mgr._handle_raw_event(1, JS_EVENT_BUTTON, 11)
+    assert emitted[-1] == ACTION_UP
+
+    # Button 12 (D-Pad Down)
+    mgr._handle_raw_event(1, JS_EVENT_BUTTON, 12)
+    assert emitted[-1] == ACTION_DOWN
+
+    # Button 15 (D-Pad Left)
+    mgr._handle_raw_event(1, JS_EVENT_BUTTON, 15)
+    assert emitted[-1] == ACTION_LEFT
+
+    # Button 16 (D-Pad Right)
+    mgr._handle_raw_event(1, JS_EVENT_BUTTON, 16)
+    assert emitted[-1] == ACTION_RIGHT
+
+    # Release D-Pad button clears held direction
+    mgr._handle_raw_event(0, JS_EVENT_BUTTON, 16)
+    assert mgr._held_direction is None
+
+
+def test_cross_device_debouncing():
+    emitted = []
+    mgr = GamepadControllerManager(action_callback=lambda act: emitted.append(act))
+
+    # First event from js0
+    mgr._emit(ACTION_SELECT)
+    assert emitted == [ACTION_SELECT]
+
+    # Rapid identical event from js1 within debounce window -> suppressed
+    mgr._emit(ACTION_SELECT)
+    assert emitted == [ACTION_SELECT]
+
+    # Different action from js1 within debounce window -> permitted
+    mgr._emit(ACTION_BACK)
+    assert emitted == [ACTION_SELECT, ACTION_BACK]
+
+    # Same action after debounce delay -> permitted
+    with patch("time.time", return_value=time.time() + 0.1):
+        mgr._emit(ACTION_BACK)
+        assert emitted == [ACTION_SELECT, ACTION_BACK, ACTION_BACK]
+
+
+def test_backwards_compatibility_properties():
+    mgr = GamepadControllerManager()
+    mgr._open_devices["/dev/input/js1"] = 42
+    assert mgr._fd == 42
+    assert mgr._device_path == "/dev/input/js1"
+
+

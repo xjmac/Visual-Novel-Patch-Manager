@@ -39,20 +39,38 @@ class GamepadControllerManager:
     """
     Background gamepad listener utilizing native Linux joystick devices (/dev/input/js*).
     Provides zero-dependency, non-blocking controller integration for Steam Deck Game Mode.
+    Monitors all accessible joystick devices concurrently (handling virtual devices like js1
+    and hotplugged controllers).
     """
 
     def __init__(self, action_callback: Optional[Callable[[str], None]] = None):
         self.action_callback = action_callback
         self._thread: Optional[threading.Thread] = None
         self._running = False
-        self._fd: Optional[int] = None
-        self._device_path: Optional[str] = None
 
-        # State tracking for axis D-pad / sticks
-        self._axis_values: dict[int, int] = {}
+        # Multi-device file descriptor mappings: dev_path -> fd, fd -> dev_path
+        self._open_devices: dict[str, int] = {}
+        self._fd_to_path: dict[int, str] = {}
+
+        # State tracking for axis D-pad / sticks: (dev_path, axis_num) -> val
+        self._axis_values: dict[tuple[str, int], int] = {}
         self._held_direction: Optional[str] = None
         self._held_since: float = 0.0
         self._last_repeat: float = 0.0
+
+        # Debounce tracking across multiple devices
+        self._last_emitted_action: Optional[str] = None
+        self._last_emitted_time: float = 0.0
+
+    @property
+    def _fd(self) -> Optional[int]:
+        """Backwards compatibility accessor for primary file descriptor."""
+        return next(iter(self._open_devices.values()), None)
+
+    @property
+    def _device_path(self) -> Optional[str]:
+        """Backwards compatibility accessor for primary device path."""
+        return next(iter(self._open_devices.keys()), None)
 
     def start(self):
         """Starts background gamepad polling thread."""
@@ -63,93 +81,146 @@ class GamepadControllerManager:
         self._thread.start()
 
     def stop(self):
-        """Stops background thread and releases device descriptor."""
+        """Stops background thread and releases all device descriptors."""
         self._running = False
-        if self._fd is not None:
+        for dev_path, fd in list(self._open_devices.items()):
             try:
-                os.close(self._fd)
+                os.close(fd)
             except Exception:
                 pass
-            self._fd = None
+        self._open_devices.clear()
+        self._fd_to_path.clear()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=0.5)
 
     def _find_joystick_device(self) -> Optional[str]:
         """Finds the first accessible joystick device file in /dev/input."""
+        devs = self._find_all_joystick_devices()
+        return devs[0] if devs else None
+
+    def _find_all_joystick_devices(self) -> list[str]:
+        """Finds all accessible joystick device files in /dev/input."""
         js_devs = sorted(glob.glob("/dev/input/js*"))
+        accessible = []
         for dev in js_devs:
             try:
                 if os.access(dev, os.R_OK):
-                    return dev
+                    accessible.append(dev)
             except Exception:
                 pass
-        return None
+        return accessible
+
+    def _get_device_name(self, fd: int) -> str:
+        """Queries the joystick device name using Linux ioctl JSIOCGNAME if available."""
+        try:
+            import fcntl
+            buf = bytearray(128)
+            # JSIOCGNAME(128) = 0x80806a13
+            fcntl.ioctl(fd, 0x80806a13, buf)
+            return buf.split(b"\x00")[0].decode("utf-8", errors="replace").strip()
+        except Exception:
+            return "Generic Gamepad"
+
+    def _refresh_devices(self):
+        """Opens newly connected joystick devices and purges stale ones."""
+        accessible_list = self._find_all_joystick_devices()
+        accessible_set = set(accessible_list)
+
+        # Close and remove devices no longer accessible
+        for dev_path in list(self._open_devices.keys()):
+            if dev_path not in accessible_set:
+                self._close_device(dev_path)
+
+        # Open any new accessible devices in deterministic order
+        for dev_path in accessible_list:
+            if dev_path not in self._open_devices:
+                try:
+                    fd = os.open(dev_path, os.O_RDONLY | os.O_NONBLOCK)
+                    dev_name = self._get_device_name(fd)
+                    self._open_devices[dev_path] = fd
+                    self._fd_to_path[fd] = dev_path
+                    logger.info(f"Connected to gamepad device: {dev_path} ({dev_name})")
+                except Exception as e:
+                    logger.debug(f"Could not open {dev_path}: {e}")
+
+    def _close_device(self, dev_path: str):
+        """Safely closes an open joystick device."""
+        fd = self._open_devices.pop(dev_path, None)
+        if fd is not None:
+            self._fd_to_path.pop(fd, None)
+            try:
+                os.close(fd)
+            except Exception:
+                pass
+            logger.info(f"Disconnected gamepad device: {dev_path}")
 
     def _emit(self, action: str):
-        """Dispatches an action to the registered callback."""
-        if self.action_callback and action:
-            try:
-                self.action_callback(action)
-            except Exception as e:
-                logger.error(f"Error in gamepad action callback: {e}")
+        """Dispatches an action to the registered callback with cross-device debouncing."""
+        if not self.action_callback or not action:
+            return
+
+        now = time.time()
+        # Debounce identical button actions across multiple devices within 40ms
+        if action == self._last_emitted_action and (now - self._last_emitted_time) < 0.04:
+            return
+
+        self._last_emitted_action = action
+        self._last_emitted_time = now
+
+        try:
+            self.action_callback(action)
+        except Exception as e:
+            logger.error(f"Error in gamepad action callback: {e}")
 
     def _run_loop(self):
-        """Main event polling loop with ultra-low latency 5ms select."""
+        """Main event polling loop monitoring all accessible controllers simultaneously."""
+        last_scan = 0.0
+
         while self._running:
-            # Reconnect device if not currently open
-            if self._fd is None:
-                dev = self._find_joystick_device()
-                if dev:
-                    try:
-                        self._fd = os.open(dev, os.O_RDONLY | os.O_NONBLOCK)
-                        self._device_path = dev
-                        self._axis_values.clear()
-                        logger.info(f"Connected to gamepad device: {dev}")
-                    except Exception:
-                        self._fd = None
-                        time.sleep(1.0)
-                        continue
-                else:
-                    time.sleep(1.0)
-                    continue
+            now = time.time()
+            # Scan for newly plugged / created joystick devices periodically or if empty
+            if now - last_scan >= 1.0 or not self._open_devices:
+                last_scan = now
+                self._refresh_devices()
 
             # Process directional repeat if held
             self._process_repeat()
 
-            # Poll device with select
-            if self._fd is None or not self._running:
+            if not self._open_devices or not self._running:
+                time.sleep(0.05)
                 continue
 
+            fds = list(self._open_devices.values())
             try:
-                r, _, _ = select.select([self._fd], [], [], 0.005)
-                if not r or not self._running or self._fd is None:
+                readable, _, _ = select.select(fds, [], [], 0.01)
+                if not readable or not self._running:
                     continue
 
-                fd = self._fd
-                if fd is None:
-                    continue
+                for fd in readable:
+                    dev_path = self._fd_to_path.get(fd)
+                    if not dev_path:
+                        continue
 
-                raw_data = os.read(fd, JS_EVENT_SIZE * 16)
-                if not raw_data:
-                    raise OSError("Gamepad disconnected")
+                    try:
+                        raw_data = os.read(fd, JS_EVENT_SIZE * 16)
+                        if not raw_data:
+                            self._close_device(dev_path)
+                            continue
 
-                for i in range(0, len(raw_data), JS_EVENT_SIZE):
-                    chunk = raw_data[i:i + JS_EVENT_SIZE]
-                    if len(chunk) < JS_EVENT_SIZE:
-                        break
-                    _, val, event_type, number = struct.unpack(JS_EVENT_FORMAT, chunk)
-                    self._handle_raw_event(val, event_type, number)
+                        for i in range(0, len(raw_data), JS_EVENT_SIZE):
+                            chunk = raw_data[i:i + JS_EVENT_SIZE]
+                            if len(chunk) < JS_EVENT_SIZE:
+                                break
+                            _, val, event_type, number = struct.unpack(JS_EVENT_FORMAT, chunk)
+                            self._handle_raw_event(val, event_type, number, dev_path=dev_path)
+
+                    except (OSError, select.error) as e:
+                        logger.debug(f"Device read error on {dev_path}: {e}")
+                        self._close_device(dev_path)
 
             except (OSError, select.error) as e:
-                logger.debug(f"Gamepad device read error: {e}")
-                if self._fd is not None:
-                    try:
-                        os.close(self._fd)
-                    except Exception:
-                        pass
-                    self._fd = None
-                self._held_direction = None
-                time.sleep(1.0)
+                logger.debug(f"Gamepad select error: {e}")
+                time.sleep(0.05)
 
     def _process_repeat(self):
         """Emits repeated directional actions when D-pad or stick is held."""
@@ -169,12 +240,12 @@ class GamepadControllerManager:
                 self._last_repeat = self._held_since
                 self._emit(direction)
 
-    def _handle_raw_event(self, val: int, event_type: int, number: int):
+    def _handle_raw_event(self, val: int, event_type: int, number: int, dev_path: str = "default"):
         """Parses raw Linux joystick events into high-level gamepad actions."""
         # Ignore initial configuration snapshot events
         if event_type & JS_EVENT_INIT:
             if event_type & ~JS_EVENT_INIT == JS_EVENT_AXIS:
-                self._axis_values[number] = val
+                self._axis_values[(dev_path, number)] = val
             return
 
         if event_type == JS_EVENT_BUTTON:
@@ -192,9 +263,22 @@ class GamepadControllerManager:
                     self._emit(ACTION_PREV_TAB)
                 elif number == 5:  # R1
                     self._emit(ACTION_NEXT_TAB)
+                # Support digital D-pad buttons (common on some pads/drivers)
+                elif number in (11, 13):  # D-Pad Up
+                    self._set_held_direction(ACTION_UP)
+                elif number in (12, 14):  # D-Pad Down
+                    self._set_held_direction(ACTION_DOWN)
+                elif number in (15,):      # D-Pad Left
+                    self._set_held_direction(ACTION_LEFT)
+                elif number in (16,):      # D-Pad Right
+                    self._set_held_direction(ACTION_RIGHT)
+            elif val == 0:
+                # Button release for D-pad buttons
+                if number in (11, 12, 13, 14, 15, 16):
+                    self._set_held_direction(None)
 
         elif event_type == JS_EVENT_AXIS:
-            self._axis_values[number] = val
+            self._axis_values[(dev_path, number)] = val
 
             # Left Stick X (Axis 0) or D-Pad X (Axis 6)
             if number in (0, 6):
@@ -204,7 +288,7 @@ class GamepadControllerManager:
                     self._set_held_direction(ACTION_RIGHT)
                 else:
                     # Check if vertical axis is still pressed before clearing
-                    vert_val = self._axis_values.get(1 if number == 0 else 7, 0)
+                    vert_val = self._axis_values.get((dev_path, 1 if number == 0 else 7), 0)
                     if vert_val < -AXIS_DEADZONE:
                         self._set_held_direction(ACTION_UP)
                     elif vert_val > AXIS_DEADZONE:
@@ -219,7 +303,7 @@ class GamepadControllerManager:
                 elif val > AXIS_DEADZONE:
                     self._set_held_direction(ACTION_DOWN)
                 else:
-                    horiz_val = self._axis_values.get(0 if number == 1 else 6, 0)
+                    horiz_val = self._axis_values.get((dev_path, 0 if number == 1 else 6), 0)
                     if horiz_val < -AXIS_DEADZONE:
                         self._set_held_direction(ACTION_LEFT)
                     elif horiz_val > AXIS_DEADZONE:

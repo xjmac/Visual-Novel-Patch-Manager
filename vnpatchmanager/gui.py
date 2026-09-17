@@ -56,7 +56,7 @@ MODE_SMB_DISPLAY = "🌐 Network Share (NAS)"
 
 class VNPatchManagerApp(ctk.CTk):
     def __init__(self):
-        super().__init__(className="VN Patch Manager")
+        super().__init__(className="VNPatchManager")
 
         self.title(f"{APP_NAME} - Steam Deck & Linux Native")
         self._setup_window_icon()
@@ -166,6 +166,7 @@ class VNPatchManagerApp(ctk.CTk):
         )
         self.controller_manager.start()
         self._bind_controller_and_keyboard_events()
+        self.after(100, self._ensure_game_mode_focus)
 
         # Initial Data Load
         self.refresh_data()
@@ -199,6 +200,14 @@ class VNPatchManagerApp(ctk.CTk):
                     break
         except Exception as e:
             logger.debug(f"Failed to set window icon: {e}")
+
+    def _ensure_game_mode_focus(self):
+        """Ensures the application window claims active keyboard and controller focus in Gamescope."""
+        try:
+            self.focus_force()
+            self._apply_focus_visuals(force_all=True)
+        except Exception:
+            pass
 
     def destroy(self):
         """Cleanly stops background controller listener before closing."""
@@ -234,31 +243,87 @@ class VNPatchManagerApp(ctk.CTk):
             except Exception:
                 pass
 
+    def _is_entry_widget(self, widget) -> bool:
+        """Determines if a widget (or its master) is a text entry or text editing widget."""
+        if widget is None:
+            return False
+        if isinstance(widget, (ctk.CTkEntry, ctk.CTkTextbox)):
+            return True
+        widget_class = widget.__class__.__name__
+        if widget_class in ("Entry", "CTkEntry", "Text", "CTkTextbox"):
+            return True
+        parent = getattr(widget, "master", None)
+        if parent is not None:
+            if isinstance(parent, (ctk.CTkEntry, ctk.CTkTextbox)):
+                return True
+            if parent.__class__.__name__ in ("Entry", "CTkEntry", "Text", "CTkTextbox"):
+                return True
+        return False
+
     def _bind_controller_and_keyboard_events(self):
         """Binds universal keyboard and Steam Input shortcut keys."""
+        # Standard Arrows & Keypad Arrows
         self.bind_all("<Up>", lambda e: self._on_key_event(ACTION_UP, e))
         self.bind_all("<Down>", lambda e: self._on_key_event(ACTION_DOWN, e))
         self.bind_all("<Left>", lambda e: self._on_key_event(ACTION_LEFT, e))
         self.bind_all("<Right>", lambda e: self._on_key_event(ACTION_RIGHT, e))
+        self.bind_all("<KP_Up>", lambda e: self._on_key_event(ACTION_UP, e))
+        self.bind_all("<KP_Down>", lambda e: self._on_key_event(ACTION_DOWN, e))
+        self.bind_all("<KP_Left>", lambda e: self._on_key_event(ACTION_LEFT, e))
+        self.bind_all("<KP_Right>", lambda e: self._on_key_event(ACTION_RIGHT, e))
+
+        # WASD Navigation (Keyboard / Desktop Template)
+        self.bind_all("<w>", lambda e: self._on_key_event(ACTION_UP, e))
+        self.bind_all("<W>", lambda e: self._on_key_event(ACTION_UP, e))
+        self.bind_all("<s>", lambda e: self._on_key_event(ACTION_DOWN, e))
+        self.bind_all("<S>", lambda e: self._on_key_event(ACTION_DOWN, e))
+        self.bind_all("<a>", lambda e: self._on_key_event(ACTION_LEFT, e))
+        self.bind_all("<A>", lambda e: self._on_key_event(ACTION_LEFT, e))
+        self.bind_all("<d>", lambda e: self._on_key_event(ACTION_RIGHT, e))
+        self.bind_all("<D>", lambda e: self._on_key_event(ACTION_RIGHT, e))
+
+        # Selection / A button
         self.bind_all("<Return>", lambda e: self._on_key_event(ACTION_SELECT, e))
+        self.bind_all("<KP_Enter>", lambda e: self._on_key_event(ACTION_SELECT, e))
+        self.bind_all("<space>", lambda e: self._on_key_event(ACTION_SELECT, e))
+
+        # Back / B button
         self.bind_all("<Escape>", lambda e: self._on_key_event(ACTION_BACK, e))
+        self.bind_all("<BackSpace>", lambda e: self._on_key_event(ACTION_BACK, e))
+
+        # Tab navigation / Bumpers L1, R1
         self.bind_all("<F1>", lambda e: self._on_key_event(ACTION_PREV_TAB, e))
         self.bind_all("<F2>", lambda e: self._on_key_event(ACTION_NEXT_TAB, e))
+        self.bind_all("<bracketleft>", lambda e: self._on_key_event(ACTION_PREV_TAB, e))
+        self.bind_all("<bracketright>", lambda e: self._on_key_event(ACTION_NEXT_TAB, e))
+
+        # Page scrolling / Triggers / Right Stick
         self.bind_all("<Prior>", lambda e: self._on_key_event(ACTION_SCROLL_UP, e))
         self.bind_all("<Next>", lambda e: self._on_key_event(ACTION_SCROLL_DOWN, e))
 
     def _on_key_event(self, action: str, event=None):
         """Filters keyboard events if user is currently typing in an Entry widget."""
         focused_widget = self.focus_get()
-        if isinstance(focused_widget, (ctk.CTkEntry,)):
-            # If in entry, let standard typing happen except for Escape / Return
-            if action == ACTION_BACK:
+        if self._is_entry_widget(focused_widget):
+            keysym = getattr(event, "keysym", "")
+            # Let standard typing (letters, spaces, backspaces) pass through unmodified
+            if keysym in ("space", "BackSpace", "w", "W", "a", "A", "s", "S", "d", "D"):
+                return None
+            if keysym == "Escape":
+                self.focus_set()
                 self._handle_controller_action(ACTION_BACK)
                 return "break"
-            elif action == ACTION_SELECT:
+            if keysym in ("Return", "KP_Enter"):
+                if hasattr(self, "entry_search") and (
+                    focused_widget == self.entry_search
+                    or getattr(focused_widget, "master", None) == self.entry_search
+                ):
+                    self._on_search_submit()
+                    return "break"
                 self._handle_controller_action(ACTION_SELECT)
                 return "break"
-            elif action in (ACTION_UP, ACTION_DOWN):
+            if action in (ACTION_UP, ACTION_DOWN):
+                self.focus_set()
                 self._handle_controller_action(action)
                 return "break"
             return None

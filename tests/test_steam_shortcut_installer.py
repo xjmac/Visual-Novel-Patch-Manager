@@ -72,6 +72,7 @@ def test_register_shortcut_and_grid_artwork(tmp_path):
     assert entry["AppName"] == APP_NAME
     assert entry["Exe"] == f'"{exe_path}"'
     assert entry["StartDir"] == f'"{exe_path.parent}/"'
+    assert entry["AllowDesktopConfig"] == 0
 
     # Verify grid artwork copied with appid hash
     _, appid_32 = calculate_shortcut_appid(str(exe_path), APP_NAME)

@@ -70,3 +70,7 @@ def get_version(repo_root: Optional[Path] = None) -> str:
 
     # 3. Static fallback default
     return DEFAULT_VERSION
+
+
+__version__ = get_version()
+

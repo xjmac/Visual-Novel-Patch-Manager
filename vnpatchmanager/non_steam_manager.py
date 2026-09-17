@@ -284,7 +284,7 @@ class NonSteamManager:
                 "ShortcutPath": "",
                 "LaunchOptions": "",
                 "IsHidden": 0,
-                "AllowDesktopConfig": 1,
+                "AllowDesktopConfig": 0,
                 "AllowOverlay": 1,
                 "OpenVR": 0,
                 "Devkit": 0,
