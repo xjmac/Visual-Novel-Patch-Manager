@@ -1,7 +1,5 @@
 """VN Patch Manager Package"""
 
-from pathlib import Path
-
 from .config_manager import (
     CONFIG_DIR,
     CONFIG_FILE,
@@ -19,6 +17,7 @@ from .non_steam_manager import NonSteamManager, calculate_shortcut_appid
 from .codec_fixer import CodecFixer
 from .version import get_version
 from .gui import VNPatchManagerApp, APP_NAME, APP_VERSION
+from .cli import main
 
 __version__ = APP_VERSION
 
@@ -42,4 +41,5 @@ __all__ = [
     "APP_VERSION",
     "__version__",
     "get_version",
+    "main",
 ]

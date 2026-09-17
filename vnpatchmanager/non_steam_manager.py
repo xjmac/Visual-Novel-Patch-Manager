@@ -1,5 +1,4 @@
 import re
-import json
 import logging
 import shutil
 import struct
@@ -22,14 +21,15 @@ logger = logging.getLogger(__name__)
 def calculate_shortcut_appid(exe_path: str, app_name: str) -> tuple[int, int]:
     """
     Calculates Steam's 64-bit and 32-bit AppID hashes for non-Steam shortcuts.
-    Algorithm: CRC32(exe_path + app_name) with high bit set.
+    Algorithm: CRC32(quoted_exe + app_name) with high bit set.
     """
-    combined = f"{exe_path}{app_name}".encode("utf-8")
-    crc = zlib.crc32(combined)
+    formatted_exe = f'"{exe_path}"' if not (str(exe_path).startswith('"') and str(exe_path).endswith('"')) else str(exe_path)
+    combined = f"{formatted_exe}{app_name}".encode("utf-8")
+    crc = zlib.crc32(combined) | 0x80000000
     signed_crc = struct.unpack("i", struct.pack("I", crc))[0]
-    appid_64 = (crc | 0x80000000) << 32 | 0x02000000
-    appid_32 = appid_64 >> 32
+    appid_32 = crc & 0xFFFFFFFF
     return signed_crc, appid_32
+
 
 
 class NonSteamManager:
@@ -44,6 +44,28 @@ class NonSteamManager:
         self.steam_root = steam_root or SteamScanner.get_steam_root()
         self.vndb_scanner = vndb_scanner or VNDBScanner()
         self.cover_manager = CoverArtManager()
+        self._title_index: dict[str, tuple[str, dict]] = {}
+        self._title_list: list[tuple[str, str, dict]] = []
+        self._index_built = False
+
+    def _ensure_title_index(self):
+        """Builds normalized search index once for fast O(1) lookup."""
+        if self._index_built:
+            return
+        db = self.vndb_scanner.bundled_db or {}
+        for aid_str, entry in db.items():
+            if not isinstance(entry, dict):
+                continue
+            vn_title = entry.get("vn_title", "")
+            if not vn_title:
+                continue
+            t_clean = vn_title.lower()
+            t_alpha = re.sub(r'\W+', '', t_clean)
+            if t_alpha:
+                if t_alpha not in self._title_index:
+                    self._title_index[t_alpha] = (aid_str, entry)
+                self._title_list.append((t_alpha, aid_str, entry))
+        self._index_built = True
 
     @staticmethod
     def clean_folder_name(name: str) -> str:
@@ -143,53 +165,42 @@ class NonSteamManager:
                 seen.add(q.lower())
                 candidates.append(q.strip())
 
-        db = self.vndb_scanner.bundled_db
+        self._ensure_title_index()
 
-        # Stage 1: Exact / Normalized Match
+        # Stage 1: Exact / Normalized Match (O(1) dictionary lookup)
         for query in candidates:
             q_clean = query.lower()
             q_alpha = re.sub(r'\W+', '', q_clean)
             if not q_alpha:
                 continue
 
-            for aid_str, entry in db.items():
-                if not isinstance(entry, dict):
-                    continue
-                vn_title = entry.get("vn_title", "")
-                t_clean = vn_title.lower()
-                t_alpha = re.sub(r'\W+', '', t_clean)
+            if q_alpha in self._title_index:
+                aid_str, entry = self._title_index[q_alpha]
+                return {
+                    "vndb_id": entry.get("vn_id"),
+                    "title": entry.get("vn_title", ""),
+                    "rating": entry.get("rating"),
+                    "vndb_url": entry.get("vndb_url"),
+                    "matched_app_id": aid_str
+                }
 
-                if q_clean == t_clean or q_alpha == t_alpha:
-                    return {
-                        "vndb_id": entry.get("vn_id"),
-                        "title": vn_title,
-                        "rating": entry.get("rating"),
-                        "vndb_url": entry.get("vndb_url"),
-                        "matched_app_id": aid_str
-                    }
-
-        # Stage 2: Substring / Sub-phrase Match (favoring exact phrase start)
+        # Stage 2: Fast Substring / Sub-phrase Match (minimum 4 chars to prevent false positives)
         for query in candidates:
             q_clean = query.lower()
             q_alpha = re.sub(r'\W+', '', q_clean)
-            if len(q_alpha) < 3:
+            if len(q_alpha) < 4:
                 continue
 
-            for aid_str, entry in db.items():
-                if not isinstance(entry, dict):
-                    continue
-                vn_title = entry.get("vn_title", "")
-                t_clean = vn_title.lower()
-                t_alpha = re.sub(r'\W+', '', t_clean)
-
+            for t_alpha, aid_str, entry in self._title_list:
                 if q_alpha in t_alpha or t_alpha in q_alpha:
                     return {
                         "vndb_id": entry.get("vn_id"),
-                        "title": vn_title,
+                        "title": entry.get("vn_title", ""),
                         "rating": entry.get("rating"),
                         "vndb_url": entry.get("vndb_url"),
                         "matched_app_id": aid_str
                     }
+
 
         fallback_title = (cleaned_folder or folder_name).replace("_", " ").replace("-", " ").title()
         return {

@@ -1,6 +1,5 @@
 import logging
 import requests
-from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 logger = logging.getLogger(__name__)

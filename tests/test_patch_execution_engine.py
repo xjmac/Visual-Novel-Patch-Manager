@@ -272,7 +272,8 @@ def test_apply_patch_run_proton_executable_success(temp_config_dir, mock_steam_s
     assert executed_cmd[3] == "/SILENT"
 
     # Assert Windows Z: path formatting
-    win_dir_expected = f'"Z:{str(mock_steam_structure["game1"]["path"]).replace("/", "\\")}"'
+    win_path = str(mock_steam_structure["game1"]["path"]).replace("/", "\\")
+    win_dir_expected = f'"Z:{win_path}"'
     assert executed_cmd[4] == f"/DIR={win_dir_expected}"
 
     # Assert Environment Variables

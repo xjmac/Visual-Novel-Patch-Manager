@@ -1,7 +1,6 @@
 import glob
 import logging
 import os
-from pathlib import Path
 import select
 import struct
 import threading
@@ -106,7 +105,7 @@ class GamepadControllerManager:
                         self._device_path = dev
                         self._axis_values.clear()
                         logger.info(f"Connected to gamepad device: {dev}")
-                    except Exception as e:
+                    except Exception:
                         self._fd = None
                         time.sleep(1.0)
                         continue

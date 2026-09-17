@@ -28,10 +28,10 @@ def calculate_shortcut_appid(exe_path: str, app_name: str) -> tuple[int, str]:
         32-bit grid ID = crc
         64-bit VDF appid = (crc << 32) | 0x02000000
     """
-    key = f'"{exe_path}"{app_name}'.encode("utf-8")
+    formatted_exe = f'"{exe_path}"' if not (str(exe_path).startswith('"') and str(exe_path).endswith('"')) else str(exe_path)
+    key = f"{formatted_exe}{app_name}".encode("utf-8")
     crc = zlib.crc32(key) | 0x80000000
     appid_32 = str(crc & 0xFFFFFFFF)
-    appid_64 = (crc << 32) | 0x02000000
     # In binary VDF, signed 32-bit integer conversion is used for the appid key
     signed_crc = crc - 0x100000000 if crc > 0x7FFFFFFF else crc
     return signed_crc, appid_32
@@ -97,8 +97,12 @@ def register_shortcut(
 
         # Check if already present
         existing_idx = None
+        quoted_exe = f'"{exe_path}"' if not (str(exe_path).startswith('"') and str(exe_path).endswith('"')) else str(exe_path)
+        start_dir = str(exe_path.parent) + "/"
+        quoted_start_dir = f'"{start_dir}"' if not (start_dir.startswith('"') and start_dir.endswith('"')) else start_dir
+
         for idx, entry in shortcuts.items():
-            if isinstance(entry, dict) and entry.get("AppName") == APP_NAME:
+            if isinstance(entry, dict) and (entry.get("AppName") == APP_NAME or entry.get("Exe") in (str(exe_path), quoted_exe)):
                 existing_idx = idx
                 break
 
@@ -106,8 +110,8 @@ def register_shortcut(
         shortcuts[target_idx] = {
             "appid": signed_appid,
             "AppName": APP_NAME,
-            "Exe": str(exe_path),
-            "StartDir": str(exe_path.parent) + "/",
+            "Exe": quoted_exe,
+            "StartDir": quoted_start_dir,
             "icon": str(icon_path) if icon_path.exists() else "",
             "ShortcutPath": "",
             "LaunchOptions": "",

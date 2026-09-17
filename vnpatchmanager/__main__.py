@@ -1,7 +1,7 @@
 """Executable entrypoint for python -m vnpatchmanager"""
 import sys
-
 from .gui import VNPatchManagerApp
+from .cli import main as cli_main
 
 try:
     import customtkinter as ctk
@@ -12,9 +12,17 @@ except ImportError:
 
 
 def main():
+    # If CLI flags were provided, delegate to argument parser
+    cli_flags = {"-h", "--help", "-V", "--version", "-l", "--list", "--sync-vndb", "--export-licenses", "--output-file", "-o", "-d", "--debug"}
+    if any(arg in cli_flags for arg in sys.argv[1:]):
+        cli_main()
+        return
+
     app = VNPatchManagerApp()
     app.mainloop()
 
 
 if __name__ == "__main__":
     main()
+
+

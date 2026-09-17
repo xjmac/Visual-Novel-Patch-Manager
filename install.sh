@@ -23,21 +23,37 @@ echo "========================================================"
 echo "  Target: ${INSTALL_DIR}"
 echo ""
 
-# 1. Check Python 3
-if ! command -v python3 >/dev/null 2>&1; then
-    echo "❌ Error: Python 3 was not found on this system."
-    exit 1
+# 1. Check Python and Tkinter availability
+BASE_PY=""
+if command -v python3 >/dev/null 2>&1 && python3 -c "import tkinter" &>/dev/null; then
+    BASE_PY="python3"
+    PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+    echo "✓ Found System Python ${PYTHON_VERSION} with Tkinter"
+elif [ -x "${INSTALL_DIR}/python/bin/python3" ] && "${INSTALL_DIR}/python/bin/python3" -c "import tkinter" &>/dev/null; then
+    BASE_PY="${INSTALL_DIR}/python/bin/python3"
+    echo "✓ Found existing standalone Python runtime"
+else
+    echo "ℹ️  System Python lacks Tkinter (standard on SteamOS). Downloading user-space Python runtime..."
+    mkdir -p "${INSTALL_DIR}"
+    PY_TAR="${INSTALL_DIR}/python_runtime.tar.gz"
+    PY_URL="https://github.com/astral-sh/python-build-standalone/releases/download/20240415/cpython-3.11.9+20240415-x86_64-unknown-linux-gnu-install_only.tar.gz"
+    if curl -fL -o "${PY_TAR}" "${PY_URL}"; then
+        tar -xzf "${PY_TAR}" -C "${INSTALL_DIR}"
+        rm -f "${PY_TAR}"
+        BASE_PY="${INSTALL_DIR}/python/bin/python3"
+        echo "✓ Provisioned standalone Python runtime"
+    else
+        echo "❌ Error: Failed to download standalone Python runtime. Please check your internet connection."
+        exit 1
+    fi
 fi
-
-PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-echo "✓ Found Python ${PYTHON_VERSION}"
 
 # 2. Create Directory Structure
 mkdir -p "${INSTALL_DIR}/bin" "${BIN_DIR}" "${APPS_DIR}"
 
 # 3. Create / Update Virtual Environment
 echo "📦 Setting up isolated Python virtual environment..."
-python3 -m venv "${INSTALL_DIR}/venv"
+"${BASE_PY}" -m venv "${INSTALL_DIR}/venv"
 "${INSTALL_DIR}/venv/bin/pip" install --upgrade pip --quiet
 "${INSTALL_DIR}/venv/bin/pip" install customtkinter vdf smbprotocol pillow requests --quiet
 
@@ -82,24 +98,38 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export PYTHONPATH="${SCRIPT_DIR}:${PYTHONPATH}"
 cd "${SCRIPT_DIR}"
 
-# Locate Python 3 in virtual environment or create it if missing
-PYTHON_BIN="${SCRIPT_DIR}/venv/bin/python3"
-if [ ! -x "${PYTHON_BIN}" ]; then
-    PYTHON_BIN="${SCRIPT_DIR}/.venv/bin/python3"
+# Locate Python in virtual environment and actively verify import health
+VENV_PYTHON="${SCRIPT_DIR}/venv/bin/python3"
+if [ ! -x "${VENV_PYTHON}" ] && [ -x "${SCRIPT_DIR}/.venv/bin/python3" ]; then
+    VENV_PYTHON="${SCRIPT_DIR}/.venv/bin/python3"
 fi
 
-if [ ! -x "${PYTHON_BIN}" ]; then
-    echo "Virtual environment missing in ${SCRIPT_DIR}. Initializing..."
-    python3 -m venv "${SCRIPT_DIR}/venv"
+if [ ! -x "${VENV_PYTHON}" ] || ! "${VENV_PYTHON}" -c "import customtkinter, vdf, smbprotocol, PIL, requests" &>/dev/null; then
+    echo "Environment check failed or dependencies missing. Repairing virtual environment..."
+    BASE_PY="python3"
+    if [ -x "${SCRIPT_DIR}/python/bin/python3" ]; then
+        BASE_PY="${SCRIPT_DIR}/python/bin/python3"
+    elif ! python3 -c "import tkinter" &>/dev/null; then
+        PY_TAR="${SCRIPT_DIR}/python_runtime.tar.gz"
+        curl -fL -o "${PY_TAR}" "https://github.com/astral-sh/python-build-standalone/releases/download/20240415/cpython-3.11.9+20240415-x86_64-unknown-linux-gnu-install_only.tar.gz" 2>/dev/null
+        if [ -f "${PY_TAR}" ]; then
+            tar -xzf "${PY_TAR}" -C "${SCRIPT_DIR}" 2>/dev/null
+            rm -f "${PY_TAR}"
+            [ -x "${SCRIPT_DIR}/python/bin/python3" ] && BASE_PY="${SCRIPT_DIR}/python/bin/python3"
+        fi
+    fi
+
+    rm -rf "${SCRIPT_DIR}/venv"
+    "${BASE_PY}" -m venv "${SCRIPT_DIR}/venv"
     "${SCRIPT_DIR}/venv/bin/pip" install --upgrade pip --quiet
     "${SCRIPT_DIR}/venv/bin/pip" install customtkinter vdf smbprotocol pillow requests --quiet
-    PYTHON_BIN="${SCRIPT_DIR}/venv/bin/python3"
+    VENV_PYTHON="${SCRIPT_DIR}/venv/bin/python3"
 fi
 
 if [ -t 1 ]; then
-    exec "${PYTHON_BIN}" -m vnpatchmanager "$@"
+    exec "${VENV_PYTHON}" -m vnpatchmanager "$@"
 else
-    exec "${PYTHON_BIN}" -m vnpatchmanager "$@" >> "${SCRIPT_DIR}/vnpm.log" 2>&1
+    exec "${VENV_PYTHON}" -m vnpatchmanager "$@" >> "${SCRIPT_DIR}/vnpm.log" 2>&1
 fi
 EOF
 chmod +x "${LAUNCHER}"
