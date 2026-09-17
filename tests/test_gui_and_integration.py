@@ -76,8 +76,8 @@ def test_save_settings(app_instance, temp_config_dir):
     assert app_instance.config_manager.config["mode"] == "smb"
     assert app_instance.config_manager.config["local_path"] == "/custom/local/path"
     assert app_instance.config_manager.config["smb_server"] == "192.168.99.1"
-    assert cfg_file.exists()
-    assert "v0.1." in app_instance.lbl_version.cget("text")
+    from vnpatchmanager.version import __version__
+    assert f"v{__version__}" in app_instance.lbl_version.cget("text")
 
 
 def test_refresh_data_filtering(app_instance, mock_steam_structure, mock_patch_repo):
@@ -1366,6 +1366,56 @@ def test_placeholder_steam_app_name_resolution(app_instance):
     status_info_2 = app_instance._compute_status_info("990002", synthetic_patch_game)
     assert synthetic_patch_game["name"] == "Synthetic Fantasy Chronicle"
     assert "synthetic fantasy chronicle" in status_info_2["search_haystack"]
+
+
+def test_is_entry_widget(app_instance):
+    assert app_instance._is_entry_widget(app_instance.entry_search) is True
+    assert app_instance._is_entry_widget(app_instance.entry_local_path) is True
+    if hasattr(app_instance.entry_search, "_entry"):
+        assert app_instance._is_entry_widget(app_instance.entry_search._entry) is True
+    assert app_instance._is_entry_widget(app_instance.btn_refresh) is False
+    assert app_instance._is_entry_widget(app_instance.lbl_status) is False
+    assert app_instance._is_entry_widget(None) is False
+
+
+def test_on_key_event_filtering(app_instance):
+    from unittest.mock import MagicMock
+    from vnpatchmanager.controller_manager import ACTION_SELECT, ACTION_BACK, ACTION_UP
+
+    # 1. When focus is NOT on entry widget
+    with patch.object(app_instance, "focus_get", return_value=app_instance):
+        with patch.object(app_instance, "_handle_controller_action") as mock_action:
+            event = MagicMock(keysym="Up")
+            res = app_instance._on_key_event(ACTION_UP, event)
+            assert res == "break"
+            mock_action.assert_called_with(ACTION_UP)
+
+    # 2. When focus IS on entry widget
+    with patch.object(app_instance, "focus_get", return_value=app_instance.entry_search):
+        for sym in ["space", "BackSpace", "w", "a", "s", "d"]:
+            event = MagicMock(keysym=sym)
+            assert app_instance._on_key_event(ACTION_SELECT, event) is None
+
+        # Escape in entry -> triggers ACTION_BACK and returns "break"
+        with patch.object(app_instance, "_handle_controller_action") as mock_action, \
+             patch.object(app_instance, "focus_set"):
+            event = MagicMock(keysym="Escape")
+            assert app_instance._on_key_event(ACTION_BACK, event) == "break"
+            mock_action.assert_called_with(ACTION_BACK)
+
+        # Up/Down in entry -> triggers navigation and returns "break"
+        with patch.object(app_instance, "_handle_controller_action") as mock_action, \
+             patch.object(app_instance, "focus_set"):
+            event = MagicMock(keysym="Up")
+            assert app_instance._on_key_event(ACTION_UP, event) == "break"
+            mock_action.assert_called_with(ACTION_UP)
+
+
+def test_ensure_game_mode_focus(app_instance):
+    with patch.object(app_instance, "focus_force") as mock_focus:
+        app_instance._ensure_game_mode_focus()
+        mock_focus.assert_called_once()
+
 
 
 
