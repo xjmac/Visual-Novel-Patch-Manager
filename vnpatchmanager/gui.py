@@ -2,7 +2,6 @@ import io
 import logging
 import threading
 import queue
-import time
 import webbrowser
 import requests
 from tkinter import messagebox, filedialog
@@ -14,7 +13,10 @@ logger = logging.getLogger(__name__)
 try:
     import customtkinter as ctk
 except ImportError:
-    pass
+    class _FallbackCTk:
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError("customtkinter is required to instantiate VNPatchManagerApp GUI")
+    ctk = type("ctk", (), {"CTk": _FallbackCTk})
 
 from .config_manager import ConfigManager
 from .steam_scanner import SteamScanner
@@ -54,7 +56,7 @@ MODE_SMB_DISPLAY = "🌐 Network Share (NAS)"
 
 class VNPatchManagerApp(ctk.CTk):
     def __init__(self):
-        super().__init__()
+        super().__init__(className="VN Patch Manager")
 
         self.title(f"{APP_NAME} - Steam Deck & Linux Native")
         self._setup_window_icon()
@@ -66,7 +68,10 @@ class VNPatchManagerApp(ctk.CTk):
         except Exception:
             screen_w, screen_h = 1280, 800
 
-        if screen_h <= 800 or screen_w <= 1280:
+        if SteamOSHelper.is_game_mode():
+            self.geometry("1280x800+0+0")
+            self.minsize(800, 520)
+        elif screen_h <= 800 or screen_w <= 1280:
             self.geometry("1000x610")
             self.minsize(760, 480)
         else:
@@ -1216,7 +1221,9 @@ class VNPatchManagerApp(ctk.CTk):
                             game_data["name"] = patch_info["game_name"]
 
                     if is_non_steam:
-                        supported[app_id] = game_data
+                        gname = (game_data.get("name") or "").strip().lower()
+                        if gname and not (gname == APP_NAME.lower() or "vn patch manager" in gname or "visual novel patch manager" in gname):
+                            supported[app_id] = game_data
                     elif has_local_patch:
                         supported[app_id] = game_data
                     elif has_vndb_18_patch and (not is_installed or (is_installed and vn_info.get("is_vn", False))):
@@ -1239,8 +1246,9 @@ class VNPatchManagerApp(ctk.CTk):
                 self.run_on_main_thread(lambda: self._populate_game_list(supported))
 
             except Exception as e:
-                logger.error(f"Error during refresh: {e}", exc_info=True)
-                self.run_on_main_thread(lambda: self.lbl_status.configure(text=f"Error: {e}", text_color="#ff4444"))
+                err_msg = str(e)
+                logger.error(f"Error during refresh: {err_msg}", exc_info=True)
+                self.run_on_main_thread(lambda err=err_msg: self.lbl_status.configure(text=f"Error: {err}", text_color="#ff4444"))
             finally:
                 self.run_on_main_thread(self._stop_progress)
 
@@ -1942,9 +1950,6 @@ class VNPatchManagerApp(ctk.CTk):
         control_frame = ctk.CTkFrame(modal, fg_color="transparent")
         control_frame.pack(fill="x", padx=16, pady=(0, 8))
 
-        var_asset_type = ctk.StringVar(value="capsule")
-        var_search_query = ctk.StringVar(value=game_data["name"])
-
         # Category Tabs
         tab_buttons = [
             ("Capsule (600x900)", "capsule"),
@@ -2070,7 +2075,6 @@ class VNPatchManagerApp(ctk.CTk):
             if not modal.winfo_exists():
                 return
             zone = modal_focus_state["zone"]
-            t_idx = modal_focus_state["tab_idx"]
             c_idx = modal_focus_state["card_idx"]
             ctrl_idx = modal_focus_state["control_idx"]
 
@@ -2341,8 +2345,9 @@ class VNPatchManagerApp(ctk.CTk):
                     else:
                         self.run_on_main_thread(lambda: lbl_modal_status.configure(text=f"❌ HTTP {resp.status_code} downloading image.", text_color="#ff4444"))
                 except Exception as e:
-                    logger.error(f"Error applying asset: {e}")
-                    self.run_on_main_thread(lambda: lbl_modal_status.configure(text=f"Error: {e}", text_color="#ff4444"))
+                    err_msg = str(e)
+                    logger.error(f"Error applying asset: {err_msg}")
+                    self.run_on_main_thread(lambda err=err_msg: lbl_modal_status.configure(text=f"Error: {err}", text_color="#ff4444"))
 
             threading.Thread(target=_apply_thread, daemon=True).start()
 
@@ -2367,7 +2372,7 @@ class VNPatchManagerApp(ctk.CTk):
                         except Exception:
                             pass
                     lbl_modal_status.configure(text=f"✅ Applied local image as {curr_type}!", text_color="#34d399")
-                    self.lbl_status.configure(text=f"✅ Updated artwork from local file.", text_color="#34d399")
+                    self.lbl_status.configure(text="✅ Updated artwork from local file.", text_color="#34d399")
             except Exception as e:
                 lbl_modal_status.configure(text=f"❌ Error loading local file: {e}", text_color="#ff4444")
 
@@ -2385,9 +2390,6 @@ class VNPatchManagerApp(ctk.CTk):
             lbl_modal_status.configure(text=f"Fetching {curr_type} artwork...", text_color="#94a3b8")
 
             def _worker():
-                import io
-                import requests
-                from PIL import ImageSequence
                 found_assets = []
 
                 # 1. Check SteamGridDB if API key present
@@ -2576,13 +2578,14 @@ class VNPatchManagerApp(ctk.CTk):
                 success, msg = CodecFixer.apply_video_fixes(str(app_id))
                 self.run_on_main_thread(self._stop_progress)
                 if success:
-                    self.run_on_main_thread(lambda: self.lbl_status.configure(text=f"✅ {msg}", text_color="#34d399"))
+                    self.run_on_main_thread(lambda m=msg: self.lbl_status.configure(text=f"✅ {m}", text_color="#34d399"))
                 else:
-                    self.run_on_main_thread(lambda: self.lbl_status.configure(text=f"⚠️ {msg}", text_color="#fbbf24"))
+                    self.run_on_main_thread(lambda m=msg: self.lbl_status.configure(text=f"⚠️ {m}", text_color="#fbbf24"))
             except Exception as e:
-                logger.error(f"Error applying video fixes: {e}")
+                err_msg = str(e)
+                logger.error(f"Error applying video fixes: {err_msg}")
                 self.run_on_main_thread(self._stop_progress)
-                self.run_on_main_thread(lambda: self.lbl_status.configure(text=f"Failed to apply video fixes: {e}", text_color="#ff4444"))
+                self.run_on_main_thread(lambda err=err_msg: self.lbl_status.configure(text=f"Failed to apply video fixes: {err}", text_color="#ff4444"))
 
         threading.Thread(target=_fix_task, daemon=True).start()
 
@@ -2712,6 +2715,57 @@ class VNPatchManagerApp(ctk.CTk):
         )
         btn_browse.grid(row=0, column=1, padx=6, pady=6)
 
+        def _on_register():
+            path_str = entry_path.get().strip()
+            title_str = entry_title.get().strip()
+            if not path_str or not title_str:
+                lbl_matched_meta.configure(text="❌ Error: Please provide both a game path and title.", text_color="#f87171")
+                return
+
+            game_path = Path(path_str)
+            if not game_path.exists():
+                lbl_matched_meta.configure(text=f"❌ Error: Path does not exist:\n{path_str}", text_color="#f87171")
+                return
+
+            lbl_matched_meta.configure(text="Registering shortcut and deploying artwork...", text_color="#60a5fa")
+            modal.update_idletasks()
+
+            success, msg, _ = self.non_steam_manager.register_non_steam_game(
+                game_path=game_path,
+                app_name=title_str
+            )
+            if success:
+                _close_add_modal()
+                self.refresh_data()
+            else:
+                lbl_matched_meta.configure(text=f"❌ Registration Failed: {msg}", text_color="#f87171")
+
+        # 4. Action Buttons Frame
+        btn_actions_frame = ctk.CTkFrame(modal, fg_color="transparent")
+        btn_actions_frame.pack(fill="x", padx=20, pady=(0, 16))
+
+        btn_create = ctk.CTkButton(
+            btn_actions_frame,
+            text="✨ Add to Steam",
+            font=ctk.CTkFont(weight="bold"),
+            height=34,
+            fg_color="#10b981",
+            hover_color="#059669",
+            command=_on_register
+        )
+        btn_create.pack(side="left", fill="x", expand=True, padx=(0, 6))
+
+        btn_cancel = ctk.CTkButton(
+            btn_actions_frame,
+            text="Cancel",
+            font=ctk.CTkFont(weight="bold"),
+            height=34,
+            fg_color="#27272a",
+            hover_color="#3f3f46",
+            command=lambda: _close_add_modal()
+        )
+        btn_cancel.pack(side="right", fill="x", expand=True, padx=(6, 0))
+
         # Modal Controller Navigation for Add Non-Steam Dialog
         add_focus_state = {"index": 0}  # 0=Path Browse, 1=Title Entry, 2=Create, 3=Cancel
 
@@ -2802,7 +2856,7 @@ class VNPatchManagerApp(ctk.CTk):
                     lambda msg: self.run_on_main_thread(lambda m=msg: self.lbl_status.configure(text=m))
                 )
                 self.run_on_main_thread(lambda: self.after(2000, self.refresh_data))
-            except Exception as e:
+            except Exception:
                 self.run_on_main_thread(self._stop_progress)
                 self.run_on_main_thread(lambda: self.lbl_status.configure(text="Patch Failed! Check terminal.", text_color="#ff4444"))
 

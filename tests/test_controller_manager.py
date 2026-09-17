@@ -131,13 +131,15 @@ def test_axis_hold_repeat_timing():
 
 
 def test_find_joystick_device():
-    with patch("glob.glob", return_value=["/dev/input/js0", "/dev/input/js1"]):
+    with patch("glob.glob", return_value=["/dev/input/js0", "/dev/input/js1"]), \
+         patch("os.access", return_value=True):
         mgr = GamepadControllerManager()
         assert mgr._find_joystick_device() == "/dev/input/js0"
 
     with patch("glob.glob", return_value=[]):
         mgr = GamepadControllerManager()
         assert mgr._find_joystick_device() is None
+
 
 
 def test_emit_callback_exception_handling():

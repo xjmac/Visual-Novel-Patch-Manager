@@ -61,7 +61,7 @@ def get_version(repo_root: Optional[Path] = None) -> str:
 
     # 2. Try resolving via package metadata (installed wheel / egg)
     try:
-        from importlib.metadata import version, PackageNotFoundError
+        from importlib.metadata import version
         pkg_version = version("vnpatchmanager")
         if pkg_version:
             return pkg_version

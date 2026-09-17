@@ -407,7 +407,7 @@ class PatchExecutionEngine:
                         logger.debug(f"Missing read permissions on {exe_file}. Attempting to fix...")
                         exe_file.chmod(0o644)
 
-                    log_callback(f"Extracting natively using innoextract...")
+                    log_callback("Extracting natively using innoextract...")
 
                     # Extract to a temporary sub-folder first because Inno Setup packages
                     # usually hide the actual game files inside an internal 'app/' folder.

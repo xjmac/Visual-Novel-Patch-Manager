@@ -14,4 +14,16 @@ venv/
 .pytest_cache/
 .coverage
 htmlcov/
+.ruff_cache/
+
+# Standalone Runtimes & Archives
+.python/
+python/
+python_runtime.tar.gz
+.python_tmp/
+
+# Build & Packaging
+dist/
+build/
+*.egg-info/
 
