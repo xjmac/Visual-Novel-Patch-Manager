@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 import logging
 from pathlib import Path
@@ -42,7 +43,7 @@ class ConfigManager:
         cfg_file = _get_config_file()
         if cfg_file.exists():
             try:
-                with open(cfg_file, 'r') as f:
+                with open(cfg_file, 'r', encoding='utf-8') as f:
                     loaded_config = json.load(f)
                     self.config.update(loaded_config)
             except Exception as e:
@@ -53,9 +54,8 @@ class ConfigManager:
         cfg_file = _get_config_file()
         cfg_dir.mkdir(parents=True, exist_ok=True)
         try:
-            with open(cfg_file, 'w') as f:
+            fd = os.open(cfg_file, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
                 json.dump(self.config, f, indent=4)
-            import os
-            os.chmod(cfg_file, 0o600)
         except Exception as e:
             logger.error(f"Failed to save config: {e}")

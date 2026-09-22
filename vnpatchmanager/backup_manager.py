@@ -8,6 +8,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 from datetime import datetime, timezone
+from .exceptions import BackupError
 
 class BackupManager:
     """Manages creation, verification, and atomic rollback of game backups."""
@@ -80,7 +81,7 @@ class BackupManager:
         """
         install_dir = Path(game_install_path)
         if not install_dir.exists():
-            raise Exception(f"Game directory does not exist: {install_dir}")
+            raise BackupError(f"Game directory does not exist: {install_dir}")
 
         now = time.time()
         iso_str = datetime.fromtimestamp(now, tz=timezone.utc).isoformat()
@@ -118,8 +119,9 @@ class BackupManager:
 
         # Recursively scan original files
         for root, dirs, files in os.walk(install_dir):
+            # Prune .backup directory so os.walk does not descend into it
+            dirs[:] = [d for d in dirs if d != BackupManager.BACKUP_DIR_NAME]
             root_path = Path(root)
-            # Skip .backup directory itself
             if BackupManager.BACKUP_DIR_NAME in root_path.parts:
                 continue
 
@@ -173,7 +175,7 @@ class BackupManager:
         latest_dir, manifest = BackupManager.get_latest_backup(install_dir)
 
         if not latest_dir or not manifest:
-            raise Exception("No valid backup found to restore.")
+            raise BackupError("No valid backup found to restore.")
 
         if log_callback:
             log_callback(f"Verifying backup integrity from {latest_dir.name}...")
@@ -185,23 +187,27 @@ class BackupManager:
         for rel_path_str, meta in manifest_files.items():
             backup_file = files_backup_dir / rel_path_str
             if not backup_file.exists():
-                raise Exception(f"Corrupted backup: missing file '{rel_path_str}' in backup storage.")
+                raise BackupError(f"Corrupted backup: missing file '{rel_path_str}' in backup storage.")
             current_hash = BackupManager.compute_sha256(backup_file)
             if current_hash != meta["sha256"]:
-                raise Exception(f"Corrupted backup: checksum mismatch for '{rel_path_str}'.")
+                raise BackupError(f"Corrupted backup: checksum mismatch for '{rel_path_str}'.")
 
         if log_callback:
             log_callback("Restoring original files and purging patch files...")
 
         # 2. Remove files currently in game directory that are not part of .backup
         for root, dirs, files in os.walk(install_dir, topdown=False):
+            dirs[:] = [d for d in dirs if d != BackupManager.BACKUP_DIR_NAME]
             root_path = Path(root)
             if BackupManager.BACKUP_DIR_NAME in root_path.parts:
                 continue
 
             for file_name in files:
                 full_file_path = root_path / file_name
-                full_file_path.unlink()
+                try:
+                    full_file_path.unlink()
+                except OSError as e:
+                    logger.warning(f"Could not remove file during rollback '{full_file_path}': {e}")
 
             # Remove empty directories (except install_dir and .backup)
             if root_path != install_dir and not any(root_path.iterdir()):
@@ -224,10 +230,10 @@ class BackupManager:
         for rel_path_str, meta in manifest_files.items():
             restored_file = install_dir / rel_path_str
             if not restored_file.exists():
-                raise Exception(f"Rollback failed: restored file '{rel_path_str}' missing.")
+                raise BackupError(f"Rollback failed: restored file '{rel_path_str}' missing.")
             restored_hash = BackupManager.compute_sha256(restored_file)
             if restored_hash != meta["sha256"]:
-                raise Exception(f"Rollback failed: restored checksum mismatch for '{rel_path_str}'.")
+                raise BackupError(f"Rollback failed: restored checksum mismatch for '{rel_path_str}'.")
 
         # 5. Remove .patch_applied.json if present
         tracking_file = install_dir / ".patch_applied.json"

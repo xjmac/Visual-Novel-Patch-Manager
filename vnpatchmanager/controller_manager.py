@@ -47,6 +47,7 @@ class GamepadControllerManager:
         self.action_callback = action_callback
         self._thread: Optional[threading.Thread] = None
         self._running = False
+        self._device_lock = threading.Lock()
 
         # Multi-device file descriptor mappings: dev_path -> fd, fd -> dev_path
         self._open_devices: dict[str, int] = {}
@@ -65,12 +66,14 @@ class GamepadControllerManager:
     @property
     def _fd(self) -> Optional[int]:
         """Backwards compatibility accessor for primary file descriptor."""
-        return next(iter(self._open_devices.values()), None)
+        with self._device_lock:
+            return next(iter(self._open_devices.values()), None)
 
     @property
     def _device_path(self) -> Optional[str]:
         """Backwards compatibility accessor for primary device path."""
-        return next(iter(self._open_devices.keys()), None)
+        with self._device_lock:
+            return next(iter(self._open_devices.keys()), None)
 
     def start(self):
         """Starts background gamepad polling thread."""
@@ -83,13 +86,14 @@ class GamepadControllerManager:
     def stop(self):
         """Stops background thread and releases all device descriptors."""
         self._running = False
-        for dev_path, fd in list(self._open_devices.items()):
-            try:
-                os.close(fd)
-            except Exception:
-                pass
-        self._open_devices.clear()
-        self._fd_to_path.clear()
+        with self._device_lock:
+            for dev_path, fd in list(self._open_devices.items()):
+                try:
+                    os.close(fd)
+                except Exception:
+                    pass
+            self._open_devices.clear()
+            self._fd_to_path.clear()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=0.5)
 
@@ -126,25 +130,30 @@ class GamepadControllerManager:
         accessible_list = self._find_all_joystick_devices()
         accessible_set = set(accessible_list)
 
-        # Close and remove devices no longer accessible
-        for dev_path in list(self._open_devices.keys()):
-            if dev_path not in accessible_set:
-                self._close_device(dev_path)
+        with self._device_lock:
+            # Close and remove devices no longer accessible
+            for dev_path in list(self._open_devices.keys()):
+                if dev_path not in accessible_set:
+                    self._close_device_locked(dev_path)
 
-        # Open any new accessible devices in deterministic order
-        for dev_path in accessible_list:
-            if dev_path not in self._open_devices:
-                try:
-                    fd = os.open(dev_path, os.O_RDONLY | os.O_NONBLOCK)
-                    dev_name = self._get_device_name(fd)
-                    self._open_devices[dev_path] = fd
-                    self._fd_to_path[fd] = dev_path
-                    logger.info(f"Connected to gamepad device: {dev_path} ({dev_name})")
-                except Exception as e:
-                    logger.debug(f"Could not open {dev_path}: {e}")
+            # Open any new accessible devices in deterministic order
+            for dev_path in accessible_list:
+                if dev_path not in self._open_devices:
+                    try:
+                        fd = os.open(dev_path, os.O_RDONLY | os.O_NONBLOCK)
+                        dev_name = self._get_device_name(fd)
+                        self._open_devices[dev_path] = fd
+                        self._fd_to_path[fd] = dev_path
+                        logger.info(f"Connected to gamepad device: {dev_path} ({dev_name})")
+                    except Exception as e:
+                        logger.debug(f"Could not open {dev_path}: {e}")
 
     def _close_device(self, dev_path: str):
         """Safely closes an open joystick device."""
+        with self._device_lock:
+            self._close_device_locked(dev_path)
+
+    def _close_device_locked(self, dev_path: str):
         fd = self._open_devices.pop(dev_path, None)
         if fd is not None:
             self._fd_to_path.pop(fd, None)
@@ -179,25 +188,34 @@ class GamepadControllerManager:
         while self._running:
             now = time.time()
             # Scan for newly plugged / created joystick devices periodically or if empty
-            if now - last_scan >= 1.0 or not self._open_devices:
+            with self._device_lock:
+                has_devices = bool(self._open_devices)
+            if now - last_scan >= 1.0 or not has_devices:
                 last_scan = now
                 self._refresh_devices()
 
             # Process directional repeat if held
             self._process_repeat()
 
-            if not self._open_devices or not self._running:
+            with self._device_lock:
+                if not self._open_devices or not self._running:
+                    need_sleep = True
+                else:
+                    need_sleep = False
+                    fds = list(self._open_devices.values())
+                    fd_to_path_snapshot = dict(self._fd_to_path)
+
+            if need_sleep:
                 time.sleep(0.05)
                 continue
 
-            fds = list(self._open_devices.values())
             try:
                 readable, _, _ = select.select(fds, [], [], 0.01)
                 if not readable or not self._running:
                     continue
 
                 for fd in readable:
-                    dev_path = self._fd_to_path.get(fd)
+                    dev_path = fd_to_path_snapshot.get(fd)
                     if not dev_path:
                         continue
 
