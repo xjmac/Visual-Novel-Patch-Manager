@@ -172,6 +172,25 @@ def test_codec_fixer_missing_prefix(monkeypatch):
     assert "Proton prefix not found" in msg
 
 
+def test_codec_fixer_atomic_write_failure(tmp_path, monkeypatch):
+    pfx_dir = tmp_path / "compatdata" / "123456" / "pfx"
+    pfx_dir.mkdir(parents=True)
+    user_reg = pfx_dir / "user.reg"
+    original_content = 'WINE REGISTRY Version 2\n\n[Software\\\\Wine]\n"Version"="1.0"\n'
+    user_reg.write_text(original_content, encoding="utf-8")
+
+    monkeypatch.setattr(CodecFixer, "find_game_prefix", lambda app_id: pfx_dir)
+
+    with patch("os.replace", side_effect=OSError("Mock disk error")):
+        success, msg = CodecFixer.apply_video_fixes("123456")
+        assert success is False
+        assert "Failed to apply fixes" in msg
+
+    # Verify original file was preserved
+    assert user_reg.exists()
+    assert user_reg.read_text(encoding="utf-8") == original_content
+
+
 def test_cover_art_set_custom_artwork(mock_steam_userdata, tmp_path):
     from vnpatchmanager.cover_art_manager import CoverArtManager
     from PIL import Image

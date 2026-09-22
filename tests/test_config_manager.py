@@ -58,7 +58,8 @@ def test_save_config(temp_config_dir):
     cm.save_config()
 
     assert cfg_file.exists()
-    with open(cfg_file, "r") as f:
+    assert (cfg_file.stat().st_mode & 0o777) == 0o600
+    with open(cfg_file, "r", encoding="utf-8") as f:
         saved = json.load(f)
     assert saved["mode"] == "smb"
     assert saved["smb_server"] == "192.168.1.200"
@@ -67,6 +68,6 @@ def test_save_config(temp_config_dir):
 def test_save_config_exception_handling(temp_config_dir, caplog):
     cfg_dir, cfg_file = temp_config_dir
     cm = ConfigManager()
-    with patch("builtins.open", side_effect=PermissionError("Mock Permission Denied")):
+    with patch("os.open", side_effect=PermissionError("Mock Permission Denied")):
         cm.save_config()
     assert "Failed to save config" in caplog.text

@@ -1,4 +1,6 @@
 import logging
+import os
+import shutil
 from pathlib import Path
 from typing import Optional
 
@@ -114,14 +116,15 @@ class CodecFixer:
                 # Append section to end of user.reg
                 content += f"\n\n{section_header}\n{overrides_block}\n"
 
-            # Create safety backup of user.reg
+            # Create safety backup of user.reg if one does not already exist
             bak_path = user_reg.with_suffix(".reg.vnpm_bak")
             if not bak_path.exists():
-                user_reg.rename(bak_path)
-            else:
-                user_reg.unlink()
+                shutil.copy2(user_reg, bak_path)
 
-            user_reg.write_text(content, encoding="utf-8")
+            # Atomically write updated user.reg using temporary file and os.replace
+            tmp_path = user_reg.with_suffix(".reg.tmp")
+            tmp_path.write_text(content, encoding="utf-8")
+            os.replace(tmp_path, user_reg)
             return True, f"Successfully applied video playback and Media Foundation fixes to Proton prefix (App #{app_id})."
 
         except Exception as e:

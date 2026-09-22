@@ -13,3 +13,8 @@ class PatchExtractionError(VNPatchError):
 class ProtonExecutionError(VNPatchError):
     """Raised when executing a Windows executable via Proton fails."""
     pass
+
+class BackupError(VNPatchError):
+    """Raised when backup creation, verification, or restoration fails."""
+    pass
+
