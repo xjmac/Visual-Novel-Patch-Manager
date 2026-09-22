@@ -415,7 +415,7 @@ class PatchExecutionEngine:
                     extract_tmp.mkdir(exist_ok=True)
 
                     cmd = ["innoextract", "-s", "-d", str(extract_tmp), str(exe_file)]
-                    print(f"DEBUG: Running innoextract command: {cmd}")
+                    logger.debug(f"Running innoextract command: {cmd}")
 
                     try:
                         process = subprocess.run(cmd, capture_output=True, text=True, timeout=300)

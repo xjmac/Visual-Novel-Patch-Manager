@@ -4,6 +4,7 @@ import requests
 import os
 import logging
 from pathlib import Path
+from .utils import find_database_file as _find_db, is_mocked
 
 logger = logging.getLogger(__name__)
 
@@ -24,44 +25,39 @@ WITH steam_releases AS (
     JOIN releases rel ON rel.id = re.id
     JOIN releases_vn rv ON rv.id = rel.id
     JOIN vn v ON v.id = rv.vid
-    WHERE e.site = 'steam'
+    WHERE e.name = 'steam'
 ),
-patch_18_en AS (
+patch_releases AS (
     SELECT DISTINCT
-        rv.vid AS vn_id,
+        sr.steam_appid,
         rel.id AS patch_release_id,
         rel.title AS patch_title,
         rel.minage,
         COALESCE(rel.released, 20300101) AS patch_released
-    FROM releases rel
-    JOIN releases_vn rv ON rv.id = rel.id
+    FROM steam_releases sr
+    JOIN releases_vn rv ON rv.vid = sr.vn_id
+    JOIN releases rel ON rel.id = rv.id
     JOIN releases_lang rl ON rl.id = rel.id
     WHERE rel.patch = true
       AND (rel.minage = 18 OR rel.uncensored = true)
       AND rl.lang = 'en'
-      AND rel.title NOT ILIKE '%episode 2%'
-      AND rel.title NOT ILIKE '%episode 3%'
-      AND rel.title NOT ILIKE '%episode 4%'
-      AND rel.title NOT ILIKE '%episode 5%'
-      AND rel.title NOT ILIKE '%episode 6%'
-      AND rel.title NOT ILIKE '%season 2%'
-      AND rel.title NOT ILIKE '%season 3%'
 )
-SELECT
+SELECT 
     sr.steam_appid,
+    sr.steam_rel_id,
     sr.steam_minage,
     sr.steam_uncensored,
+    sr.steam_released,
     sr.vn_id,
     sr.vn_title,
     sr.c_rating,
     sr.c_votecount,
-    p.patch_release_id,
-    p.patch_title,
-    p.minage,
-    p.patch_released,
-    sr.steam_released
+    pr.patch_release_id,
+    pr.patch_title,
+    pr.minage,
+    pr.patch_released
 FROM steam_releases sr
-LEFT JOIN patch_18_en p ON p.vn_id = sr.vn_id
+LEFT JOIN patch_releases pr ON pr.steam_appid = sr.steam_appid;
 '''
 
 class VNDBScanner:
@@ -77,22 +73,12 @@ class VNDBScanner:
 
     @classmethod
     def find_database_file(cls, explicit_path: Path = None) -> Path:
-        if explicit_path and explicit_path.exists():
-            return explicit_path
-        candidates = [
-            Path(__file__).parent.parent / "vndb_steam_database.json",
-            Path(__file__).parent / "vndb_steam_database.json",
-            Path.home() / ".local/share/vnpm/vndb_steam_database.json",
-            Path.home() / ".cache/vnpatchmanager/vndb_cache.json"
-        ]
-        for c in candidates:
-            if c.exists():
-                return c
-        return candidates[0]
+        return _find_db(explicit_path)
 
-    def __init__(self, cache_file: Path = None, bundled_db_path: Path = None):
+    def __init__(self, cache_file: Path = None, bundled_db_path: Path = None, session: requests.Session = None):
         self.cache_file = cache_file or self.CACHE_FILE
         self.bundled_db_path = bundled_db_path or self.find_database_file()
+        self._session = session or requests.Session()
         self.cache_file.parent.mkdir(parents=True, exist_ok=True)
         self.bundled_db = self._load_bundled_db()
         self.cache = self._load_cache()
@@ -272,7 +258,8 @@ class VNDBScanner:
             params = {"sql": VNDB_SNAPSHOT_SQL, "export": "json"}
             headers = {"User-Agent": "VNPM/2.0 (Linux; SteamDeck; github.com/user/VNPM)"}
             
-            response = requests.get(url, params=params, headers=headers, timeout=timeout_sec)
+            client = requests if is_mocked(requests.get) else self._session
+            response = client.get(url, params=params, headers=headers, timeout=timeout_sec)
             response.raise_for_status()
             raw_data = response.json()
 
@@ -342,7 +329,8 @@ class VNDBScanner:
                     "Content-Type": "application/json",
                     "User-Agent": "VNPM/2.0 (Linux; SteamDeck; github.com/user/VNPM)"
                 }
-                response = requests.post(self.API_URL, json=payload, headers=headers, timeout=8)
+                client = requests if is_mocked(requests.post) else self._session
+                response = client.post(self.API_URL, json=payload, headers=headers, timeout=8)
                 if response.status_code == 429:
                     wait_seconds = 2 ** (attempt + 1)
                     time.sleep(wait_seconds)
