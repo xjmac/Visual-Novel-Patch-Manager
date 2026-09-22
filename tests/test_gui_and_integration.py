@@ -731,22 +731,22 @@ def test_oled_pure_black_theming_and_card_styling(app_instance, mock_steam_struc
     app_instance.update()
 
     # Verify root container & scrollable pure black colors
-    assert app_instance.tabview.cget("fg_color") == "#000000"
-    assert app_instance.scrollable_games.cget("fg_color") == "#000000"
+    assert app_instance.tabview.cget("fg_color") == "#0b0e14"
+    assert app_instance.scrollable_games.cget("fg_color") == "#0b0e14"
 
     # Verify focused card styling (prominent blue border + elevated surface)
     cards = app_instance.scrollable_games.winfo_children()
     assert len(cards) == 1
     card = cards[0]
     assert card.cget("fg_color") == "#1e293b"
-    assert card.cget("border_color") == "#3b82f6"
+    assert card.cget("border_color") == "#38bdf8"
     assert card.cget("border_width") == 3
 
-    # Switch focus to Toolbar -> card returns to unfocused #121212 and #27272a
+    # Switch focus to Toolbar -> card returns to unfocused #121212 and #283548
     app_instance._focused_zone = "TOOLBAR"
     app_instance._apply_focus_visuals()
     assert card.cget("fg_color") == "#121212"
-    assert card.cget("border_color") == "#27272a"
+    assert card.cget("border_color") == "#283548"
     assert card.cget("border_width") == 1
 
 
@@ -836,12 +836,12 @@ def test_controller_card_navigation_and_visual_focus(app_instance, mock_steam_st
 
     # Focused Card 0: Must have 3px bright blue border and elevated surface
     assert card0.cget("border_width") == 3
-    assert card0.cget("border_color") == "#3b82f6"
+    assert card0.cget("border_color") == "#38bdf8"
     assert card0.cget("fg_color") == "#1e293b"
 
     # Unfocused Card 1: Must have 1px dark border
     assert card1.cget("border_width") == 1
-    assert card1.cget("border_color") == "#27272a"
+    assert card1.cget("border_color") == "#283548"
     assert card1.cget("fg_color") == "#121212"
 
     # Move Right -> Focus moves to card 1
@@ -849,7 +849,7 @@ def test_controller_card_navigation_and_visual_focus(app_instance, mock_steam_st
     app_instance._handle_controller_action(ACTION_RIGHT)
     assert app_instance._focused_card_idx == 1
     assert card1.cget("border_width") == 3
-    assert card1.cget("border_color") == "#3b82f6"
+    assert card1.cget("border_color") == "#38bdf8"
 
     # Move Left -> Returns to card 0
     app_instance._handle_controller_action(ACTION_LEFT)
@@ -859,7 +859,7 @@ def test_controller_card_navigation_and_visual_focus(app_instance, mock_steam_st
     app_instance._handle_controller_action(ACTION_UP)
     assert app_instance._focused_zone == "TOOLBAR"
     assert app_instance._search_frame.cget("border_width") == 2
-    assert app_instance._search_frame.cget("border_color") == "#3b82f6"
+    assert app_instance._search_frame.cget("border_color") == "#38bdf8"
 
 
 def test_controller_search_bar_osk_trigger(app_instance, mock_steam_structure):
@@ -1172,7 +1172,7 @@ def test_gui_controller_filter_and_sort_selection(app_instance, mock_steam_struc
 
     # Verify visual focus outline on filter
     assert app_instance._filter_frame.cget("border_width") == 2
-    assert app_instance._filter_frame.cget("border_color") == "#3b82f6"
+    assert app_instance._filter_frame.cget("border_color") == "#38bdf8"
 
     # Press A (SELECT) to cycle filter: "All" -> "Patch Available"
     assert app_instance.filter_var.get() == "All"
@@ -1187,7 +1187,7 @@ def test_gui_controller_filter_and_sort_selection(app_instance, mock_steam_struc
     app_instance._handle_controller_action(ACTION_RIGHT)
     assert app_instance._focused_toolbar_idx == 2
     assert app_instance._sort_frame.cget("border_width") == 2
-    assert app_instance._sort_frame.cget("border_color") == "#3b82f6"
+    assert app_instance._sort_frame.cget("border_color") == "#38bdf8"
 
     # Press A (SELECT) to cycle sort
     assert app_instance.sort_var.get() == "Title (A-Z)"
@@ -1198,12 +1198,12 @@ def test_gui_controller_filter_and_sort_selection(app_instance, mock_steam_struc
     app_instance._handle_controller_action(ACTION_RIGHT)
     assert app_instance._focused_toolbar_idx == 3
     assert app_instance._view_frame.cget("border_width") == 2
-    assert app_instance._view_frame.cget("border_color") == "#3b82f6"
+    assert app_instance._view_frame.cget("border_color") == "#38bdf8"
 
-    # Press A (SELECT) to toggle view mode
-    assert app_instance.view_var.get() == "Grid"
+    # Press A (SELECT) to toggle view mode (Posters -> Grid)
+    assert app_instance.view_var.get() == "Posters"
     app_instance._handle_controller_action(ACTION_SELECT)
-    assert app_instance.view_var.get() == "List"
+    assert app_instance.view_var.get() == "Grid"
 
 
 def test_gui_controller_tab_bar_spatial_navigation(app_instance, mock_steam_structure):
@@ -1232,7 +1232,7 @@ def test_gui_controller_tab_bar_spatial_navigation(app_instance, mock_steam_stru
     assert app_instance._focused_tab_idx == 0
     assert app_instance.tabview.get() == "Games Library"
     assert app_instance.tabview.cget("border_width") == 2
-    assert app_instance.tabview.cget("border_color") == "#3b82f6"
+    assert app_instance.tabview.cget("border_color") == "#38bdf8"
 
     # Press RIGHT in TABS -> switches to Settings tab
     app_instance._handle_controller_action(ACTION_RIGHT)

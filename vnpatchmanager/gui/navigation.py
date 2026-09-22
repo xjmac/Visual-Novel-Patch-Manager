@@ -285,7 +285,7 @@ class NavigationMixin:
         if self._focused_zone == "TOOLBAR":
             filter_options = ["All", "Patch Available", "Patched", "Missing 18+ (VNDB)", "Backed Up"]
             sort_options = ["Title (A-Z)", "Title (Z-A)", "VNDB Rating", "Status Priority", "Installed First"]
-            view_options = ["Grid", "List"]
+            view_options = ["Posters", "Grid", "List"]
 
             if action == ACTION_UP:
                 self._focused_zone = "TABS"
@@ -327,6 +327,8 @@ class NavigationMixin:
                     curr_idx = view_options.index(curr_view) if curr_view in view_options else 0
                     next_idx = (curr_idx + 1) % len(view_options)
                     self.view_var.set(view_options[next_idx])
+                    if hasattr(self, "opt_view") and self.opt_view:
+                        self.opt_view.set(view_options[next_idx])
                     self._apply_filters_and_render()
             elif action == ACTION_BACK:
                 self._on_search_submit()
@@ -363,7 +365,13 @@ class NavigationMixin:
                     self._apply_focus_visuals()
                 return
 
-            is_grid = ("Grid" in self.view_var.get())
+            if "Posters" in self.view_var.get():
+                col_count = getattr(self, "_poster_col_count", 3)
+            elif "Grid" in self.view_var.get():
+                col_count = 2
+            else:
+                col_count = 1
+
             current_entry = self._card_entries[self._focused_card_idx] if 0 <= self._focused_card_idx < num_cards else None
             num_buttons = len(current_entry["buttons"]) if current_entry else 0
 
@@ -387,42 +395,22 @@ class NavigationMixin:
 
             # Case B: In Card Browsing Mode (_focused_btn_idx == -1)
             if action == ACTION_UP:
-                if is_grid:
-                    if self._focused_card_idx in (0, 1):
-                        self._focused_zone = "TOOLBAR"
-                        self._focused_toolbar_idx = 0
-                        self._apply_focus_visuals()
-                    else:
-                        self._focused_card_idx = max(0, self._focused_card_idx - 2)
-                        self._apply_focus_visuals()
+                if self._focused_card_idx < col_count:
+                    self._focused_zone = "TOOLBAR"
+                    self._focused_toolbar_idx = 0
+                    self._apply_focus_visuals()
                 else:
-                    if self._focused_card_idx == 0:
-                        self._focused_zone = "TOOLBAR"
-                        self._focused_toolbar_idx = 0
-                        self._apply_focus_visuals()
-                    else:
-                        self._focused_card_idx = max(0, self._focused_card_idx - 1)
-                        self._apply_focus_visuals()
+                    self._focused_card_idx = max(0, self._focused_card_idx - col_count)
+                    self._apply_focus_visuals()
 
             elif action == ACTION_DOWN:
-                if is_grid:
-                    self._focused_card_idx = min(num_cards - 1, self._focused_card_idx + 2)
-                else:
-                    self._focused_card_idx = min(num_cards - 1, self._focused_card_idx + 1)
+                self._focused_card_idx = min(num_cards - 1, self._focused_card_idx + col_count)
                 self._apply_focus_visuals()
 
             elif action == ACTION_LEFT:
-                if is_grid:
-                    if self._focused_card_idx % 2 == 1:
-                        self._focused_card_idx -= 1
-                        self._apply_focus_visuals()
-                    elif self._focused_card_idx > 0:
-                        self._focused_card_idx -= 1
-                        self._apply_focus_visuals()
-                else:
-                    if self._focused_card_idx > 0:
-                        self._focused_card_idx -= 1
-                        self._apply_focus_visuals()
+                if self._focused_card_idx > 0:
+                    self._focused_card_idx -= 1
+                    self._apply_focus_visuals()
 
             elif action == ACTION_RIGHT:
                 if self._focused_card_idx < num_cards - 1:
@@ -430,14 +418,24 @@ class NavigationMixin:
                     self._apply_focus_visuals()
 
             elif action == ACTION_SELECT:
-                # Pressing A enters Action Mode on the selected card's action buttons
-                if current_entry and num_buttons > 0:
+                # Direct selection: open Game Detail View or enter action buttons
+                if current_entry and current_entry.get("open_detail"):
+                    current_entry["open_detail"]()
+                elif current_entry and num_buttons > 0:
                     self._focused_btn_idx = 0
                     self._apply_focus_visuals()
 
-            elif action == ACTION_QUICK_ACTION:  # X Button directly invokes default action
+            elif action == ACTION_QUICK_ACTION:  # X Button directly invokes quick action
                 if current_entry and current_entry.get("default_button"):
                     current_entry["default_button"].invoke()
+                elif current_entry and current_entry.get("app_id"):
+                    aid = current_entry["app_id"]
+                    gdata = current_entry["game_data"]
+                    pdata = getattr(self, "repo", None).available_patches.get(aid) if hasattr(self, "repo") else None
+                    if pdata:
+                        self.run_patch(gdata, pdata)
+                    elif current_entry.get("open_detail"):
+                        current_entry["open_detail"]()
 
             elif action == ACTION_BACK:
                 if self.search_var.get():
@@ -446,6 +444,9 @@ class NavigationMixin:
 
     def _apply_focus_visuals(self, force_all: bool = False):
         """Updates high-contrast OLED visual focus borders across all UI components."""
+        if hasattr(self, "update_controller_prompts"):
+            self.update_controller_prompts(self._focused_zone)
+
         # 1. Update Tabview and Toolbar Focus Highlights
         is_tabs_focused = (self._focused_zone == "TABS")
         if hasattr(self, 'tabview') and self.tabview.winfo_exists():

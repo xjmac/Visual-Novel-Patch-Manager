@@ -122,7 +122,7 @@ class VNPatchManagerApp(
         self.search_var = ctk.StringVar(value="")
         self.filter_var = ctk.StringVar(value="All")
         self.sort_var = ctk.StringVar(value="Title (A-Z)")
-        self.view_var = ctk.StringVar(value="Grid")
+        self.view_var = ctk.StringVar(value="Posters")
         self._search_debounce_job = None
         self._active_render_job = None
 
@@ -267,19 +267,55 @@ class VNPatchManagerApp(
         self.btn_add_non_steam.pack(side="right", padx=(0, 0))
 
     def _setup_bottom_footer(self):
-        """Constructs the status label and progress bar footer."""
+        """Constructs the status label, controller prompt bar, and progress bar footer."""
         footer_frame = ctk.CTkFrame(self, fg_color="transparent")
-        footer_frame.grid(row=2, column=0, padx=20, pady=(4, 12), sticky="ew")
+        footer_frame.grid(row=2, column=0, padx=20, pady=(2, 8), sticky="ew")
         footer_frame.grid_columnconfigure(0, weight=1)
 
-        self.lbl_status = ctk.CTkLabel(footer_frame, text="Ready", font=ctk.CTkFont(size=12), text_color="gray")
+        # Top row of footer: status & progress
+        status_row = ctk.CTkFrame(footer_frame, fg_color="transparent")
+        status_row.pack(fill="x", expand=True)
+        status_row.grid_columnconfigure(0, weight=1)
+
+        self.lbl_status = ctk.CTkLabel(status_row, text="Ready", font=ctk.CTkFont(size=12), text_color="gray")
         self.lbl_status.grid(row=0, column=0, sticky="w")
 
         self.progress_bar = ctk.CTkProgressBar(
-            footer_frame, width=200, height=8, mode="indeterminate", progress_color=COLOR_PRIMARY_BLUE
+            status_row, width=200, height=8, mode="indeterminate", progress_color=COLOR_PRIMARY_BLUE
         )
         self.progress_bar.grid(row=0, column=1, sticky="e")
         self.progress_bar.set(0)
+
+        # Bottom row of footer: Console-style Gamepad Prompt Bar
+        self.prompt_bar_frame = ctk.CTkFrame(
+            footer_frame,
+            fg_color="#141a24",
+            border_color="#1f2937",
+            border_width=1,
+            corner_radius=8,
+            height=28,
+        )
+        self.prompt_bar_frame.pack(fill="x", expand=True, pady=(6, 0))
+
+        self.lbl_prompt_hints = ctk.CTkLabel(
+            self.prompt_bar_frame,
+            text="[A] View Details  •  [X] Apply Patch  •  [Y] Search  •  [L1/R1] Tabs  •  [Start] Scan",
+            font=ctk.CTkFont(family="DejaVu Sans Mono", size=11, weight="bold"),
+            text_color="#38bdf8",
+        )
+        self.lbl_prompt_hints.pack(pady=4)
+
+    def update_controller_prompts(self, active_zone: str = "LIBRARY"):
+        """Updates controller hints based on active navigation zone."""
+        if not hasattr(self, "lbl_prompt_hints") or not self.lbl_prompt_hints.winfo_exists():
+            return
+        if active_zone == "SETTINGS":
+            hints = "[A] Save Settings  •  [B] Back to Library  •  [L1/R1] Switch Tabs"
+        elif active_zone == "TOOLBAR":
+            hints = "[A] Select / Type  •  [Down] Return to Library  •  [B] Clear"
+        else:
+            hints = "[A] View Details  •  [X] Apply Patch  •  [Y] Search  •  [L1/R1] Tabs  •  [Start] Scan"
+        self.lbl_prompt_hints.configure(text=hints)
 
     def destroy(self):
         """Cleanly stops background controller listener before closing."""
