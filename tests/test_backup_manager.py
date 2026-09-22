@@ -2,8 +2,10 @@ import hashlib
 import json
 import time
 from pathlib import Path
+from unittest.mock import patch
 import pytest
 from vnpatchmanager import BackupManager
+from vnpatchmanager.exceptions import BackupError
 
 
 def test_compute_sha256(tmp_path):
@@ -150,7 +152,7 @@ def test_restore_backup_tampered_backup_fails(tmp_path):
     tampered_file = backup_dir / "files" / "file.txt"
     tampered_file.write_text("tampered content")
 
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(BackupError) as exc_info:
         BackupManager.restore_backup(game_dir)
     assert "checksum mismatch" in str(exc_info.value)
 
@@ -165,7 +167,7 @@ def test_restore_backup_missing_file_in_storage(tmp_path):
     # Remove the backup file from storage
     (backup_dir / "files" / "file.txt").unlink()
 
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(BackupError) as exc_info:
         BackupManager.restore_backup(game_dir)
     assert "missing file" in str(exc_info.value)
 
@@ -174,9 +176,40 @@ def test_restore_backup_no_backup_found(tmp_path):
     game_dir = tmp_path / "GameNoBackup"
     game_dir.mkdir()
 
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(BackupError) as exc_info:
         BackupManager.restore_backup(game_dir)
     assert "No valid backup found" in str(exc_info.value)
+
+
+def test_restore_backup_post_restore_missing_file(tmp_path):
+    game_dir = tmp_path / "Game"
+    game_dir.mkdir()
+    (game_dir / "file.txt").write_text("original")
+
+    BackupManager.create_backup(game_dir, "100", "Game")
+
+    # Simulate copy failure where destination file is not created
+    with patch("shutil.copy2", return_value=None):
+        with pytest.raises(BackupError) as exc_info:
+            BackupManager.restore_backup(game_dir)
+        assert "restored file 'file.txt' missing" in str(exc_info.value)
+
+
+def test_restore_backup_post_restore_checksum_mismatch(tmp_path):
+    game_dir = tmp_path / "Game"
+    game_dir.mkdir()
+    (game_dir / "file.txt").write_text("original")
+
+    BackupManager.create_backup(game_dir, "100", "Game")
+
+    # Simulate corrupted copy where file has wrong content
+    def mock_corrupt_copy(src, dst):
+        Path(dst).write_text("corrupted content during copy")
+
+    with patch("shutil.copy2", side_effect=mock_corrupt_copy):
+        with pytest.raises(BackupError) as exc_info:
+            BackupManager.restore_backup(game_dir)
+        assert "restored checksum mismatch" in str(exc_info.value)
 
 
 def test_create_backup_detects_pre_existing_patch_collision(tmp_path):

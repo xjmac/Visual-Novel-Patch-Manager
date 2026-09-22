@@ -53,6 +53,72 @@ def test_get_patch_status(tmp_path):
     assert PatchExecutionEngine.get_patch_status(game_dir, patch_data=patch_data)
 
 
+def test_get_patch_status_zip_archive(tmp_path):
+    import zipfile
+
+    game_dir = tmp_path / "Game"
+    game_dir.mkdir()
+    patch_dir = tmp_path / "PatchSource"
+    patch_dir.mkdir()
+
+    # Create a zip containing a patch file
+    zip_path = patch_dir / "patch.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("patch_content.dat", b"18plus_data")
+
+    patch_data = {
+        "patch_source_dir": str(patch_dir),
+        "actions": [{"type": "extract_archive", "source": "patch.zip", "destination": "{game_dir}/"}]
+    }
+
+    # Not installed yet -> False
+    assert not PatchExecutionEngine.get_patch_status(game_dir, patch_data=patch_data)
+
+    # Installed in game dir with matching size -> True
+    (game_dir / "patch_content.dat").write_bytes(b"18plus_data")
+    assert PatchExecutionEngine.get_patch_status(game_dir, patch_data=patch_data)
+
+
+def test_get_patch_status_copy_directory(tmp_path):
+    game_dir = tmp_path / "Game"
+    game_dir.mkdir()
+    patch_dir = tmp_path / "PatchSource"
+    patch_dir.mkdir()
+
+    source_sub = patch_dir / "unpacked_patch"
+    source_sub.mkdir()
+    (source_sub / "update.xp3").write_bytes(b"xp3_data")
+
+    patch_data = {
+        "patch_source_dir": str(patch_dir),
+        "actions": [{"type": "copy_directory", "source": "unpacked_patch", "destination": "{game_dir}/"}]
+    }
+
+    # Not installed -> False
+    assert not PatchExecutionEngine.get_patch_status(game_dir, patch_data=patch_data)
+
+    # Installed -> True
+    (game_dir / "update.xp3").write_bytes(b"xp3_data")
+    assert PatchExecutionEngine.get_patch_status(game_dir, patch_data=patch_data)
+
+
+def test_get_patch_status_artemis_and_kirikiri_signatures(tmp_path):
+    game_dir = tmp_path / "Game"
+    game_dir.mkdir()
+
+    # Artemis PFS patch increment (e.g. game.pfs.040)
+    pfs_file = game_dir / "root.pfs.040"
+    pfs_file.write_bytes(b"pfs")
+    assert PatchExecutionEngine.get_patch_status(game_dir)
+    pfs_file.unlink()
+
+    # Kirikiri adult.xp3
+    xp3_file = game_dir / "adult.xp3"
+    xp3_file.write_bytes(b"xp3")
+    assert PatchExecutionEngine.get_patch_status(game_dir)
+    xp3_file.unlink()
+
+
 def test_find_proton_executable(mock_steam_structure, tmp_path):
     primary_lib = mock_steam_structure["steam_root"]
     secondary_lib = mock_steam_structure["secondary_library"]

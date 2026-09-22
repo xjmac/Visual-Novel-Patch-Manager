@@ -66,9 +66,10 @@ class PatchExecutionEngine:
                 dest_clean = destination.replace("{game_dir}", "").strip("/\\")
                 target_dir = (game_path / dest_clean) if dest_clean else game_path
 
-                # Specific patch payload files
-                if atype == "copy_file":
-                    if source in [".", "patch_data"]:
+                # Specific patch payload files or directory copies
+                if atype in ("copy_file", "copy_directory"):
+                    src_check = (patch_src_dir / source) if patch_src_dir.exists() else None
+                    if source in [".", "patch_data"] or (src_check and src_check.is_dir()):
                         src_dir = (patch_src_dir / source) if source != "." else patch_src_dir
                         if src_dir.exists() and src_dir.is_dir():
                             src_files = [f for f in src_dir.glob("*") if f.is_file() and not f.name.endswith(".txt")]

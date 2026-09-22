@@ -19,20 +19,10 @@ def test_cli_export_licenses_logic(tmp_path):
     }
 
     with patch.object(SteamScanner, "get_owned_games", return_value=mock_games):
-        with open(raw_file, "r") as f:
-            found_ids = set(re.findall(r"\b\d{3,7}\b", f.read()))
+        cli_main(["--export-licenses", str(raw_file), "-o", str(out_file)])
 
-        assert "900001" in found_ids
-        assert "900002" in found_ids
-
-        resolved = sorted([mock_games[aid]["name"] for aid in found_ids if aid in mock_games])
-        assert resolved == ["Synthetic VN Alpha", "Synthetic VN Beta"]
-
-        with open(out_file, "w") as f:
-            for game in resolved:
-                f.write(f"{game}\n")
-
-        assert out_file.read_text() == "Synthetic VN Alpha\nSynthetic VN Beta\n"
+    assert out_file.exists()
+    assert out_file.read_text(encoding="utf-8") == "Synthetic VN Alpha\nSynthetic VN Beta\n"
 
 
 def test_cli_version_flag(capsys):
