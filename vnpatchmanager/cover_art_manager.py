@@ -1,7 +1,8 @@
 import requests
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
+from .utils import is_mocked
 
 logger = logging.getLogger(__name__)
 from PIL import Image, ImageDraw
@@ -13,11 +14,59 @@ class CoverArtManager:
     STEAM_HEADER_URL = "https://cdn.akamai.steamstatic.com/steam/apps/{appid}/header.jpg"
     MAX_CACHE_SIZE = 250
 
-    def __init__(self, cache_dir: Path = None):
+    def __init__(self, cache_dir: Path = None, session: Optional[requests.Session] = None):
         self.cache_dir = cache_dir or self.CACHE_DIR
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self._image_cache = {}
         self._fallback_cache = {}
+        self._session = session or requests.Session()
+
+    def _get(self, url: str, headers: Optional[dict] = None, timeout: int = 5):
+        client = requests if is_mocked(requests.get) else self._session
+        return client.get(url, headers=headers, timeout=timeout)
+
+    def _post(self, url: str, json: Optional[dict] = None, headers: Optional[dict] = None, timeout: int = 5):
+        client = requests if is_mocked(requests.post) else self._session
+        return client.post(url, json=json, headers=headers, timeout=timeout)
+
+    def download_image_bytes(self, url: str, timeout: int = 12) -> Optional[bytes]:
+        """Downloads raw image bytes from URL using connection pool."""
+        if not url:
+            return None
+        try:
+            headers = {"User-Agent": "VNPM/2.0 (Linux; SteamDeck; github.com/user/VNPM)"}
+            resp = self._get(url, headers=headers, timeout=timeout)
+            if resp.status_code == 200 and len(resp.content) > 0:
+                return resp.content
+        except Exception as e:
+            logger.warning(f"Failed to download image from {url}: {e}")
+        return None
+
+    def download_and_set_specific_asset(
+        self,
+        app_id: str,
+        asset_type: str,
+        url: str,
+        steamgriddb_client: Optional[Any] = None,
+        steam_root: Optional[Path] = None,
+        timeout: int = 12
+    ) -> bool:
+        """Downloads artwork from URL and saves as a specific grid asset."""
+        image_bytes = None
+        if steamgriddb_client and hasattr(steamgriddb_client, "download_image_bytes"):
+            image_bytes = steamgriddb_client.download_image_bytes(url, timeout=timeout)
+        if not image_bytes:
+            image_bytes = self.download_image_bytes(url, timeout=timeout)
+
+        if not image_bytes:
+            return False
+
+        return self.set_specific_grid_asset(
+            app_id=str(app_id),
+            asset_type=asset_type,
+            image_bytes=image_bytes,
+            steam_root=steam_root
+        )
 
     def get_cached_path(self, app_id: str) -> Path:
         return self.cache_dir / f"{app_id}.jpg"
@@ -69,7 +118,7 @@ class CoverArtManager:
             payload["filters"] = ["search", "=", title]
 
         try:
-            resp = requests.post(url, json=payload, headers=headers, timeout=5)
+            resp = self._post(url, json=payload, headers=headers, timeout=5)
             if resp.status_code == 200:
                 data = resp.json()
                 results = data.get("results", [])
@@ -100,7 +149,7 @@ class CoverArtManager:
         ]
         for url in cdn_urls:
             try:
-                resp = requests.get(url, headers=headers, timeout=4)
+                resp = self._get(url, headers=headers, timeout=4)
                 if resp.status_code == 200 and len(resp.content) > 0:
                     with open(cache_path, "wb") as f:
                         f.write(resp.content)
@@ -112,13 +161,13 @@ class CoverArtManager:
         # 3. Try Steam Store API for app_id
         try:
             api_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&filters=basic"
-            resp = requests.get(api_url, headers=headers, timeout=4)
+            resp = self._get(api_url, headers=headers, timeout=4)
             if resp.status_code == 200:
                 data = resp.json()
                 app_data = data.get(str(app_id), {}).get("data", {})
                 img_url = app_data.get("header_image") or app_data.get("capsule_image")
                 if img_url:
-                    img_resp = requests.get(img_url, headers=headers, timeout=4)
+                    img_resp = self._get(img_url, headers=headers, timeout=4)
                     if img_resp.status_code == 200 and len(img_resp.content) > 0:
                         with open(cache_path, "wb") as f:
                             f.write(img_resp.content)
@@ -138,7 +187,7 @@ class CoverArtManager:
                 ]
                 for m_url in matched_urls:
                     try:
-                        resp = requests.get(m_url, headers=headers, timeout=4)
+                        resp = self._get(m_url, headers=headers, timeout=4)
                         if resp.status_code == 200 and len(resp.content) > 0:
                             with open(cache_path, "wb") as f:
                                 f.write(resp.content)
@@ -155,7 +204,7 @@ class CoverArtManager:
             vndb_cover_url = self.fetch_vndb_cover(vn_id=vn_id, title=game_name)
             if vndb_cover_url:
                 try:
-                    resp = requests.get(vndb_cover_url, headers=headers, timeout=6)
+                    resp = self._get(vndb_cover_url, headers=headers, timeout=6)
                     if resp.status_code == 200 and len(resp.content) > 0:
                         with open(cache_path, "wb") as f:
                             f.write(resp.content)
