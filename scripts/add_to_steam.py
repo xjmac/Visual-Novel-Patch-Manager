@@ -158,9 +158,71 @@ def register_shortcut(
     return registered_count
 
 
+def remove_shortcut(app_name: str = APP_NAME) -> int:
+    """Removes shortcuts matching app_name from all Steam profiles and removes matching grid artwork."""
+    removed_count = 0
+    for user_dir in find_steam_userdata_dirs():
+        config_dir = user_dir / "config"
+        shortcuts_file = config_dir / "shortcuts.vdf"
+        grid_dir = config_dir / "grid"
+
+        if not shortcuts_file.exists():
+            continue
+
+        try:
+            with open(shortcuts_file, "rb") as f:
+                shortcuts_data = vdf.binary_loads(f.read())
+        except Exception as e:
+            print(f"Error reading {shortcuts_file}: {e}")
+            continue
+
+        shortcuts = shortcuts_data.get("shortcuts", {})
+        new_shortcuts = {}
+        matched_appids = []
+        cur_idx = 0
+
+        for idx, entry in sorted(shortcuts.items(), key=lambda x: int(x[0]) if str(x[0]).isdigit() else 9999):
+            if entry.get("AppName") == app_name:
+                aid = entry.get("appid")
+                if aid is not None:
+                    matched_appids.append(aid)
+                continue
+            new_shortcuts[str(cur_idx)] = entry
+            cur_idx += 1
+
+        if len(new_shortcuts) != len(shortcuts):
+            shortcuts_data["shortcuts"] = new_shortcuts
+            try:
+                with open(shortcuts_file, "wb") as f:
+                    f.write(vdf.binary_dumps(shortcuts_data))
+                removed_count += 1
+                print(f"✅ Removed '{app_name}' from Steam profile {user_dir.name}.")
+            except Exception as e:
+                print(f"Error saving {shortcuts_file}: {e}")
+
+        # Remove deployed artwork
+        if grid_dir.exists():
+            for art_file in grid_dir.iterdir():
+                for aid in matched_appids:
+                    aid_32 = str(aid & 0xFFFFFFFF)
+                    if art_file.name.startswith(aid_32):
+                        try:
+                            art_file.unlink()
+                        except OSError:
+                            pass
+
+    return removed_count
+
+
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--remove":
+        app_name = sys.argv[2] if len(sys.argv) > 2 else APP_NAME
+        remove_shortcut(app_name)
+        return
+
     if len(sys.argv) < 3:
         print("Usage: python3 add_to_steam.py <path_to_vnpm_executable> <path_to_assets_dir>")
+        print("       python3 add_to_steam.py --remove [app_name]")
         sys.exit(1)
 
     exe_path = Path(sys.argv[1]).resolve()

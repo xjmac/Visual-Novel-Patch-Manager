@@ -1,8 +1,6 @@
 import json
-from pathlib import Path
 from unittest.mock import patch
 from vnpatchmanager import ConfigManager
-import vnpatchmanager
 
 
 def test_default_config(temp_config_dir):

@@ -1,8 +1,6 @@
 import io
 import json
-from pathlib import Path
 from unittest.mock import patch, MagicMock
-import smbclient
 from vnpatchmanager import PatchRepository, ConfigManager
 
 
@@ -110,7 +108,7 @@ def test_scan_smb_success(temp_config_dir):
 
     # Mock directory items
     mock_items = ["SyntheticAlphaPatch", "File.txt", "SyntheticBetaPatch"]
-    
+
     # Mock stat returning directory mode (0o040000) for dirs, regular file for File.txt
     def mock_stat(path):
         stat_res = MagicMock()
@@ -139,6 +137,7 @@ def test_scan_smb_success(temp_config_dir):
         repo.refresh_patches()
 
         mock_reg.assert_called_once_with("192.168.1.100", username="vnuser", password="pass123")
+        assert mock_list.called
         assert "900001" in repo.available_patches
         assert "900002" in repo.available_patches
         assert repo.available_patches["900001"]["title"] == "Synthetic VN Alpha SMB Patch"

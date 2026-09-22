@@ -2,10 +2,10 @@ import requests
 import logging
 from pathlib import Path
 from typing import Optional, Any
+from PIL import Image, ImageDraw
 from .utils import is_mocked
 
 logger = logging.getLogger(__name__)
-from PIL import Image, ImageDraw
 
 class CoverArtManager:
     """Handles fetching, caching, and generating Steam game cover art banners."""
@@ -255,11 +255,11 @@ class CoverArtManager:
                         if udir.is_dir() and udir.name.isdigit():
                             grid_dir = udir / "config" / "grid"
                             grid_dir.mkdir(parents=True, exist_ok=True)
-                            
+
                             # Landscape (920x430)
                             landscape = pil_img.resize((920, 430), Image.Resampling.BICUBIC)
                             landscape.save(grid_dir / f"{app_id}.jpg", quality=95)
-                            
+
                             # Portrait (600x900)
                             portrait = pil_img.resize((600, 900), Image.Resampling.BICUBIC)
                             portrait.save(grid_dir / f"{app_id}p.jpg", quality=95)

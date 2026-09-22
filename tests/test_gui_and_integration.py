@@ -2,7 +2,7 @@ import time
 import pytest
 from unittest.mock import patch, MagicMock
 import customtkinter as ctk
-from vnpatchmanager import VNPatchManagerApp, PatchExecutionEngine, SteamScanner, PatchRepository, BackupManager
+from vnpatchmanager import VNPatchManagerApp, PatchExecutionEngine, BackupManager
 
 
 @pytest.fixture
@@ -459,8 +459,8 @@ def test_uninstalled_game_badges_and_actions(app_instance):
             lbls.extend(find_labels(child))
         return lbls
 
-    labels = [l.cget("text") for l in find_labels(cards[0])]
-    assert any("Not Installed" in l for l in labels)
+    labels = [lbl.cget("text") for lbl in find_labels(cards[0])]
+    assert any("Not Installed" in text for text in labels)
 
     # Test that run_patch on uninstalled game warns and aborts
     with patch("tkinter.messagebox.showwarning") as mock_warn:
@@ -516,9 +516,10 @@ def test_run_patch_success(app_instance, mock_steam_structure, mock_patch_repo):
 
     with patch("threading.Thread", side_effect=sync_thread), \
          patch.object(PatchExecutionEngine, "apply_patch", return_value=True) as mock_apply, \
-         patch.object(app_instance, "refresh_data") as mock_refresh:
+         patch.object(app_instance, "after") as mock_after:
         app_instance.run_patch(game_data, patch_data)
         mock_apply.assert_called_once()
+        mock_after.assert_called_once_with(2000, app_instance.refresh_data)
 
 
 def test_run_patch_failure(app_instance, mock_steam_structure, mock_patch_repo):
@@ -844,7 +845,7 @@ def test_controller_card_navigation_and_visual_focus(app_instance, mock_steam_st
     assert card1.cget("fg_color") == "#121212"
 
     # Move Right -> Focus moves to card 1
-    from vnpatchmanager.controller_manager import ACTION_RIGHT, ACTION_LEFT, ACTION_UP, ACTION_DOWN
+    from vnpatchmanager.controller_manager import ACTION_RIGHT, ACTION_LEFT, ACTION_UP
     app_instance._handle_controller_action(ACTION_RIGHT)
     assert app_instance._focused_card_idx == 1
     assert card1.cget("border_width") == 3
@@ -862,7 +863,7 @@ def test_controller_card_navigation_and_visual_focus(app_instance, mock_steam_st
 
 
 def test_controller_search_bar_osk_trigger(app_instance, mock_steam_structure):
-    from vnpatchmanager.controller_manager import ACTION_SEARCH, ACTION_SELECT
+    from vnpatchmanager.controller_manager import ACTION_SEARCH
     from vnpatchmanager.steamos_helper import SteamOSHelper
 
     with patch.object(SteamOSHelper, "show_onscreen_keyboard") as mock_osk:
@@ -1022,7 +1023,6 @@ def test_gui_controller_toolbar_and_button_navigation(app_instance, mock_steam_s
     from vnpatchmanager.controller_manager import (
         ACTION_LEFT,
         ACTION_RIGHT,
-        ACTION_UP,
         ACTION_DOWN,
         ACTION_SELECT,
         ACTION_BACK,
@@ -1080,12 +1080,9 @@ def test_gui_controller_toolbar_and_button_navigation(app_instance, mock_steam_s
 
 def test_gui_controller_grid_multi_card_navigation(app_instance, mock_steam_structure, mock_patch_repo):
     from vnpatchmanager.controller_manager import (
-        ACTION_LEFT,
         ACTION_RIGHT,
         ACTION_UP,
-        ACTION_DOWN,
-        ACTION_SELECT,
-        ACTION_BACK
+        ACTION_DOWN
     )
 
     app_instance.repo.available_patches = {
@@ -1158,7 +1155,6 @@ def test_gui_destroy_and_refresh_error_handling(app_instance):
 
 def test_gui_controller_filter_and_sort_selection(app_instance, mock_steam_structure):
     from vnpatchmanager.controller_manager import (
-        ACTION_LEFT,
         ACTION_RIGHT,
         ACTION_SELECT
     )
@@ -1216,7 +1212,6 @@ def test_gui_controller_tab_bar_spatial_navigation(app_instance, mock_steam_stru
         ACTION_RIGHT,
         ACTION_UP,
         ACTION_DOWN,
-        ACTION_SELECT,
         ACTION_BACK
     )
 
@@ -1288,8 +1283,7 @@ def test_gui_controller_header_scan_button_navigation(app_instance):
         ACTION_RIGHT,
         ACTION_UP,
         ACTION_DOWN,
-        ACTION_SELECT,
-        ACTION_BACK
+        ACTION_SELECT
     )
 
     # 1. Start in TABS zone on Games Library

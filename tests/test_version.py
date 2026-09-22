@@ -1,4 +1,3 @@
-import subprocess
 from unittest.mock import patch, MagicMock
 from pathlib import Path
 from vnpatchmanager.version import get_version, DEFAULT_VERSION

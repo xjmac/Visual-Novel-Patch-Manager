@@ -17,7 +17,6 @@ except ImportError:
             raise RuntimeError("customtkinter is required to instantiate VNPatchManagerApp GUI")
     ctk = type("ctk", (), {"CTk": _FallbackCTk})
 
-from ..backup_manager import BackupManager
 from ..codec_fixer import CodecFixer
 from ..config_manager import ConfigManager
 from ..controller_manager import GamepadControllerManager
@@ -28,7 +27,7 @@ from ..patch_repository import PatchRepository
 from ..steam_scanner import SteamScanner
 from ..steamgriddb_client import SteamGridDBClient
 from ..steamos_helper import SteamOSHelper
-from ..version import APP_NAME, APP_VERSION
+from ..version import APP_NAME
 from ..vndb_scanner import VNDBScanner
 
 from .constants import (
@@ -569,9 +568,9 @@ class VNPatchManagerApp(
                 self.run_on_main_thread(_done)
             except Exception as e:
                 logger.error(f"Error removing non-steam game: {e}", exc_info=True)
-                def _fail():
+                def _fail(err=e):
                     self._stop_progress()
-                    self.lbl_status.configure(text=f"❌ Failed to remove game: {e}", text_color=COLOR_STATUS_RED)
+                    self.lbl_status.configure(text=f"❌ Failed to remove game: {err}", text_color=COLOR_STATUS_RED)
                 self.run_on_main_thread(_fail)
 
         threading.Thread(target=_worker, daemon=True).start()

@@ -1,8 +1,6 @@
 import json
 import time
-from pathlib import Path
 from unittest.mock import MagicMock, patch
-import pytest
 from vnpatchmanager import VNDBScanner
 
 
@@ -198,7 +196,6 @@ def test_post_query_requests_http_error(tmp_path):
 
 
 def test_post_query_requests_429_retry(tmp_path):
-    import requests
     scanner = VNDBScanner(cache_file=tmp_path / "cache.json")
 
     mock_429 = MagicMock()
@@ -298,7 +295,7 @@ def test_vndb_scanner_bundled_db_instant_lookup(tmp_path):
 
     scanner = VNDBScanner(cache_file=cache_file, bundled_db_path=bundled_file)
     assert "900021" in scanner.bundled_db
-    
+
     # Instant lookup without network
     cached = scanner.get_cached_vns()
     assert "900021" in cached

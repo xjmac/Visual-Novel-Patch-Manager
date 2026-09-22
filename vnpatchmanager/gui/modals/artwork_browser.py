@@ -665,4 +665,15 @@ def show_artwork_browser_modal(app, app_id: str, game_data: dict):
     def _on_category_changed(val):
         _fetch_and_render_assets()
 
-    _fetch_and_render_assets()
+    def _set_tab(val):
+        seg_type.set(val)
+        _fetch_and_render_assets()
+
+    modal._controller_handler = _handle_modal_controller
+    modal._close_modal = _close_modal
+    modal._set_tab = _set_tab
+    modal._apply_selected_asset = _apply_selected_asset
+    modal._fetch_and_render_assets = _fetch_and_render_assets
+    modal._on_local_file_upload = _on_local_file_upload
+
+    return modal

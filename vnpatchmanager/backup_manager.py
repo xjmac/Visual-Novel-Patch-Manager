@@ -4,11 +4,12 @@ import shutil
 import hashlib
 import time
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Callable, Dict, Optional, Tuple, Union
+from .exceptions import BackupError
 
 logger = logging.getLogger(__name__)
-from datetime import datetime, timezone
-from .exceptions import BackupError
 
 class BackupManager:
     """Manages creation, verification, and atomic rollback of game backups."""
@@ -26,7 +27,7 @@ class BackupManager:
         return hasher.hexdigest()
 
     @staticmethod
-    def has_backup(game_install_path) -> bool:
+    def has_backup(game_install_path: Union[str, Path]) -> bool:
         """Checks if a valid backup with manifest exists in the game's .backup directory."""
         backup_root = Path(game_install_path) / BackupManager.BACKUP_DIR_NAME
         if not backup_root.exists() or not backup_root.is_dir():
@@ -37,7 +38,7 @@ class BackupManager:
         return False
 
     @staticmethod
-    def get_latest_backup(game_install_path) -> tuple[Path, dict]:
+    def get_latest_backup(game_install_path: Union[str, Path]) -> Tuple[Optional[Path], Optional[Dict[str, Any]]]:
         """Returns the path to the newest backup directory and its parsed manifest."""
         backup_root = Path(game_install_path) / BackupManager.BACKUP_DIR_NAME
         if not backup_root.exists() or not backup_root.is_dir():
@@ -65,7 +66,7 @@ class BackupManager:
         return latest_dir, latest_manifest
 
     @staticmethod
-    def has_clean_backup(game_install_path) -> bool:
+    def has_clean_backup(game_install_path: Union[str, Path]) -> bool:
         """Returns True if the newest backup is marked clean and free of pre-existing patch files."""
         _, manifest = BackupManager.get_latest_backup(game_install_path)
         if not manifest:
@@ -73,7 +74,13 @@ class BackupManager:
         return manifest.get("is_clean_original", True) is True
 
     @staticmethod
-    def create_backup(game_install_path, app_id: str, game_name: str, patch_source_dir=None, log_callback=None) -> Path:
+    def create_backup(
+        game_install_path: Union[str, Path],
+        app_id: Union[str, int],
+        game_name: str,
+        patch_source_dir: Optional[Union[str, Path]] = None,
+        log_callback: Optional[Callable[[str], None]] = None,
+    ) -> Path:
         """
         Computes SHA256 checksums of all original game files, stores them in
         .backup/<timestamp>/ with a manifest.json.
@@ -166,7 +173,10 @@ class BackupManager:
         return backup_dir
 
     @staticmethod
-    def restore_backup(game_install_path, log_callback=None) -> bool:
+    def restore_backup(
+        game_install_path: Union[str, Path],
+        log_callback: Optional[Callable[[str], None]] = None,
+    ) -> bool:
         """
         Restores original game files from the latest backup atomically,
         verifying SHA256 checksums before and after restoration.

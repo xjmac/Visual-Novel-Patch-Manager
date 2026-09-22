@@ -1,6 +1,5 @@
 import hashlib
 import json
-import time
 from pathlib import Path
 from unittest.mock import patch
 import pytest
@@ -89,15 +88,14 @@ def test_get_latest_backup_ordering(tmp_path):
     game_dir.mkdir()
     (game_dir / "file.txt").write_text("v1")
 
-    backup_dir_1 = BackupManager.create_backup(game_dir, "100", "Game")
-
-    # Fast-forward time for second backup
-    time.sleep(0.01)
-    (game_dir / "file.txt").write_text("v2")
-    backup_dir_2 = BackupManager.create_backup(game_dir, "100", "Game")
+    with patch("time.time", side_effect=[1000.0, 2000.0]):
+        backup_dir_1 = BackupManager.create_backup(game_dir, "100", "Game")
+        (game_dir / "file.txt").write_text("v2")
+        backup_dir_2 = BackupManager.create_backup(game_dir, "100", "Game")
 
     latest_dir, latest_manifest = BackupManager.get_latest_backup(game_dir)
     assert latest_dir == backup_dir_2
+    assert backup_dir_1 != backup_dir_2
     assert latest_manifest["timestamp"] >= 0
 
 

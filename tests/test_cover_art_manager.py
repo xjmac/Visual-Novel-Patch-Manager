@@ -1,7 +1,5 @@
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 from PIL import Image
-import pytest
 import customtkinter as ctk
 from vnpatchmanager import CoverArtManager
 
@@ -128,6 +126,7 @@ def test_invalidate_memory_cache_and_corrupt_disk_image(tmp_path):
     real_img = Image.new("RGB", (300, 150), color=(100, 150, 200))
     real_img.save(tmp_path / "900001.jpg")
     img1 = mgr.get_cover_image("900001", size=(280, 130))
+    assert img1 is not None
     assert ("900001", (280, 130)) in mgr._image_cache
 
     # Invalidate specific app_id

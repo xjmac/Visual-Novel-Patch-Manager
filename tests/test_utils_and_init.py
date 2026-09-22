@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 import vnpatchmanager
 from vnpatchmanager.utils import find_database_file, is_mocked
 from vnpatchmanager.exceptions import (

@@ -1,6 +1,7 @@
 import sys
 import logging
 from pathlib import Path
+from typing import Any, Dict, Optional
 import vdf
 
 logger = logging.getLogger(__name__)
@@ -9,7 +10,7 @@ class SteamScanner:
     """Parses Steam's VDF files to locate library folders and installed games."""
 
     @staticmethod
-    def get_steam_root() -> Path:
+    def get_steam_root() -> Optional[Path]:
         paths = []
         if sys.platform == "win32":
             import winreg
@@ -59,7 +60,7 @@ class SteamScanner:
         return any(kw in name_l for kw in dlc_keywords)
 
     @staticmethod
-    def get_installed_games():
+    def get_installed_games() -> Dict[str, Dict[str, Any]]:
         """Returns a dict mapping Steam AppID to game metadata (name, install path) for installed games."""
         steam_root = SteamScanner.get_steam_root()
         if not steam_root:
@@ -144,7 +145,7 @@ class SteamScanner:
         return installed_games
 
     @staticmethod
-    def get_owned_games():
+    def get_owned_games() -> Dict[str, Dict[str, Any]]:
         """Returns a dict of all owned games (installed and uninstalled) from the Steam library and cache."""
         owned_games = SteamScanner.get_installed_games()
         steam_root = SteamScanner.get_steam_root()

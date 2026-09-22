@@ -8,8 +8,6 @@ Vanilla Installation -> Backup Creation -> Patch Application -> Status Verificat
 import hashlib
 import json
 import zipfile
-from pathlib import Path
-import pytest
 
 from vnpatchmanager import (
     BackupManager,
