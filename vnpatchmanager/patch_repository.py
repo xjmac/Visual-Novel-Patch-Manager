@@ -39,6 +39,23 @@ class PatchRepository:
         self.available_patches = {} # Map AppID -> Patch config data
         self._title_map = None
 
+    ROMAN_NUMERAL_MAP = {
+        "x": "10", "ix": "9", "viii": "8", "vii": "7", "vi": "6",
+        "v": "5", "iv": "4", "iii": "3", "ii": "2", "i": "1"
+    }
+
+    def _get_number_variants(self, text: str) -> list[str]:
+        """Generates variants swapping between Roman numerals and Arabic digits (e.g. 'part i' <-> 'part 1')."""
+        variants = {text}
+        for r, d in self.ROMAN_NUMERAL_MAP.items():
+            pattern_r = rf"\b{r}\b"
+            if re.search(pattern_r, text):
+                variants.add(re.sub(pattern_r, d, text))
+            pattern_d = rf"\b{d}\b"
+            if re.search(pattern_d, text):
+                variants.add(re.sub(pattern_d, r, text))
+        return list(variants)
+
     def _normalize_title(self, text: str) -> str:
         t = text.lower()
         t = t.replace("+", " plus ")
@@ -52,6 +69,42 @@ class PatchRepository:
             return self._title_map
 
         title_map = {}
+
+        def _add_title(t_str: str, aid_val: str, v_name: str, overwrite: bool = False):
+            if not t_str:
+                return
+            t_norm = self._normalize_title(t_str)
+            for var in self._get_number_variants(t_norm):
+                if overwrite or var not in title_map:
+                    title_map[var] = (str(aid_val), v_name)
+                # Also index clean version without edition/patch keywords
+                c_var = re.sub(
+                    r"(?i)\b(?:perfect edition|edition|r-?18|patch|steam|dlc|uncensored|restoration)\b|(?<!\w)18\+",
+                    "",
+                    var,
+                )
+                c_var = re.sub(r"\s+", " ", c_var).strip()
+                if c_var and (overwrite or c_var not in title_map):
+                    title_map[c_var] = (str(aid_val), v_name)
+
+        # 1. Index locally installed and owned Steam games (highest priority)
+        try:
+            from .steam_scanner import SteamScanner
+            installed = SteamScanner.get_installed_games()
+            for aid, ginfo in installed.items():
+                gname = ginfo.get("name")
+                if gname:
+                    _add_title(gname, aid, gname, overwrite=True)
+
+            owned = SteamScanner.get_owned_games()
+            for aid, ginfo in owned.items():
+                gname = ginfo.get("name")
+                if gname and not gname.startswith("Steam App #"):
+                    _add_title(gname, aid, gname, overwrite=False)
+        except Exception as e:
+            logger.debug(f"Could not index Steam games for patch title map: {e}")
+
+        # 2. Index VNDB / offline database
         db_path = self.find_database_file(self.bundled_db_path)
         if db_path and db_path.exists():
             try:
@@ -60,14 +113,20 @@ class PatchRepository:
                 for aid, data in db.items():
                     if str(aid).startswith("_") or not isinstance(data, dict):
                         continue
+
+                    steam_title = data.get("steam_title") or data.get("title")
+                    if steam_title:
+                        _add_title(steam_title, aid, steam_title, overwrite=False)
+
                     vn_title = data.get("vn_title", "")
                     if vn_title:
-                        title_map[self._normalize_title(vn_title)] = (str(aid), vn_title)
+                        _add_title(vn_title, aid, vn_title, overwrite=False)
+
+                    display_title = steam_title or vn_title
                     for p in data.get("patch_releases", []):
                         p_title = p.get("title", "")
                         if p_title:
-                            p_clean = re.sub(r"\b(patch|18\+|r18|uncensored|restoration|dlc|steam)\b", "", p_title, flags=re.IGNORECASE)
-                            title_map[self._normalize_title(p_clean)] = (str(aid), vn_title)
+                            _add_title(p_title, aid, display_title, overwrite=False)
             except (OSError, json.JSONDecodeError) as e:
                 logger.warning(f"Error loading title map for patch repository: {e}")
 
@@ -86,28 +145,39 @@ class PatchRepository:
             return None, None
 
         q_norm = self._normalize_title(query)
-        q_clean = re.sub(r"\b(perfect edition|edition|r18|patch|steam|dlc|rar|zip|7z)\b", "", q_norm).strip()
+        q_clean = re.sub(
+            r"(?i)\b(?:perfect edition|edition|r-?18|patch|steam|dlc|rar|zip|7z)\b|(?<!\w)18\+",
+            "",
+            q_norm,
+        ).strip()
+        q_clean = re.sub(r"\s+", " ", q_clean).strip()
 
-        if q_norm in title_map:
-            return title_map[q_norm]
-        if q_clean in title_map:
-            return title_map[q_clean]
+        # 1. Exact and normalized matching (checking number variants)
+        for var in self._get_number_variants(q_norm):
+            if var in title_map:
+                return title_map[var]
 
-        # Word set matching using precomputed token sets
-        q_words = set(q_clean.split())
-        best_aid, best_title, best_score = None, None, 0
-        for aid, v_title, t_words in getattr(self, "_title_tokens", []):
-            if q_words == t_words:
-                return aid, v_title
-            if q_words and (q_words.issubset(t_words) or t_words.issubset(q_words)):
-                score = len(q_words & t_words) / max(len(q_words | t_words), 1)
-                if score > best_score:
-                    best_score = score
-                    best_aid = aid
-                    best_title = v_title
+        for var in self._get_number_variants(q_clean):
+            if var in title_map:
+                return title_map[var]
 
-        if best_score >= 0.5:
-            return best_aid, best_title
+        # 2. Word set matching using precomputed token sets
+        for q_check in [q_clean, q_norm]:
+            for var in self._get_number_variants(q_check):
+                q_words = set(var.split())
+                best_aid, best_title, best_score = None, None, 0
+                for aid, v_title, t_words in getattr(self, "_title_tokens", []):
+                    if q_words == t_words:
+                        return aid, v_title
+                    if q_words and (q_words.issubset(t_words) or t_words.issubset(q_words)):
+                        score = len(q_words & t_words) / max(len(q_words | t_words), 1)
+                        if score > best_score:
+                            best_score = score
+                            best_aid = aid
+                            best_title = v_title
+
+                if best_score >= 0.5:
+                    return best_aid, best_title
 
         close = difflib.get_close_matches(q_clean, list(title_map.keys()), n=1, cutoff=0.6)
         if close:

@@ -366,3 +366,97 @@ def test_scan_local_multiple_archives_in_same_folder(temp_config_dir, tmp_path):
     assert "900103" in repo.available_patches
 
 
+def test_match_installed_steam_game_takes_precedence(temp_config_dir, tmp_path):
+    cm = ConfigManager()
+    mock_installed = {
+        "2552410": {"name": "Liminal Border Part I", "path": "/fake/path", "is_installed": True}
+    }
+    fake_db = tmp_path / "vndb_empty.json"
+    fake_db.write_text(json.dumps({}))
+
+    with patch("vnpatchmanager.steam_scanner.SteamScanner.get_installed_games", return_value=mock_installed), \
+         patch("vnpatchmanager.steam_scanner.SteamScanner.get_owned_games", return_value={}):
+        repo = PatchRepository(cm, bundled_db_path=fake_db)
+        aid, title = repo.match_title_to_app_id("Liminal Border Part I")
+        assert aid == "2552410"
+        assert title == "Liminal Border Part I"
+
+
+def test_match_roman_numeral_and_arabic_digit_variants(temp_config_dir, tmp_path):
+    cm = ConfigManager()
+    mock_installed = {
+        "2552410": {"name": "Liminal Border Part I", "path": "/fake/path", "is_installed": True}
+    }
+    fake_db = tmp_path / "vndb_empty.json"
+    fake_db.write_text(json.dumps({}))
+
+    with patch("vnpatchmanager.steam_scanner.SteamScanner.get_installed_games", return_value=mock_installed), \
+         patch("vnpatchmanager.steam_scanner.SteamScanner.get_owned_games", return_value={}):
+        repo = PatchRepository(cm, bundled_db_path=fake_db)
+
+        # Query with Arabic numeral '1' instead of Roman 'I'
+        aid, title = repo.match_title_to_app_id("Liminal Border Part 1")
+        assert aid == "2552410"
+        assert title == "Liminal Border Part I"
+
+        # Query with underscore and suffix
+        aid, title = repo.match_title_to_app_id("Liminal_Border_Part_1_Patch")
+        assert aid == "2552410"
+
+
+def test_patch_release_18plus_regex_stripping(temp_config_dir, tmp_path):
+    fake_db = tmp_path / "vndb_test_18.json"
+    fake_db.write_text(json.dumps({
+        "100001": {
+            "vn_title": "Crimson Horizon",
+            "patch_releases": [
+                {"title": "Crimson Horizon Part I - 18+ DLC"}
+            ]
+        }
+    }))
+
+    cm = ConfigManager()
+    with patch("vnpatchmanager.steam_scanner.SteamScanner.get_installed_games", return_value={}), \
+         patch("vnpatchmanager.steam_scanner.SteamScanner.get_owned_games", return_value={}):
+        repo = PatchRepository(cm, bundled_db_path=fake_db)
+
+        # Exact clean title without '18+ DLC'
+        aid, title = repo.match_title_to_app_id("Crimson Horizon Part I")
+        assert aid == "100001"
+
+        # Arabic variant
+        aid, title = repo.match_title_to_app_id("Crimson Horizon Part 1")
+        assert aid == "100001"
+
+
+def test_multi_release_no_blind_overwrite(temp_config_dir, tmp_path):
+    fake_db = tmp_path / "vndb_multi.json"
+    fake_db.write_text(json.dumps({
+        "2552410": {
+            "vn_title": "Criminal Border",
+            "steam_title": "Liminal Border Part I",
+            "patch_releases": [{"title": "Liminal Border Part I - 18+ DLC"}]
+        },
+        "3591440": {
+            "vn_title": "Criminal Border",
+            "steam_title": "Liminal Border Part IV",
+            "patch_releases": [
+                {"title": "Liminal Border Part I - 18+ DLC"},
+                {"title": "Liminal Border Part IV - 18+ DLC"}
+            ]
+        }
+    }))
+
+    cm = ConfigManager()
+    with patch("vnpatchmanager.steam_scanner.SteamScanner.get_installed_games", return_value={}), \
+         patch("vnpatchmanager.steam_scanner.SteamScanner.get_owned_games", return_value={}):
+        repo = PatchRepository(cm, bundled_db_path=fake_db)
+
+        aid_1, _ = repo.match_title_to_app_id("Liminal Border Part I")
+        assert aid_1 == "2552410"
+
+        aid_4, _ = repo.match_title_to_app_id("Liminal Border Part IV")
+        assert aid_4 == "3591440"
+
+
+
