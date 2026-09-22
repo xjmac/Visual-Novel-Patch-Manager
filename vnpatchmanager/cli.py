@@ -64,7 +64,12 @@ def cmd_list_games(args):
 
             rating_str = f" ★{vn_info['rating']:.1f}" if vn_info.get("rating") else ""
             status_display = " ".join(status_tags) if status_tags else "[Vanilla]"
-            name = vn_info.get("vn_title") or gdata.get("name", f"App #{app_id}")
+            name = (
+                (gdata.get("name") if gdata.get("name") and not gdata.get("name", "").startswith("Steam App #") else None)
+                or vn_info.get("steam_title")
+                or vn_info.get("vn_title")
+                or f"App #{app_id}"
+            )
             print(f"  {app_id:>8} | {status_display:<24} | {name}{rating_str}")
 
     print(f"\nTotal visual novels found: {matched}\n")
