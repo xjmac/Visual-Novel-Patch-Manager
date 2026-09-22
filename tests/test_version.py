@@ -75,3 +75,34 @@ def test_get_version_total_fallback():
          patch("importlib.metadata.version", side_effect=Exception("No package")):
         ver = get_version(repo_root=Path("/fake/non_git_repo"))
         assert ver == DEFAULT_VERSION
+
+
+def test_version_module_getattr_and_caching():
+    import pytest
+    import vnpatchmanager.version as vmod
+
+    # 1. Test get_version caching
+    vmod.get_version.cache_clear()
+    v1 = vmod.get_version()
+    assert isinstance(v1, str)
+
+    # Calling get_version again must return cached value without executing subprocess
+    with patch("subprocess.run") as mock_run:
+        assert vmod.get_version() == v1
+        mock_run.assert_not_called()
+
+    # 2. Test __getattr__ for APP_VERSION and __version__
+    # Remove from globals if present to force __getattr__ invocation
+    vmod.__dict__.pop("APP_VERSION", None)
+    vmod.__dict__.pop("__version__", None)
+
+    app_ver = vmod.APP_VERSION
+    mod_ver = vmod.__version__
+    assert app_ver == v1
+    assert mod_ver == v1
+
+    # 3. Invalid attribute raises AttributeError
+    with pytest.raises(AttributeError):
+        _ = vmod.NON_EXISTENT_ATTR
+
+

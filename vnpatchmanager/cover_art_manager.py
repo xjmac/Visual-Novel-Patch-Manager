@@ -2,7 +2,7 @@ import requests
 import logging
 from pathlib import Path
 from typing import Optional, Any
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 from .utils import is_mocked
 
 logger = logging.getLogger(__name__)
@@ -257,19 +257,19 @@ class CoverArtManager:
                             grid_dir.mkdir(parents=True, exist_ok=True)
 
                             # Landscape (920x430)
-                            landscape = pil_img.resize((920, 430), Image.Resampling.BICUBIC)
+                            landscape = ImageOps.fit(pil_img, (920, 430), method=Image.Resampling.BICUBIC)
                             landscape.save(grid_dir / f"{app_id}.jpg", quality=95)
 
                             # Portrait (600x900)
-                            portrait = pil_img.resize((600, 900), Image.Resampling.BICUBIC)
+                            portrait = ImageOps.fit(pil_img, (600, 900), method=Image.Resampling.BICUBIC)
                             portrait.save(grid_dir / f"{app_id}p.jpg", quality=95)
 
                             # Hero (1920x620)
-                            hero = pil_img.resize((1920, 620), Image.Resampling.BICUBIC)
+                            hero = ImageOps.fit(pil_img, (1920, 620), method=Image.Resampling.BICUBIC)
                             hero.save(grid_dir / f"{app_id}_hero.jpg", quality=95)
 
                             # Icon (32x32)
-                            icon = pil_img.resize((32, 32), Image.Resampling.BICUBIC)
+                            icon = ImageOps.fit(pil_img, (32, 32), method=Image.Resampling.BICUBIC)
                             icon.save(grid_dir / f"{app_id}_icon.jpg", quality=95)
 
             self.invalidate_memory_cache(str(app_id))
@@ -334,21 +334,21 @@ class CoverArtManager:
                                 if is_animated:
                                     (grid_dir / f"{app_id}p.png").write_bytes(image_bytes)
                                 else:
-                                    portrait = pil_img.convert("RGB").resize((600, 900), Image.Resampling.BICUBIC)
+                                    portrait = ImageOps.fit(pil_img.convert("RGB"), (600, 900), method=Image.Resampling.BICUBIC)
                                     portrait.save(grid_dir / f"{app_id}p.jpg", quality=95)
                             elif asset_type == "wide":
                                 _clean_slot([f"{app_id}.jpg", f"{app_id}.png", f"{app_id}.jpeg", f"{app_id}.webp"])
                                 if is_animated:
                                     (grid_dir / f"{app_id}.png").write_bytes(image_bytes)
                                 else:
-                                    landscape = pil_img.convert("RGB").resize((920, 430), Image.Resampling.BICUBIC)
+                                    landscape = ImageOps.fit(pil_img.convert("RGB"), (920, 430), method=Image.Resampling.BICUBIC)
                                     landscape.save(grid_dir / f"{app_id}.jpg", quality=95)
                             elif asset_type == "hero":
                                 _clean_slot([f"{app_id}_hero.*"])
                                 if is_animated:
                                     (grid_dir / f"{app_id}_hero.png").write_bytes(image_bytes)
                                 else:
-                                    hero = pil_img.convert("RGB").resize((1920, 620), Image.Resampling.BICUBIC)
+                                    hero = ImageOps.fit(pil_img.convert("RGB"), (1920, 620), method=Image.Resampling.BICUBIC)
                                     hero.save(grid_dir / f"{app_id}_hero.jpg", quality=95)
                             elif asset_type == "logo":
                                 _clean_slot([f"{app_id}_logo.*"])
@@ -362,7 +362,7 @@ class CoverArtManager:
                                 if is_animated:
                                     (grid_dir / f"{app_id}_icon.png").write_bytes(image_bytes)
                                 else:
-                                    icon = pil_img.convert("RGB").resize((32, 32), Image.Resampling.BICUBIC)
+                                    icon = ImageOps.fit(pil_img.convert("RGB"), (32, 32), method=Image.Resampling.BICUBIC)
                                     icon.save(grid_dir / f"{app_id}_icon.jpg", quality=95)
 
             return True
@@ -417,7 +417,7 @@ class CoverArtManager:
         if cache_path.exists() and cache_path.stat().st_size > 0:
             try:
                 pil_img = Image.open(cache_path).convert("RGB")
-                pil_img = pil_img.resize(size, Image.Resampling.BICUBIC)
+                pil_img = ImageOps.fit(pil_img, size, method=Image.Resampling.BICUBIC)
                 ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=size)
                 if len(self._image_cache) >= self.MAX_CACHE_SIZE:
                     self._image_cache.pop(next(iter(self._image_cache)))

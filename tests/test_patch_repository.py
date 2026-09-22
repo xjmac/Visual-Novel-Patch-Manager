@@ -458,4 +458,59 @@ def test_multi_release_no_blind_overwrite(temp_config_dir, tmp_path):
         assert aid_4 == "3591440"
 
 
+def test_scan_smb_engine_payload_and_archive_auto_detection(temp_config_dir):
+    cm = ConfigManager()
+    cm.config["mode"] = "smb"
+    cm.config["smb_server"] = "192.168.1.100"
+    cm.config["smb_share"] = "VNShare"
+    cm.config["smb_path"] = "Patches/"
+
+    repo = PatchRepository(cm)
+
+    def mock_listdir(unc):
+        if unc.endswith("EnginePatch"):
+            return ["update.xp3", "data.arc"]
+        if unc.endswith("ArchiveShare"):
+            return ["Clannad_Voice_Patch.zip", "Kanon_Patch.7z"]
+        return ["EnginePatch", "ArchiveShare"]
+
+    def mock_stat(unc):
+        stat_res = MagicMock()
+        if unc.endswith((".xp3", ".arc", ".zip", ".7z")):
+            stat_res.st_mode = 0o100644
+        else:
+            stat_res.st_mode = 0o040755
+        return stat_res
+
+    def mock_match(title):
+        if "EnginePatch" in title:
+            return "900020", "Synthetic Engine Game"
+        if "Clannad" in title:
+            return "900021", "Clannad"
+        if "Kanon" in title:
+            return "900022", "Kanon"
+        return None, None
+
+    with patch("smbclient.register_session"), \
+         patch("smbclient.open_file", side_effect=OSError(2, "No patch.json")), \
+         patch("smbclient.listdir", side_effect=mock_listdir), \
+         patch("smbclient.stat", side_effect=mock_stat), \
+         patch.object(repo, "match_title_to_app_id", side_effect=mock_match):
+        repo.refresh_patches()
+
+        # Check engine payload auto-detection
+        assert "900020" in repo.available_patches
+        assert repo.available_patches["900020"]["actions"][0]["type"] == "copy_file"
+        assert repo.available_patches["900020"]["actions"][0]["source"] == "."
+
+        # Check archive auto-detection
+        assert "900021" in repo.available_patches
+        assert repo.available_patches["900021"]["actions"][0]["type"] == "extract_archive"
+        assert repo.available_patches["900021"]["actions"][0]["source"] == "Clannad_Voice_Patch.zip"
+
+        assert "900022" in repo.available_patches
+        assert repo.available_patches["900022"]["actions"][0]["type"] == "extract_archive"
+        assert repo.available_patches["900022"]["actions"][0]["source"] == "Kanon_Patch.7z"
+
+
 

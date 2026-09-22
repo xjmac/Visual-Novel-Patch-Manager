@@ -258,3 +258,38 @@ def test_set_specific_grid_asset(tmp_path):
     assert not (grid_dir / "123p.jpg").exists()
 
 
+def test_set_custom_artwork_aspect_ratio_preservation(tmp_path):
+    cache_dir = tmp_path / "cache"
+    steam_root = tmp_path / "Steam"
+    grid_dir = steam_root / "userdata" / "999" / "config" / "grid"
+    grid_dir.mkdir(parents=True, exist_ok=True)
+
+    source_img_path = tmp_path / "custom_input.png"
+    img = Image.new("RGB", (1000, 500), color="blue")
+    img.save(source_img_path)
+
+    mgr = CoverArtManager(cache_dir=cache_dir)
+    res = mgr.set_custom_artwork("777", source_img_path, steam_root=steam_root)
+    assert res is True
+
+    landscape_file = grid_dir / "777.jpg"
+    portrait_file = grid_dir / "777p.jpg"
+    hero_file = grid_dir / "777_hero.jpg"
+    icon_file = grid_dir / "777_icon.jpg"
+
+    assert landscape_file.exists()
+    assert portrait_file.exists()
+    assert hero_file.exists()
+    assert icon_file.exists()
+
+    with Image.open(landscape_file) as im:
+        assert im.size == (920, 430)
+    with Image.open(portrait_file) as im:
+        assert im.size == (600, 900)
+    with Image.open(hero_file) as im:
+        assert im.size == (1920, 620)
+    with Image.open(icon_file) as im:
+        assert im.size == (32, 32)
+
+
+
