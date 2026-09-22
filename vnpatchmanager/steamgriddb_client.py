@@ -1,6 +1,7 @@
 import logging
 import requests
 from typing import Optional, List, Dict, Any
+from .utils import is_mocked
 
 logger = logging.getLogger(__name__)
 
@@ -12,8 +13,9 @@ class SteamGridDBClient:
 
     API_BASE = "https://www.steamgriddb.com/api/v2"
 
-    def __init__(self, api_key: str = ""):
+    def __init__(self, api_key: str = "", session: Optional[requests.Session] = None):
         self.api_key = api_key.strip()
+        self._session = session or requests.Session()
 
     def set_api_key(self, api_key: str):
         self.api_key = api_key.strip()
@@ -27,13 +29,17 @@ class SteamGridDBClient:
             headers["Authorization"] = f"Bearer {self.api_key}"
         return headers
 
+    def _get(self, url: str, headers: Optional[Dict[str, str]] = None, timeout: int = 5):
+        client = requests if is_mocked(requests.get) else self._session
+        return client.get(url, headers=headers, timeout=timeout)
+
     def search_games(self, query: str) -> List[Dict[str, Any]]:
         """Searches SteamGridDB for games matching query string."""
         if not self.has_api_key() or not query.strip():
             return []
         url = f"{self.API_BASE}/search/autocomplete/{requests.utils.quote(query)}"
         try:
-            resp = requests.get(url, headers=self._get_headers(), timeout=5)
+            resp = self._get(url, headers=self._get_headers(), timeout=5)
             if resp.status_code == 200:
                 data = resp.json()
                 if data.get("success"):
@@ -48,7 +54,7 @@ class SteamGridDBClient:
             return None
         url = f"{self.API_BASE}/games/steam/{app_id}"
         try:
-            resp = requests.get(url, headers=self._get_headers(), timeout=5)
+            resp = self._get(url, headers=self._get_headers(), timeout=5)
             if resp.status_code == 200:
                 data = resp.json()
                 if data.get("success") and data.get("data"):
@@ -89,7 +95,7 @@ class SteamGridDBClient:
             return []
 
         try:
-            resp = requests.get(url, headers=self._get_headers(), timeout=6)
+            resp = self._get(url, headers=self._get_headers(), timeout=6)
             if resp.status_code == 200:
                 data = resp.json()
                 if data.get("success"):

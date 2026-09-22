@@ -7,6 +7,8 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+from .utils import find_database_file as _find_db
+
 try:
     import smbclient
 except ImportError:
@@ -20,18 +22,7 @@ class PatchRepository:
 
     @classmethod
     def find_database_file(cls, explicit_path: Path = None) -> Path:
-        if explicit_path and explicit_path.exists():
-            return explicit_path
-        candidates = [
-            Path(__file__).parent.parent / "vndb_steam_database.json",
-            Path(__file__).parent / "vndb_steam_database.json",
-            Path.home() / ".local/share/vnpm/vndb_steam_database.json",
-            Path.home() / ".cache/vnpatchmanager/vndb_cache.json"
-        ]
-        for c in candidates:
-            if c.exists():
-                return c
-        return candidates[0]
+        return _find_db(explicit_path)
 
     def __init__(self, config_manager, bundled_db_path: Path = None):
         self.cm = config_manager

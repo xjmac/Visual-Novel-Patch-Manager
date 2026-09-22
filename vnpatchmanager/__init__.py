@@ -15,11 +15,18 @@ from .steamos_helper import SteamOSHelper
 from .controller_manager import GamepadControllerManager
 from .non_steam_manager import NonSteamManager, calculate_shortcut_appid
 from .codec_fixer import CodecFixer
-from .version import get_version
-from .gui import VNPatchManagerApp, APP_NAME, APP_VERSION
+from .version import get_version, APP_NAME, APP_VERSION, __version__
 from .cli import main
-
-__version__ = APP_VERSION
+from .exceptions import (
+    VNPatchError,
+    PatchSecurityError,
+    PatchExtractionError,
+    ProtonExecutionError,
+    BackupError,
+    ConfigError,
+    NetworkError,
+    SteamScanError,
+)
 
 __all__ = [
     "CONFIG_DIR",
@@ -42,4 +49,20 @@ __all__ = [
     "__version__",
     "get_version",
     "main",
+    "VNPatchError",
+    "PatchSecurityError",
+    "PatchExtractionError",
+    "ProtonExecutionError",
+    "BackupError",
+    "ConfigError",
+    "NetworkError",
+    "SteamScanError",
 ]
+
+
+def __getattr__(name: str):
+    if name == "VNPatchManagerApp":
+        from .gui import VNPatchManagerApp
+        return VNPatchManagerApp
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+

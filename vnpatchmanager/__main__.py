@@ -1,28 +1,28 @@
 """Executable entrypoint for python -m vnpatchmanager"""
 import sys
-from .gui import VNPatchManagerApp
 from .cli import main as cli_main
 
-try:
-    import customtkinter as ctk
-    ctk.set_appearance_mode("Dark")
-    ctk.set_default_color_theme("blue")
-except ImportError:
-    pass
+
+def __getattr__(name: str):
+    if name == "VNPatchManagerApp":
+        from .gui import VNPatchManagerApp
+        return VNPatchManagerApp
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def main():
-    # If CLI flags were provided, delegate to argument parser
-    cli_flags = {"-h", "--help", "-V", "--version", "-l", "--list", "--sync-vndb", "--export-licenses", "--output-file", "-o", "-d", "--debug"}
-    if any(arg in cli_flags for arg in sys.argv[1:]):
+    # If arguments were provided, delegate directly to CLI router
+    if len(sys.argv) > 1:
         cli_main()
         return
 
-    app = VNPatchManagerApp()
+    app_cls = getattr(sys.modules[__name__], "VNPatchManagerApp")
+    app = app_cls()
     app.mainloop()
 
 
 if __name__ == "__main__":
     main()
+
 
 

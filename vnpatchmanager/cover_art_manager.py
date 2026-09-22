@@ -4,11 +4,7 @@ from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
-try:
-    import customtkinter as ctk
-    from PIL import Image, ImageDraw
-except ImportError:
-    pass
+from PIL import Image, ImageDraw
 
 class CoverArtManager:
     """Handles fetching, caching, and generating Steam game cover art banners."""
@@ -358,8 +354,10 @@ class CoverArtManager:
             draw.text((w // 2 - (len(initials) * 4), py1 + max(2, (pill_h - 14) // 2)), initials, fill=(226, 232, 240))
         return img
 
-    def get_cover_image(self, app_id: str, title: str = "", size: tuple[int, int] = (270, 125)) -> 'ctk.CTkImage':
+    def get_cover_image(self, app_id: str, title: str = "", size: tuple[int, int] = (270, 125)):
         """Retrieves a CTkImage for the given AppID, from disk cache or procedural fallback."""
+        import customtkinter as ctk
+
         cache_key = (str(app_id), size)
         cache_path = self.get_cached_path(str(app_id))
 

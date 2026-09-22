@@ -72,5 +72,8 @@ def get_version(repo_root: Optional[Path] = None) -> str:
     return DEFAULT_VERSION
 
 
-__version__ = get_version()
+APP_NAME = "VN Patch Manager"
+APP_VERSION = get_version()
+__version__ = APP_VERSION
+
 

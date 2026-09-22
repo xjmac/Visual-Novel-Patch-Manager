@@ -18,3 +18,16 @@ class BackupError(VNPatchError):
     """Raised when backup creation, verification, or restoration fails."""
     pass
 
+class ConfigError(VNPatchError):
+    """Raised when loading or saving configuration fails."""
+    pass
+
+class NetworkError(VNPatchError):
+    """Raised when external network requests (VNDB, SteamGridDB, SMB) fail."""
+    pass
+
+class SteamScanError(VNPatchError):
+    """Raised when discovering or parsing Steam libraries and shortcuts fails."""
+    pass
+
+

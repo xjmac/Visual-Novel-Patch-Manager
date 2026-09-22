@@ -45,10 +45,7 @@ from .controller_manager import (
     ACTION_SCROLL_DOWN,
 )
 
-from .version import get_version
-
-APP_NAME = "VN Patch Manager"
-APP_VERSION = get_version()
+from .version import get_version, APP_NAME, APP_VERSION
 
 MODE_LOCAL_DISPLAY = "📁 Local Storage"
 MODE_SMB_DISPLAY = "🌐 Network Share (NAS)"
