@@ -11,7 +11,11 @@ from .constants import (
     COLOR_PRIMARY_HOVER,
     COLOR_TEXT_WHITE,
     COLOR_TEXT_MUTED,
+    POSTER_CARD_SIZE,
+    POSTER_COLUMNS_MIN,
+    POSTER_COL_WIDTH,
 )
+from .views import create_poster_card, show_game_detail_modal
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +143,7 @@ class GamesTabMixin:
 
         self.opt_view = ctk.CTkSegmentedButton(
             view_frame,
-            values=["Grid", "List"],
+            values=["Posters", "Grid", "List"],
             variable=self.view_var,
             command=lambda v: self._apply_filters_and_render(),
             fg_color="#121212",
@@ -150,7 +154,7 @@ class GamesTabMixin:
         )
         self.opt_view.pack(padx=2, pady=2)
 
-        # Scrollable Game Area - OLED Pure Black Surface
+        # Scrollable Game Area - SteamOS Slate Canvas
         self.scrollable_games = ctk.CTkScrollableFrame(
             self.tab_games,
             fg_color=COLOR_BG_BLACK,
@@ -160,6 +164,26 @@ class GamesTabMixin:
         )
         self.scrollable_games.grid(row=1, column=0, sticky="nsew")
         self.scrollable_games.grid_columnconfigure(0, weight=1)
+        self.scrollable_games.bind("<Configure>", self._on_games_area_resized)
+
+    def _on_games_area_resized(self, event):
+        """Dynamically recomputes column layout when window is resized."""
+        if "Posters" not in self.view_var.get():
+            return
+        new_w = event.width
+        last_w = getattr(self, "_last_rendered_width", 0)
+        if abs(new_w - last_w) > 60:
+            if getattr(self, "_resize_job", None):
+                try:
+                    self.after_cancel(self._resize_job)
+                except Exception:
+                    pass
+            self._resize_job = self.after(150, self._apply_filters_and_render)
+
+    def open_game_detail(self, app_id: str, game_data: dict):
+        """Displays the full console-grade Game Detail Drawer/Modal for the selected visual novel."""
+        status_info = self._get_game_status_info(app_id, game_data)
+        return show_game_detail_modal(self, app_id, game_data, status_info)
 
     def _on_search_changed(self, *args):
         """Debounces search input to prevent UI lag during typing."""
@@ -306,12 +330,66 @@ class GamesTabMixin:
             sorted_games = dict(sorted(matched_games.items(), key=lambda x: x[1]["name"].lower()))
 
         self._banner_widgets.clear()
-        if "Grid" in view_mode:
+        if "Posters" in view_mode:
+            self._render_poster_view(sorted_games)
+        elif "Grid" in view_mode:
             self._render_grid_view(sorted_games)
         else:
             self._render_list_view(sorted_games)
 
         self.lbl_status.configure(text=f"Showing {len(matched_games)} of {total_vns} Visual Novel(s).", text_color="gray")
+
+    def _render_poster_view(self, games_dict):
+        """Batch-renders games in a responsive multi-column poster gallery (2:3 portrait capsules)."""
+        try:
+            curr_w = self.scrollable_games.winfo_width()
+            if curr_w <= 100:
+                curr_w = self.winfo_width()
+        except Exception:
+            curr_w = 1060
+        self._last_rendered_width = curr_w
+
+        col_count = max(POSTER_COLUMNS_MIN, curr_w // POSTER_COL_WIDTH)
+        self._poster_col_count = col_count
+
+        for c in range(col_count):
+            self.scrollable_games.grid_columnconfigure(c, weight=1)
+
+        items = list(games_dict.items())
+
+        def render_batch(start_idx, batch_size=12):
+            if start_idx >= len(items):
+                self._apply_focus_visuals()
+                return
+            end_idx = min(start_idx + batch_size, len(items))
+            for idx in range(start_idx, end_idx):
+                app_id, game_data = items[idx]
+                status_info = self._get_game_status_info(app_id, game_data)
+                row_idx = idx // col_count
+                col_idx = idx % col_count
+                entry = create_poster_card(
+                    self.scrollable_games,
+                    app_id,
+                    game_data,
+                    status_info,
+                    self.cover_manager,
+                    on_select=self.open_game_detail,
+                    row_idx=row_idx,
+                    col_idx=col_idx,
+                )
+                self._card_entries.append(entry)
+                if entry.get("banner_label"):
+                    self._banner_widgets.setdefault(str(app_id), []).append(
+                        (entry["banner_label"], game_data.get("name", ""), POSTER_CARD_SIZE)
+                    )
+
+            if end_idx < len(items):
+                self._active_render_job = self.after(16, lambda: render_batch(end_idx, batch_size))
+            else:
+                self._active_render_job = None
+                self._apply_focus_visuals()
+
+        render_batch(0)
 
     def _render_grid_view(self, games_dict):
         """Batch-renders games in a 2-column grid."""

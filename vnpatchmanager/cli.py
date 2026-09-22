@@ -133,6 +133,7 @@ def main(argv: Optional[List[str]] = None):
     parser.add_argument("--version", "-V", action="version", version=f"%(prog)s {VERSION}")
     parser.add_argument("--debug", "-d", action="store_true", help="Enable verbose debug logging")
     parser.add_argument("--list", "-l", action="store_true", help="List detected visual novels and patch statuses (headless)")
+    parser.add_argument("--daemon", "--service", action="store_true", help="Run headless background JSON-RPC IPC daemon (for Decky Loader / SteamOS Game Mode)")
     parser.add_argument("--sync-vndb", action="store_true", help="Force-sync the VNDB online database snapshot")
     parser.add_argument("--export-licenses", nargs="?", const="raw_licenses.txt", metavar="FILE", help="Extract AppIDs from raw_licenses.txt and export names")
     parser.add_argument("--output-file", "-o", metavar="FILE", help="Output file for --export-licenses (default: my_steam_games.txt)")
@@ -140,7 +141,10 @@ def main(argv: Optional[List[str]] = None):
     args = parser.parse_args(argv)
     setup_logging(args.debug)
 
-    if args.list:
+    if args.daemon:
+        from .ipc_service import run_ipc_server
+        run_ipc_server()
+    elif args.list:
         cmd_list_games(args)
     elif args.sync_vndb:
         cmd_sync_vndb(args)
