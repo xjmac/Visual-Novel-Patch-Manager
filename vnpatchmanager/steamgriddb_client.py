@@ -33,6 +33,18 @@ class SteamGridDBClient:
         client = requests if is_mocked(requests.get) else self._session
         return client.get(url, headers=headers, timeout=timeout)
 
+    def download_image_bytes(self, url: str, timeout: int = 12) -> Optional[bytes]:
+        """Downloads raw image bytes from a URL using connection pool."""
+        if not url:
+            return None
+        try:
+            resp = self._get(url, headers={"User-Agent": "VNPM/2.0 (Linux; SteamDeck; github.com/user/VNPM)"}, timeout=timeout)
+            if resp.status_code == 200 and len(resp.content) > 0:
+                return resp.content
+        except Exception as e:
+            logger.warning(f"Failed to download image from {url}: {e}")
+        return None
+
     def search_games(self, query: str) -> List[Dict[str, Any]]:
         """Searches SteamGridDB for games matching query string."""
         if not self.has_api_key() or not query.strip():
