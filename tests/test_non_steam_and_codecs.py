@@ -1,14 +1,10 @@
-import os
-import struct
-import zlib
 import pytest
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import vdf
 from vnpatchmanager.non_steam_manager import NonSteamManager, calculate_shortcut_appid
 from vnpatchmanager.codec_fixer import CodecFixer
-from vnpatchmanager.gui import VNPatchManagerApp, ACTION_LEFT, ACTION_RIGHT, ACTION_SELECT
+from vnpatchmanager.gui import VNPatchManagerApp, ACTION_LEFT, ACTION_RIGHT
 
 
 @pytest.fixture

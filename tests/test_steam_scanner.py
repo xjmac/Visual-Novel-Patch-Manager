@@ -95,7 +95,7 @@ def test_get_installed_games_corrupted_library_vdf(mock_steam_structure, caplog)
 def test_get_installed_games_nonexistent_library_path(mock_steam_structure):
     steam_root = mock_steam_structure["steam_root"]
     vdf_file = steam_root / "steamapps" / "libraryfolders.vdf"
-    
+
     # Point a library entry to a folder without steamapps
     bad_library_data = {
         "libraryfolders": {

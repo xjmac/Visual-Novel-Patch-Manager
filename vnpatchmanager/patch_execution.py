@@ -6,6 +6,7 @@ import time
 import subprocess
 from pathlib import Path
 import logging
+from typing import Any, Callable, Dict, Optional, Union
 
 from .steam_scanner import SteamScanner
 from .backup_manager import BackupManager
@@ -17,7 +18,7 @@ class PatchExecutionEngine:
     """Handles the actual copying of files and execution of Proton patches."""
 
     @staticmethod
-    def _safe_extract_zip(zf, extract_tmp):
+    def _safe_extract_zip(zf: Any, extract_tmp: Path) -> None:
         extract_tmp_resolved = str(extract_tmp.resolve())
         for member in zf.namelist():
             member_path = str((extract_tmp / member).resolve())
@@ -26,7 +27,7 @@ class PatchExecutionEngine:
         zf.extractall(extract_tmp)
 
     @staticmethod
-    def _safe_extract_tar(tar, extract_tmp):
+    def _safe_extract_tar(tar: Any, extract_tmp: Path) -> None:
         extract_tmp_resolved = str(extract_tmp.resolve())
         for member in tar.getmembers():
             member_path = str((extract_tmp / member.name).resolve())
@@ -35,7 +36,11 @@ class PatchExecutionEngine:
         tar.extractall(extract_tmp)
 
     @staticmethod
-    def get_patch_status(game_install_path, patch_data=None, vn_info=None):
+    def get_patch_status(
+        game_install_path: Optional[Union[str, Path]],
+        patch_data: Optional[Dict[str, Any]] = None,
+        vn_info: Optional[Dict[str, Any]] = None,
+    ) -> bool:
         """
         Checks if a patch is applied to the game directory.
         1. Checks for VNPM .patch_applied.json tracking manifest.
@@ -149,7 +154,7 @@ class PatchExecutionEngine:
         return False
 
     @staticmethod
-    def _find_proton_executable(library_path: Path = None) -> Path:
+    def _find_proton_executable(library_path: Optional[Union[str, Path]] = None) -> Optional[Path]:
         """
         Attempts to find a Proton installation across:
         1. The target game library path (if provided).
@@ -247,7 +252,11 @@ class PatchExecutionEngine:
         return BackupManager.restore_backup(install_dir, log_callback)
 
     @staticmethod
-    def restore_via_steam(game_data, patch_data=None, log_callback=None) -> bool:
+    def restore_via_steam(
+        game_data: Dict[str, Any],
+        patch_data: Optional[Dict[str, Any]] = None,
+        log_callback: Optional[Callable[[str], None]] = None,
+    ) -> bool:
         """
         Purges patch tracking and known patch files, then triggers Steam to verify
         and re-download original unpatched files directly from Steam CDN.
@@ -315,7 +324,12 @@ class PatchExecutionEngine:
             return False
 
     @staticmethod
-    def apply_patch(game_data, patch_data, config_manager, log_callback):
+    def apply_patch(
+        game_data: Dict[str, Any],
+        patch_data: Dict[str, Any],
+        config_manager: Any,
+        log_callback: Callable[[str], None],
+    ) -> bool:
         """Applies the patch logic based on the 'actions' from patch.json"""
         app_id = patch_data.get('steam_app_id')
         install_dir = Path(game_data['path'])

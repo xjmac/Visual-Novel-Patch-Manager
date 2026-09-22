@@ -1,4 +1,4 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from vnpatchmanager.steamos_helper import SteamOSHelper
 
 

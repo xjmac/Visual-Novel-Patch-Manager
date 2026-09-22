@@ -196,7 +196,7 @@ def show_add_non_steam_modal(app):
             except Exception as e:
                 logger.error(f"Error registering non-steam game: {e}", exc_info=True)
                 app.run_on_main_thread(
-                    lambda: lbl_matched_meta.configure(text=f"❌ Registration Failed: {e}", text_color="#f87171")
+                    lambda err=e: lbl_matched_meta.configure(text=f"❌ Registration Failed: {err}", text_color="#f87171")
                 )
 
         threading.Thread(target=_worker, daemon=True).start()
@@ -306,3 +306,16 @@ def show_add_non_steam_modal(app):
 
     modal.protocol("WM_DELETE_WINDOW", _close_add_modal)
     _apply_add_modal_focus()
+
+    modal._entry_path = entry_path
+    modal._entry_title = entry_title
+    modal._lbl_matched_meta = lbl_matched_meta
+    modal._btn_browse = btn_browse
+    modal._btn_create = btn_create
+    modal._btn_cancel = btn_cancel
+    modal._on_browse = _on_browse
+    modal._on_register = _on_register
+    modal._close_add_modal = _close_add_modal
+    modal._controller_handler = _handle_add_modal_controller
+
+    return modal

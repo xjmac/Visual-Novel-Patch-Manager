@@ -1,6 +1,5 @@
 import time
-from unittest.mock import patch, MagicMock
-import pytest
+from unittest.mock import patch
 from vnpatchmanager.controller_manager import (
     GamepadControllerManager,
     ACTION_UP,

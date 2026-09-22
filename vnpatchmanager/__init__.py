@@ -27,6 +27,7 @@ from .exceptions import (
     NetworkError,
     SteamScanError,
 )
+from .types import GameData, PatchData, VNInfo
 
 __all__ = [
     "CONFIG_DIR",
@@ -57,6 +58,9 @@ __all__ = [
     "ConfigError",
     "NetworkError",
     "SteamScanError",
+    "GameData",
+    "PatchData",
+    "VNInfo",
 ]
 
 

@@ -42,7 +42,7 @@ patch_releases AS (
       AND (rel.minage = 18 OR rel.uncensored = true)
       AND rl.lang = 'en'
 )
-SELECT 
+SELECT
     sr.steam_appid,
     sr.steam_rel_id,
     sr.steam_minage,
@@ -211,7 +211,7 @@ class VNDBScanner:
                         if patch_data and "results" in patch_data:
                             for p_rel in patch_data.get("results", []):
                                 p_vns = p_rel.get("vns", [])
-                                langs = [l.get("lang") for l in p_rel.get("languages", [])]
+                                langs = [lang_item.get("lang") for lang_item in p_rel.get("languages", [])]
                                 is_en = "en" in langs
                                 is_18 = (p_rel.get("minage") == 18) or (p_rel.get("uncensored") is True)
                                 if is_en and is_18:
@@ -257,7 +257,7 @@ class VNDBScanner:
             url = self.SNAPSHOT_URL
             params = {"sql": VNDB_SNAPSHOT_SQL, "export": "json"}
             headers = {"User-Agent": "VNPM/2.0 (Linux; SteamDeck; github.com/user/VNPM)"}
-            
+
             client = requests if is_mocked(requests.get) else self._session
             response = client.get(url, params=params, headers=headers, timeout=timeout_sec)
             response.raise_for_status()

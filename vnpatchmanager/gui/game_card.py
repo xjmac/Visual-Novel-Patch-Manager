@@ -22,7 +22,6 @@ from .constants import (
     COLOR_BADGE_PINK,
     COLOR_BADGE_SKY,
     GRID_CARD_BANNER_SIZE,
-    LIST_ROW_BANNER_SIZE,
 )
 
 logger = logging.getLogger(__name__)

@@ -1,7 +1,5 @@
-import zlib
 from pathlib import Path
-from unittest.mock import patch, MagicMock
-import pytest
+from unittest.mock import patch
 import vdf
 
 from scripts.add_to_steam import (

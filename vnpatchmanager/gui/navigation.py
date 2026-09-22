@@ -26,9 +26,7 @@ from .constants import (
     COLOR_BORDER_FOCUSED,
     COLOR_SURFACE_BORDER,
     COLOR_PRIMARY_BLUE,
-    COLOR_PRIMARY_HOVER,
     COLOR_ACCENT_GREEN,
-    COLOR_ACCENT_GREEN_HOVER,
 )
 
 logger = logging.getLogger(__name__)

@@ -1,11 +1,8 @@
 import json
-import os
-import shutil
 import tempfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 import pytest
-import vnpatchmanager
 from vnpatchmanager import PatchExecutionEngine, ConfigManager, SteamScanner, BackupManager
 
 
@@ -166,7 +163,8 @@ def test_apply_patch_copy_file_and_dir_local(temp_config_dir, mock_steam_structu
     patch_data["patch_source_dir"] = str(mock_patch_repo["patch1_dir"])
 
     logs = []
-    log_callback = lambda msg: logs.append(msg)
+    def log_callback(msg):
+        logs.append(msg)
 
     success = PatchExecutionEngine.apply_patch(game_data, patch_data, cm, log_callback)
     assert success is True
@@ -255,6 +253,7 @@ def test_apply_patch_extract_inno_setup_success(temp_config_dir, mock_steam_stru
          patch("subprocess.run", side_effect=fake_subprocess_run) as mock_run:
         success = PatchExecutionEngine.apply_patch(game_data, patch_data, cm, lambda m: logs.append(m))
         assert success is True
+        mock_run.assert_called_once()
 
     game_path = mock_steam_structure["game2"]["path"]
     assert (game_path / "voice.pak").exists()
@@ -827,7 +826,7 @@ def test_apply_patch_tar_slip_prevention(temp_config_dir, tmp_path):
 def test_apply_patch_subprocess_timeouts(temp_config_dir, mock_steam_structure, mock_patch_repo):
     """Verifies that subprocess timeouts raise appropriate custom exceptions."""
     import subprocess
-    from vnpatchmanager.exceptions import ProtonExecutionError, PatchExtractionError
+    from vnpatchmanager.exceptions import ProtonExecutionError
 
     cm = ConfigManager()
     cm.config["mode"] = "local"
@@ -961,7 +960,7 @@ def test_restore_via_steam_all_branches(tmp_path):
 def test_find_proton_experimental_and_custom_sorting(mock_steam_structure):
     steam_root = mock_steam_structure["steam_root"]
     common_dir = steam_root / "steamapps" / "common"
-    
+
     # Create Proton Experimental
     exp_dir = common_dir / "Proton - Experimental"
     exp_dir.mkdir(parents=True, exist_ok=True)

@@ -4,10 +4,9 @@ import re
 import difflib
 import logging
 from pathlib import Path
+from .utils import find_database_file as _find_db
 
 logger = logging.getLogger(__name__)
-
-from .utils import find_database_file as _find_db
 
 try:
     import smbclient

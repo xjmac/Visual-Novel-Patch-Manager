@@ -3,9 +3,7 @@ Unit tests for modular GUI package structure, constants, and service layer downl
 """
 
 import time
-import pytest
 from unittest.mock import patch, MagicMock
-from pathlib import Path
 
 from vnpatchmanager.gui import (
     VNPatchManagerApp,

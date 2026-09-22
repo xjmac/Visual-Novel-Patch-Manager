@@ -6,7 +6,6 @@ import logging
 from pathlib import Path
 from typing import Optional
 from unittest.mock import Mock
-import requests
 
 logger = logging.getLogger(__name__)
 
