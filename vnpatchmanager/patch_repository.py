@@ -335,9 +335,12 @@ class PatchRepository:
                     except OSError as e:
                         logger.debug(f"Error statting SMB entry {entry_unc}: {e}")
 
-                # RPA auto-detection
+                parts = [p for p in current_unc.split("\\") if p]
+                current_folder_name = parts[-1] if parts else ""
+                parent_folder_name = parts[-2] if len(parts) >= 2 else current_folder_name
+
+                # 2. RPA auto-detection
                 rpa_files = [f for f in files if f.endswith(".rpa")]
-                current_folder_name = current_unc.split("\\")[-1]
                 if rpa_files:
                     aid, title = self.match_title_to_app_id(current_folder_name)
                     if aid and aid not in self.available_patches:
@@ -352,6 +355,54 @@ class PatchRepository:
                             "patch_source_dir": current_unc
                         }
                         return
+
+                # 3. Auto-detection: Extracted engine payloads (.pfs, .xp3, .arc, movie)
+                payload_files = [
+                    f for f in files
+                    if any(f.endswith(ext) for ext in [".pfs.010", ".pfs.040", ".pfs.011", ".pfs.041", ".pfs.020", ".pfs.050", ".xp3", ".arc"])
+                ]
+                has_movie_dir = any(sub[0] == "movie" for sub in subdirs)
+                if payload_files or has_movie_dir:
+                    name_candidate = (
+                        parent_folder_name
+                        if current_folder_name.lower().startswith(("patch", "r18", "amanatsu_patch", "amanatsu_plus", "senrenbanka"))
+                        else current_folder_name
+                    )
+                    aid, title = self.match_title_to_app_id(name_candidate)
+                    if aid and aid not in self.available_patches:
+                        self.available_patches[aid] = {
+                            "steam_app_id": aid,
+                            "game_name": title or name_candidate,
+                            "actions": [
+                                {
+                                    "type": "copy_file",
+                                    "source": ".",
+                                    "destination": "{game_dir}/"
+                                }
+                            ],
+                            "patch_source_dir": current_unc
+                        }
+                        return
+
+                # 4. Auto-detection: Standalone archives (.zip, .7z, .rar)
+                archives = [f for f in files if any(f.lower().endswith(ext) for ext in [".zip", ".7z", ".rar"])]
+                for arc in archives:
+                    aid, title = self.match_title_to_app_id(arc)
+                    if not aid:
+                        aid, title = self.match_title_to_app_id(current_folder_name)
+                    if aid and aid not in self.available_patches:
+                        self.available_patches[aid] = {
+                            "steam_app_id": aid,
+                            "game_name": title or current_folder_name,
+                            "actions": [
+                                {
+                                    "type": "extract_archive",
+                                    "source": arc,
+                                    "destination": "{game_dir}/"
+                                }
+                            ],
+                            "patch_source_dir": current_unc
+                        }
 
                 for _, subdir_unc in subdirs:
                     _walk_smb(subdir_unc)

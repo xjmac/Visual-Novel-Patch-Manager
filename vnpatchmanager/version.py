@@ -7,16 +7,17 @@ Computes semantic versions automatically from Git tags and commit offsets:
 Falls back to importlib.metadata or DEFAULT_VERSION when running outside a git repository.
 """
 
+import functools
 from pathlib import Path
 import re
 import subprocess
 from typing import Optional
 
 DEFAULT_VERSION = "0.2.0"
+APP_NAME = "VN Patch Manager"
 
 
-def get_version(repo_root: Optional[Path] = None) -> str:
-    """Returns the dynamic semantic version string computed from git repository metadata."""
+def _resolve_version(repo_root: Optional[Path] = None) -> str:
     if repo_root is None:
         repo_root = Path(__file__).resolve().parent.parent
 
@@ -72,8 +73,33 @@ def get_version(repo_root: Optional[Path] = None) -> str:
     return DEFAULT_VERSION
 
 
-APP_NAME = "VN Patch Manager"
-APP_VERSION = get_version()
-__version__ = APP_VERSION
+@functools.lru_cache(maxsize=1)
+def _get_default_version() -> str:
+    return _resolve_version(None)
+
+
+def get_version(repo_root: Optional[Path] = None) -> str:
+    """Returns the dynamic semantic version string computed from git repository metadata."""
+    if repo_root is None:
+        return _get_default_version()
+    return _resolve_version(repo_root)
+
+
+get_version.cache_clear = _get_default_version.cache_clear
+
+
+def __getattr__(name: str):
+    if name in ("APP_VERSION", "__version__"):
+        val = get_version()
+        globals()[name] = val
+        return val
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+
+
+# Type hints for lazy module attributes (PEP 562)
+APP_VERSION: str
+__version__: str
+
+__all__ = ["APP_NAME", "APP_VERSION", "__version__", "DEFAULT_VERSION", "get_version"]
 
 

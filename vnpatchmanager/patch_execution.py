@@ -36,6 +36,31 @@ class PatchExecutionEngine:
         tar.extractall(extract_tmp)
 
     @staticmethod
+    def _validate_extracted_tree(extract_dir: Path) -> None:
+        """Validates that all extracted files and symlinks stay strictly within extract_dir."""
+        base_resolved = extract_dir.resolve()
+        base_str = str(base_resolved)
+        for root, dirs, files in os.walk(extract_dir, followlinks=False):
+            root_path = Path(root)
+            if os.path.commonpath([base_str, str(root_path.resolve())]) != base_str:
+                raise PatchSecurityError(f"Directory traversal detected: {root_path} escapes {extract_dir}")
+            for item in dirs + files:
+                item_path = root_path / item
+                if item_path.is_symlink():
+                    target_resolved = item_path.resolve()
+                    if os.path.commonpath([base_str, str(target_resolved)]) != base_str:
+                        raise PatchSecurityError(
+                            f"Symlink traversal detected: {item_path.name} -> {target_resolved} escapes {extract_dir}"
+                        )
+                else:
+                    item_resolved = item_path.resolve()
+                    if os.path.commonpath([base_str, str(item_resolved)]) != base_str:
+                        raise PatchSecurityError(
+                            f"Path traversal detected: {item_path.name} escapes {extract_dir}"
+                        )
+
+
+    @staticmethod
     def get_patch_status(
         game_install_path: Optional[Union[str, Path]],
         patch_data: Optional[Dict[str, Any]] = None,
@@ -444,6 +469,8 @@ class PatchExecutionEngine:
                     app_dir = extract_tmp / "app"
                     source_copy_dir = app_dir if app_dir.exists() else extract_tmp
 
+                    PatchExecutionEngine._validate_extracted_tree(extract_tmp)
+
                     log_callback("Copying extracted files to game directory...")
                     shutil.copytree(source_copy_dir, dest_path, dirs_exist_ok=True)
 
@@ -482,6 +509,8 @@ class PatchExecutionEngine:
                             raise PatchExtractionError("unrar or 7z tool not found. Please install unrar or 7z.")
                     else:
                         shutil.unpack_archive(str(arc_file), str(extract_tmp))
+
+                    PatchExecutionEngine._validate_extracted_tree(extract_tmp)
 
                     shutil.copytree(extract_tmp, dest_path, dirs_exist_ok=True)
 

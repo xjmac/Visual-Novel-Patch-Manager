@@ -1018,3 +1018,88 @@ def test_get_patch_status_replacement_rpa_size_verification(tmp_path):
         vn_info={"has_18plus_en_patch": True, "is_vn": True}
     )
     assert status_patched is True
+
+
+def test_validate_extracted_tree_valid(tmp_path):
+    extract_dir = tmp_path / "valid_extract"
+    extract_dir.mkdir()
+    (extract_dir / "safe_file.txt").write_text("safe")
+    sub = extract_dir / "subdir"
+    sub.mkdir()
+    (sub / "nested.dat").write_text("nested")
+
+    # Internal symlink within extract_dir is safe
+    safe_symlink = sub / "symlink_to_safe.txt"
+    safe_symlink.symlink_to(extract_dir / "safe_file.txt")
+
+    PatchExecutionEngine._validate_extracted_tree(extract_dir)
+
+
+def test_validate_extracted_tree_symlink_traversal(tmp_path):
+    from vnpatchmanager.exceptions import PatchSecurityError
+
+    extract_dir = tmp_path / "unsafe_extract"
+    extract_dir.mkdir()
+    (extract_dir / "safe.txt").write_text("safe")
+
+    sensitive_file = tmp_path / "outside_secret.txt"
+    sensitive_file.write_text("top_secret")
+
+    malicious_symlink = extract_dir / "evil_link"
+    malicious_symlink.symlink_to(sensitive_file)
+
+    with pytest.raises(PatchSecurityError, match="Symlink traversal detected"):
+        PatchExecutionEngine._validate_extracted_tree(extract_dir)
+
+
+def test_extract_archive_traversal_protection(tmp_path):
+    from vnpatchmanager.exceptions import PatchSecurityError
+
+    game_dir = tmp_path / "Game"
+    game_dir.mkdir()
+    patch_dir = tmp_path / "PatchSource"
+    patch_dir.mkdir()
+
+    arc_path = patch_dir / "mod.7z"
+    arc_path.write_bytes(b"dummy_7z")
+
+    patch_data = {
+        "steam_app_id": "999999",
+        "actions": [
+            {
+                "type": "extract_archive",
+                "source": "mod.7z",
+                "destination": "{game_dir}/"
+            }
+        ],
+        "patch_source_dir": str(patch_dir)
+    }
+
+    game_data = {
+        "name": "Synthetic VN Security",
+        "path": str(game_dir),
+        "library_path": str(tmp_path),
+        "app_id": "999999"
+    }
+
+    cm = ConfigManager()
+    cm.config["mode"] = "local"
+    cm.config["local_path"] = str(tmp_path)
+
+    def mock_7z_run(cmd, *args, **kwargs):
+        for arg in cmd:
+            if arg.startswith("-o"):
+                extract_tmp = Path(arg[2:])
+                outside_target = tmp_path / "escaped_outside.txt"
+                outside_target.write_text("outside")
+                evil = extract_tmp / "escaped_link"
+                evil.symlink_to(outside_target)
+                break
+        return MagicMock(returncode=0)
+
+    with patch("shutil.which", return_value="/usr/bin/7z"), \
+         patch("subprocess.run", side_effect=mock_7z_run), \
+         patch.object(BackupManager, "has_backup", return_value=True):
+        with pytest.raises(PatchSecurityError, match="Symlink traversal detected"):
+            PatchExecutionEngine.apply_patch(game_data, patch_data, cm, lambda m: None)
+
