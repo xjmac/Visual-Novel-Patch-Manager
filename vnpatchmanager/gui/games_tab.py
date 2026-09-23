@@ -164,10 +164,100 @@ class GamesTabMixin:
         )
         self.scrollable_games.grid(row=1, column=0, sticky="nsew")
         self.scrollable_games.grid_columnconfigure(0, weight=1)
-        self.scrollable_games.bind("<Configure>", self._on_games_area_resized)
+
+        # Attach viewport canvas configure listener WITH add="+" so CTkScrollableFrame's
+        # internal scrollregion configure binding is never overwritten
+        canvas = getattr(self.scrollable_games, "_parent_canvas", None)
+        if canvas:
+            canvas.bind("<Configure>", self._on_games_area_resized, add="+")
+        else:
+            self.scrollable_games.bind("<Configure>", self._on_games_area_resized, add="+")
+
+        # Bind universal mouse wheel scrolling handlers
+        self._bind_mouse_wheel_scrolling()
+
+    def _update_scroll_region(self):
+        """Explicitly recalculates and updates the canvas scrollregion."""
+        canvas = getattr(self.scrollable_games, "_parent_canvas", None)
+        if canvas and canvas.winfo_exists():
+            canvas.update_idletasks()
+            bbox = canvas.bbox("all")
+            if bbox:
+                canvas.configure(scrollregion=bbox)
+
+    def _bind_mouse_wheel_scrolling(self):
+        """Binds universal mouse wheel handlers across Linux (X11 & Wayland) and Windows."""
+        canvas = getattr(self.scrollable_games, "_parent_canvas", None)
+        if not canvas:
+            return
+
+        def _on_mouse_wheel(event):
+            bbox = canvas.bbox("all")
+            if not bbox:
+                return
+            canvas_h = canvas.winfo_height()
+            if (bbox[3] - bbox[1]) <= canvas_h:
+                return
+
+            if getattr(event, "num", None) == 4:
+                canvas.yview_scroll(-3, "units")
+                return "break"
+            elif getattr(event, "num", None) == 5:
+                canvas.yview_scroll(3, "units")
+                return "break"
+
+            delta = getattr(event, "delta", 0)
+            if delta != 0:
+                step = -1 if delta > 0 else 1
+                canvas.yview_scroll(step * 3, "units")
+                return "break"
+
+        for widget in (canvas, self.scrollable_games):
+            widget.bind("<Button-4>", _on_mouse_wheel, add="+")
+            widget.bind("<Button-5>", _on_mouse_wheel, add="+")
+            widget.bind("<MouseWheel>", _on_mouse_wheel, add="+")
+
+    def _attach_mouse_wheel(self, widget):
+        """Recursively binds mouse wheel events on a widget and its children to scroll the library canvas."""
+        canvas = getattr(self.scrollable_games, "_parent_canvas", None)
+        if not canvas:
+            return
+
+        def _on_mouse_wheel(event):
+            bbox = canvas.bbox("all")
+            if not bbox:
+                return
+            canvas_h = canvas.winfo_height()
+            if (bbox[3] - bbox[1]) <= canvas_h:
+                return
+
+            if getattr(event, "num", None) == 4:
+                canvas.yview_scroll(-3, "units")
+                return "break"
+            elif getattr(event, "num", None) == 5:
+                canvas.yview_scroll(3, "units")
+                return "break"
+
+            delta = getattr(event, "delta", 0)
+            if delta != 0:
+                step = -1 if delta > 0 else 1
+                canvas.yview_scroll(step * 3, "units")
+                return "break"
+
+        for w in (widget, getattr(widget, "_canvas", None), getattr(widget, "_label", None)):
+            if w and hasattr(w, "bind"):
+                try:
+                    w.bind("<Button-4>", _on_mouse_wheel, add="+")
+                    w.bind("<Button-5>", _on_mouse_wheel, add="+")
+                    w.bind("<MouseWheel>", _on_mouse_wheel, add="+")
+                except Exception:
+                    pass
+        for child in widget.winfo_children():
+            self._attach_mouse_wheel(child)
 
     def _on_games_area_resized(self, event):
         """Dynamically recomputes column layout when window is resized."""
+        self._update_scroll_region()
         if "Posters" not in self.view_var.get():
             return
         new_w = event.width
@@ -378,6 +468,7 @@ class GamesTabMixin:
                     col_idx=col_idx,
                 )
                 self._card_entries.append(entry)
+                self._attach_mouse_wheel(entry["card"])
                 if entry.get("banner_label"):
                     self._banner_widgets.setdefault(str(app_id), []).append(
                         (entry["banner_label"], game_data.get("name", ""), POSTER_CARD_SIZE)
@@ -387,6 +478,7 @@ class GamesTabMixin:
                 self._active_render_job = self.after(16, lambda: render_batch(end_idx, batch_size))
             else:
                 self._active_render_job = None
+                self._update_scroll_region()
                 self._apply_focus_visuals()
 
         render_batch(0)
@@ -400,6 +492,7 @@ class GamesTabMixin:
 
         def render_batch(start_idx, batch_size=10):
             if start_idx >= len(items):
+                self._update_scroll_region()
                 self._apply_focus_visuals()
                 return
             end_idx = min(start_idx + batch_size, len(items))
@@ -409,11 +502,13 @@ class GamesTabMixin:
                 col_idx = idx % 2
                 entry = self._create_grid_card(self.scrollable_games, app_id, game_data, row_idx, col_idx)
                 self._card_entries.append(entry)
+                self._attach_mouse_wheel(entry["card"])
 
             if end_idx < len(items):
                 self._active_render_job = self.after(16, lambda: render_batch(end_idx, batch_size))
             else:
                 self._active_render_job = None
+                self._update_scroll_region()
                 self._apply_focus_visuals()
 
         render_batch(0)
@@ -427,6 +522,7 @@ class GamesTabMixin:
 
         def render_batch(start_idx, batch_size=15):
             if start_idx >= len(items):
+                self._update_scroll_region()
                 self._apply_focus_visuals()
                 return
             end_idx = min(start_idx + batch_size, len(items))
@@ -434,11 +530,13 @@ class GamesTabMixin:
                 app_id, game_data = items[row_idx]
                 entry = self._create_list_row(self.scrollable_games, app_id, game_data, row_idx)
                 self._card_entries.append(entry)
+                self._attach_mouse_wheel(entry["card"])
 
             if end_idx < len(items):
                 self._active_render_job = self.after(16, lambda: render_batch(end_idx, batch_size))
             else:
                 self._active_render_job = None
+                self._update_scroll_region()
                 self._apply_focus_visuals()
 
         render_batch(0)

@@ -565,35 +565,35 @@ class NavigationMixin:
 
             canvas.update_idletasks()
 
-            card_root_y = card_widget.winfo_rooty()
-            canvas_root_y = canvas.winfo_rooty()
-            card_h = card_widget.winfo_height() or 140
-            canvas_h = canvas.winfo_height() or 500
-
-            rel_top = card_root_y - canvas_root_y
-            rel_bottom = rel_top + card_h
-
             bbox = canvas.bbox("all")
             if not bbox:
                 return
+
+            # Ensure canvas scrollregion is configured if missing or outdated
+            if not canvas.cget("scrollregion"):
+                canvas.configure(scrollregion=bbox)
+
+            canvas_h = canvas.winfo_height() or 500
             total_h = max(bbox[3] - bbox[1], canvas_h, 1)
 
             if total_h <= canvas_h:
                 return
 
-            curr_y_view = canvas.yview()
-            curr_top_fraction = curr_y_view[0]
-            curr_top_y = curr_top_fraction * total_h
+            card_y = card_widget.winfo_y()
+            card_h = card_widget.winfo_height() or 270
 
-            padding = 16
+            viewport_top = canvas.canvasy(0)
+            viewport_bottom = canvas.canvasy(canvas_h)
+
+            padding = 20
 
             # If card is above viewport margin
-            if rel_top < padding:
-                target_top_y = max(0.0, curr_top_y + rel_top - padding)
+            if card_y < viewport_top + padding:
+                target_top_y = max(0.0, card_y - padding)
                 canvas.yview_moveto(target_top_y / total_h)
             # If card is below viewport margin
-            elif rel_bottom > canvas_h - padding:
-                target_top_y = min(total_h - canvas_h, curr_top_y + (rel_bottom - canvas_h) + padding)
+            elif (card_y + card_h) > viewport_bottom - padding:
+                target_top_y = min(total_h - canvas_h, (card_y + card_h + padding) - canvas_h)
                 canvas.yview_moveto(target_top_y / total_h)
         except Exception:
             pass
