@@ -129,6 +129,43 @@ def create_poster_card(
 
     _bind_click_recursive(card)
 
+    # 5. Forward Mouse Wheel Events to Parent Canvas
+    canvas = getattr(parent, "_parent_canvas", None)
+    if canvas:
+        def _forward_mouse_wheel(event):
+            bbox = canvas.bbox("all")
+            if not bbox:
+                return
+            canvas_h = canvas.winfo_height()
+            if (bbox[3] - bbox[1]) <= canvas_h:
+                return
+            if getattr(event, "num", None) == 4:
+                canvas.yview_scroll(-3, "units")
+                return "break"
+            elif getattr(event, "num", None) == 5:
+                canvas.yview_scroll(3, "units")
+                return "break"
+            delta = getattr(event, "delta", 0)
+            if delta != 0:
+                step = -1 if delta > 0 else 1
+                canvas.yview_scroll(step * 3, "units")
+                return "break"
+
+        def _bind_mouse_wheel_recursive(widget):
+            for seq in ("<Button-4>", "<Button-5>", "<MouseWheel>"):
+                try:
+                    widget.bind(seq, _forward_mouse_wheel, add="+")
+                    if hasattr(widget, "_canvas") and widget._canvas:
+                        widget._canvas.bind(seq, _forward_mouse_wheel, add="+")
+                    if hasattr(widget, "_label") and widget._label:
+                        widget._label.bind(seq, _forward_mouse_wheel, add="+")
+                except Exception:
+                    pass
+            for child in widget.winfo_children():
+                _bind_mouse_wheel_recursive(child)
+
+        _bind_mouse_wheel_recursive(card)
+
     return {
         "card": card,
         "app_id": app_id,
