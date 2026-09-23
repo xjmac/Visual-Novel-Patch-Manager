@@ -7,6 +7,7 @@ import queue
 import threading
 from pathlib import Path
 from tkinter import messagebox
+from typing import Optional
 from PIL import Image, ImageTk
 
 try:
@@ -111,6 +112,7 @@ class VNPatchManagerApp(
         self.steamgriddb_client = SteamGridDBClient(
             api_key=self.config_manager.config.get("steamgriddb_api_key", "")
         )
+        self.cover_manager.steamgriddb_client = self.steamgriddb_client
         self.non_steam_manager = NonSteamManager(
             steam_root=self.steam_scanner.get_steam_root(),
             vndb_scanner=self.vndb_scanner,
@@ -381,6 +383,8 @@ class VNPatchManagerApp(
                 supported = {}
                 for app_id, game_data in all_games.items():
                     is_non_steam = game_data.get("is_non_steam", False)
+                    if not is_non_steam:
+                        game_data.setdefault("steam_app_id", str(app_id))
                     game_path = Path(game_data["path"]) if game_data.get("path") else None
                     if is_non_steam:
                         game_data["is_installed"] = bool(game_path and game_path.exists())
@@ -404,7 +408,9 @@ class VNPatchManagerApp(
                     # Resolve human-readable game title if currently placeholder or empty
                     cur_name = game_data.get("name", "")
                     if not cur_name or cur_name.startswith("Steam App #"):
-                        if vn_info.get("vn_title"):
+                        if vn_info.get("steam_title"):
+                            game_data["name"] = vn_info["steam_title"]
+                        elif vn_info.get("vn_title"):
                             game_data["name"] = vn_info["vn_title"]
                         elif patch_info and patch_info.get("game_name"):
                             game_data["name"] = patch_info["game_name"]
@@ -513,13 +519,25 @@ class VNPatchManagerApp(
 
         threading.Thread(target=_rollback_task, daemon=True).start()
 
-    def run_steam_restore(self, game_data, patch_data):
+    def run_steam_restore(self, game_data, patch_data=None, app_id=None):
         """Restores original vanilla game files via Steam depot redownload."""
         if not game_data.get("is_installed", True) or not game_data.get("path") or not Path(game_data["path"]).exists():
-            messagebox.showwarning("Game Not Installed", f"'{game_data['name']}' is not installed.")
+            messagebox.showwarning("Game Not Installed", f"'{game_data.get('name', 'Game')}' is not installed.")
             return
 
-        self.lbl_status.configure(text=f"Restoring original {game_data['name']} via Steam...", text_color="gray")
+        resolved_app_id = app_id or game_data.get("steam_app_id")
+        if not resolved_app_id and hasattr(self, "_all_supported_games"):
+            for aid, gd in self._all_supported_games.items():
+                if gd is game_data or (gd.get("path") and gd.get("path") == game_data.get("path")):
+                    resolved_app_id = aid
+                    break
+
+        if resolved_app_id:
+            game_data["steam_app_id"] = str(resolved_app_id)
+            if patch_data is None and hasattr(self, "repo") and self.repo.available_patches:
+                patch_data = self.repo.available_patches.get(str(resolved_app_id))
+
+        self.lbl_status.configure(text=f"Restoring original {game_data.get('name', 'Game')} via Steam...", text_color="gray")
         self.progress_bar.configure(mode="indeterminate")
         self.progress_bar.start()
 
@@ -541,6 +559,11 @@ class VNPatchManagerApp(
                 )
 
         threading.Thread(target=_steam_task, daemon=True).start()
+
+    def run_codec_fix(self, game_data: dict, app_id: Optional[str] = None):
+        """Convenience alias for run_fix_video."""
+        resolved_app_id = app_id or game_data.get("steam_app_id") or ""
+        self.run_fix_video(str(resolved_app_id), game_data)
 
     def run_fix_video(self, app_id: str, game_data: dict):
         """Applies video codec / Media Foundation / Quartz fixes to the game's Proton prefix."""

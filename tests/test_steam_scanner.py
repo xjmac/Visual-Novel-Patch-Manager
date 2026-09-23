@@ -56,11 +56,13 @@ def test_get_installed_games_success(mock_steam_structure):
     assert game1["name"] == "Synthetic VN Alpha"
     assert game1["path"] == mock_steam_structure["game1"]["path"]
     assert game1["library_path"] == mock_steam_structure["game1"]["library_path"]
+    assert game1["steam_app_id"] == "900001"
 
     game2 = games["900002"]
     assert game2["name"] == "Synthetic VN Beta"
     assert game2["path"] == mock_steam_structure["game2"]["path"]
     assert game2["library_path"] == mock_steam_structure["game2"]["library_path"]
+    assert game2["steam_app_id"] == "900002"
 
 
 def test_get_installed_games_corrupted_acf_and_vdf(mock_steam_structure, caplog):

@@ -45,7 +45,7 @@ COLOR_PAD_BTN_BORDER = "#3b82f6"
 
 # Dimensions & Responsive Layout
 POSTER_CARD_SIZE: Tuple[int, int] = (180, 270)      # 2:3 Visual Novel Portrait Poster
-GRID_CARD_BANNER_SIZE: Tuple[int, int] = (280, 130) # Classic wide banner
+GRID_CARD_BANNER_SIZE: Tuple[int, int] = (180, 270) # 2:3 Portrait Capsule Poster
 LIST_ROW_BANNER_SIZE: Tuple[int, int] = (150, 70)   # Compact list thumbnail
 HERO_BANNER_SIZE: Tuple[int, int] = (640, 220)      # Detail view hero header
 MIN_TOUCH_TARGET: int = 44                          # Handheld touch target minimum height

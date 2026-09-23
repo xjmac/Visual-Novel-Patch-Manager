@@ -103,6 +103,7 @@ def test_game_detail_modal_lifecycle_and_controller(tmp_path):
     root.run_rollback = MagicMock()
     root.run_steam_restore = MagicMock()
     root.run_codec_fix = MagicMock()
+    root.run_fix_video = MagicMock()
     root.run_custom_artwork = MagicMock()
     root.run_remove_non_steam = MagicMock()
 
@@ -154,6 +155,88 @@ def test_game_detail_modal_lifecycle_and_controller(tmp_path):
     root.destroy()
 
 
+def test_game_detail_modal_steam_restore_and_codec_fix(tmp_path):
+    """Tests GameDetailModal 'Restore via Steam' and 'Video Codec Fix' button actions."""
+    root = ctk.CTk()
+    root.withdraw()
+
+    cover_mgr = MagicMock()
+    pil_dummy = Image.new("RGB", (20, 20), color="blue")
+    ctk_img = ctk.CTkImage(light_image=pil_dummy, dark_image=pil_dummy, size=(20, 20))
+    cover_mgr.get_cover_image.return_value = ctk_img
+    root.cover_manager = cover_mgr
+    root.repo = MagicMock()
+    root.repo.available_patches = {"900020": {"steam_app_id": "900020", "actions": []}}
+
+    root.run_steam_restore = MagicMock()
+    root.run_fix_video = MagicMock()
+    root.push_modal_controller_handler = MagicMock()
+    root.pop_modal_controller_handler = MagicMock()
+
+    game_data = {
+        "name": "Steam Test VN",
+        "path": str(tmp_path),
+        "is_non_steam": False,
+        "steam_app_id": "900020",
+    }
+    status_info = {
+        "is_patched": True,
+        "has_local_patch": True,
+        "has_clean_backup": False,
+        "has_backup": True,
+        "vn_info": {},
+    }
+
+    modal = show_game_detail_modal(
+        parent=root,
+        app_id="900020",
+        game_data=game_data,
+        status_info=status_info,
+    )
+
+    # Locate Restore via Steam button
+    steam_btn = next((b for b in modal._action_buttons if "Restore via Steam" in b.cget("text")), None)
+    assert steam_btn is not None
+    steam_btn._command()
+    root.run_steam_restore.assert_called_once_with(
+        game_data,
+        patch_data={"steam_app_id": "900020", "actions": []},
+        app_id="900020",
+    )
+
+    # Re-open modal to test Codec Fix button
+    modal2 = show_game_detail_modal(
+        parent=root,
+        app_id="900020",
+        game_data=game_data,
+        status_info=status_info,
+    )
+    codec_btn = next((b for b in modal2._action_buttons if "Video Codec Fix" in b.cget("text")), None)
+    assert codec_btn is not None
+    codec_btn._command()
+    root.run_fix_video.assert_called_once_with("900020", game_data)
+
+    # Test when game has no patch manifest in repo (patch_data=None)
+    root.repo.available_patches = {}
+    modal3 = show_game_detail_modal(
+        parent=root,
+        app_id="900020",
+        game_data=game_data,
+        status_info=status_info,
+    )
+    steam_btn3 = next((b for b in modal3._action_buttons if "Restore via Steam" in b.cget("text")), None)
+    assert steam_btn3 is not None
+    root.run_steam_restore.reset_mock()
+    steam_btn3._command()
+    root.run_steam_restore.assert_called_once_with(
+        game_data,
+        patch_data=None,
+        app_id="900020",
+    )
+
+    root.destroy()
+
+
 def test_ipc_service_methods(tmp_path):
     """Tests VNPMService headless methods."""
     cm = MagicMock()
@@ -179,6 +262,10 @@ def test_ipc_service_methods(tmp_path):
     res_b = service.restore_backup("999999")
     assert res_b["success"] is False
 
+    # Test restore_via_steam on missing app
+    res_s = service.restore_via_steam("999999")
+    assert res_s["success"] is False
+
     # Test fix_codecs on missing app
     res_c = service.fix_codecs("999999")
     assert res_c["success"] is False
@@ -191,6 +278,7 @@ def test_ipc_server_client_roundtrip(tmp_path):
     service = MagicMock()
     service.get_status.return_value = {"status": "ok", "version": "0.2.0"}
     service.scan_games.return_value = {"123": {"name": "Game 123"}}
+    service.restore_via_steam.return_value = {"success": True, "logs": []}
 
     server = IPCServer(service=service, socket_path=sock_path)
     server.start(background=True)
@@ -207,6 +295,9 @@ def test_ipc_server_client_roundtrip(tmp_path):
         games_res = client.scan_games()
         assert "123" in games_res
         assert games_res["123"]["name"] == "Game 123"
+
+        steam_res = client.restore_via_steam("123")
+        assert steam_res["success"] is True
     finally:
         server.stop()
         time.sleep(0.05)

@@ -127,6 +127,25 @@ class VNPMService:
         except Exception as e:
             return {"success": False, "error": str(e), "logs": logs}
 
+    def restore_via_steam(self, app_id: str) -> Dict[str, Any]:
+        """Purges patch artifacts and initiates Steam validation for a game."""
+        games = self.scan_games()
+        gdata = games.get(str(app_id))
+        if not gdata or not gdata.get("path"):
+            return {"success": False, "error": f"Game {app_id} not found"}
+
+        patch_data = self.repo.available_patches.get(str(app_id))
+        logs = []
+        try:
+            success = PatchExecutionEngine.restore_via_steam(
+                gdata,
+                patch_data=patch_data,
+                log_callback=lambda m: logs.append(m),
+            )
+            return {"success": success, "logs": logs}
+        except Exception as e:
+            return {"success": False, "error": str(e), "logs": logs}
+
     def fix_codecs(self, app_id: str) -> Dict[str, Any]:
         """Applies Proton video codec fixes for a game prefix."""
         games = self.scan_games()
@@ -240,6 +259,8 @@ class IPCServer:
                 res = self.service.apply_patch(params.get("app_id"))
             elif method == "restore_backup":
                 res = self.service.restore_backup(params.get("app_id"))
+            elif method == "restore_via_steam":
+                res = self.service.restore_via_steam(params.get("app_id"))
             elif method == "fix_codecs":
                 res = self.service.fix_codecs(params.get("app_id"))
             elif method == "stop":
@@ -305,6 +326,9 @@ class VNPMClient:
 
     def restore_backup(self, app_id: str) -> Dict[str, Any]:
         return self.call("restore_backup", {"app_id": str(app_id)})
+
+    def restore_via_steam(self, app_id: str) -> Dict[str, Any]:
+        return self.call("restore_via_steam", {"app_id": str(app_id)})
 
     def fix_codecs(self, app_id: str) -> Dict[str, Any]:
         return self.call("fix_codecs", {"app_id": str(app_id)})

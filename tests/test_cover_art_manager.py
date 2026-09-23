@@ -292,4 +292,82 @@ def test_set_custom_artwork_aspect_ratio_preservation(tmp_path):
         assert im.size == (32, 32)
 
 
+def test_check_steam_grid_portrait_precedence(tmp_path):
+    """Verifies that check_steam_grid prioritizes portrait capsule {app_id}p.jpg over wide {app_id}.jpg."""
+    cache_dir = tmp_path / "cache"
+    steam_root = tmp_path / "Steam"
+    grid_dir = steam_root / "userdata" / "12345" / "config" / "grid"
+    grid_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create both wide and portrait
+    (grid_dir / "9999.jpg").write_bytes(b"wide image bytes")
+    (grid_dir / "9999p.jpg").write_bytes(b"portrait capsule bytes")
+
+    mgr = CoverArtManager(cache_dir=cache_dir)
+    assert mgr.check_steam_grid("9999", steam_root=steam_root) is True
+    assert (cache_dir / "9999.jpg").read_bytes() == b"portrait capsule bytes"
+
+
+def test_download_cover_legacy_wide_upgrade(tmp_path):
+    """Verifies that download_cover detects legacy wide images and upgrades them to capsules."""
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    mgr = CoverArtManager(cache_dir=cache_dir)
+
+    # Save a legacy wide image (460x215)
+    legacy_wide = Image.new("RGB", (460, 215), color="blue")
+    legacy_wide.save(cache_dir / "8888.jpg")
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.content = b"new portrait capsule bytes"
+
+    with patch.object(mgr, "_get", return_value=mock_resp) as mock_get:
+        res = mgr.download_cover("8888")
+        assert res is True
+        mock_get.assert_called()
+        assert "library_600x900_2x.jpg" in mock_get.call_args_list[0][0][0]
+        assert (cache_dir / "8888.jpg").read_bytes() == b"new portrait capsule bytes"
+
+
+def test_download_cover_capsule_priority_and_vndb_fallback(tmp_path):
+    """Verifies that download_cover queries capsule first, and falls back to VNDB when capsule 404s."""
+    cache_dir = tmp_path / "cache"
+    mgr = CoverArtManager(cache_dir=cache_dir)
+
+    called_urls = []
+
+    def mock_get(url, *args, **kwargs):
+        called_urls.append(url)
+        resp = MagicMock()
+        if "vndb.org" in url:
+            resp.status_code = 200
+            resp.content = b"vndb capsule bytes"
+            return resp
+        resp.status_code = 404
+        resp.content = b""
+        return resp
+
+    mock_post_resp = MagicMock()
+    mock_post_resp.status_code = 200
+    mock_post_resp.json.return_value = {
+        "results": [{"id": "v47551", "image": {"url": "https://t.vndb.org/cv/41/107441.jpg"}}]
+    }
+
+    with patch.object(mgr, "_get", side_effect=mock_get), \
+         patch.object(mgr, "_post", return_value=mock_post_resp):
+        game_data = {
+            "name": "Amanatsu+",
+            "vndb": {"vn_id": "v47551"},
+        }
+        res = mgr.download_cover("3830560", game_data=game_data)
+        assert res is True
+        assert (cache_dir / "3830560.jpg").read_bytes() == b"vndb capsule bytes"
+        # First attempt should have been Steam capsule
+        assert "library_600x900_2x.jpg" in called_urls[0]
+        # Then VNDB cover was fetched
+        assert "https://t.vndb.org/cv/41/107441.jpg" in called_urls
+
+
+
 

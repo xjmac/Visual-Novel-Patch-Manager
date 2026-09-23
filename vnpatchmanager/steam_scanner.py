@@ -103,7 +103,8 @@ class SteamScanner:
                                     "name": name,
                                     "path": full_install_path,
                                     "library_path": lib_path,
-                                    "is_installed": True
+                                    "is_installed": True,
+                                    "steam_app_id": str(app_id),
                                 }
                     except Exception as e:
                         logger.warning(f"Failed to parse {acf_file}: {e}")

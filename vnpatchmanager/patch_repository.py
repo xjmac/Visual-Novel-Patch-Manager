@@ -4,7 +4,7 @@ import re
 import difflib
 import logging
 from pathlib import Path
-from .utils import find_database_file as _find_db
+from .utils import extract_part_numbers, find_database_file as _find_db
 
 logger = logging.getLogger(__name__)
 
@@ -113,9 +113,13 @@ class PatchRepository:
                         _add_title(vn_title, aid, vn_title, overwrite=False)
 
                     display_title = steam_title or vn_title
+                    title_parts = extract_part_numbers(display_title)
                     for p in data.get("patch_releases", []):
                         p_title = p.get("title", "")
                         if p_title:
+                            patch_parts = extract_part_numbers(p_title)
+                            if title_parts and patch_parts and not (title_parts & patch_parts):
+                                continue
                             _add_title(p_title, aid, display_title, overwrite=False)
             except (OSError, json.JSONDecodeError) as e:
                 logger.warning(f"Error loading title map for patch repository: {e}")
@@ -185,6 +189,48 @@ class PatchRepository:
         elif mode == "smb":
             self._scan_smb()
 
+    def _extract_readme_candidates(self, files: list[str], read_func) -> list[str]:
+        """
+        Inspects readme files in the patch directory to extract explicit game title candidates
+        from official patch distributions (e.g. Shiravune, MangaGamer, JAST).
+        """
+        readme_files = [f for f in files if re.search(r"(?i)^readme.*\.txt$", f)]
+        candidates = []
+        for rf in readme_files:
+            # 1. Check filename patterns like readme_CRBD2.txt -> Criminal Border 2 / Liminal Border Part 2
+            m_code = re.search(r"(?i)readme_([a-z]+)(\d+)\.txt", rf)
+            if m_code:
+                code, num = m_code.group(1).lower(), m_code.group(2)
+                if code == "crbd":
+                    candidates.append(f"Liminal Border Part {num}")
+                    candidates.append(f"Criminal Border {num}")
+
+            # 2. Check content of readme
+            try:
+                raw_bytes = read_func(rf)
+                if not raw_bytes:
+                    continue
+                content = None
+                for enc in ["utf-16", "utf-8", "cp1252", "latin-1"]:
+                    try:
+                        content = raw_bytes.decode(enc)
+                        break
+                    except (UnicodeDecodeError, LookupError):
+                        continue
+                if content:
+                    matches = re.findall(
+                        r'(?i)(?:patch for(?: the [a-z0-9_-]+ version of)?|installation folder of)\s+["“]([^"”\r\n]+)["”]',
+                        content,
+                    )
+                    for m in matches:
+                        for part in m.split("/"):
+                            cand = part.strip()
+                            if cand and cand not in candidates:
+                                candidates.append(cand)
+            except Exception as e:
+                logger.debug(f"Error reading readme {rf}: {e}")
+        return candidates
+
     def _scan_local(self):
         base_path = Path(self.cm.config.get("local_path"))
         if not base_path.exists():
@@ -210,10 +256,28 @@ class PatchRepository:
                 except (OSError, json.JSONDecodeError) as e:
                     logger.warning(f"Error reading {patch_json}: {e}")
 
+            # Helper to extract readme candidates for this directory
+            def _local_read(fname: str) -> bytes:
+                target = r_path / fname
+                try:
+                    if target.is_file() and target.stat().st_size < 65536:
+                        return target.read_bytes()
+                except OSError:
+                    pass
+                return b""
+
+            readme_candidates = self._extract_readme_candidates(files, _local_read)
+
             # 2. Auto-detection: Ren'Py RPA patches
             rpa_files = [f for f in files if f.endswith(".rpa")]
             if rpa_files:
-                aid, title = self.match_title_to_app_id(r_path.name)
+                aid, title = None, None
+                for cand in readme_candidates:
+                    aid, title = self.match_title_to_app_id(cand)
+                    if aid:
+                        break
+                if not aid:
+                    aid, title = self.match_title_to_app_id(r_path.name)
                 if aid and aid not in self.available_patches:
                     actions = [
                         {
@@ -244,7 +308,13 @@ class PatchRepository:
                     if r_path.name.lower().startswith(("patch", "r18", "amanatsu_patch", "amanatsu_plus", "senrenbanka"))
                     else r_path.name
                 )
-                aid, title = self.match_title_to_app_id(name_candidate)
+                aid, title = None, None
+                for cand in readme_candidates:
+                    aid, title = self.match_title_to_app_id(cand)
+                    if aid:
+                        break
+                if not aid:
+                    aid, title = self.match_title_to_app_id(name_candidate)
                 if aid:
                     self.available_patches[aid] = {
                         "steam_app_id": aid,
@@ -265,6 +335,11 @@ class PatchRepository:
             archives = [f for f in files if any(f.lower().endswith(ext) for ext in [".zip", ".7z", ".rar"])]
             for arc in archives:
                 aid, title = self.match_title_to_app_id(arc)
+                if not aid:
+                    for cand in readme_candidates:
+                        aid, title = self.match_title_to_app_id(cand)
+                        if aid:
+                            break
                 if not aid:
                     aid, title = self.match_title_to_app_id(r_path.name)
                 if aid and aid not in self.available_patches:
@@ -339,10 +414,26 @@ class PatchRepository:
                 current_folder_name = parts[-1] if parts else ""
                 parent_folder_name = parts[-2] if len(parts) >= 2 else current_folder_name
 
+                # Helper to extract readme candidates over SMB
+                def _smb_read(fname: str) -> bytes:
+                    try:
+                        with smbclient.open_file(rf"{current_unc}\{fname}", mode="rb") as f:
+                            return f.read(65536)
+                    except Exception:
+                        return b""
+
+                readme_candidates = self._extract_readme_candidates(files, _smb_read)
+
                 # 2. RPA auto-detection
                 rpa_files = [f for f in files if f.endswith(".rpa")]
                 if rpa_files:
-                    aid, title = self.match_title_to_app_id(current_folder_name)
+                    aid, title = None, None
+                    for cand in readme_candidates:
+                        aid, title = self.match_title_to_app_id(cand)
+                        if aid:
+                            break
+                    if not aid:
+                        aid, title = self.match_title_to_app_id(current_folder_name)
                     if aid and aid not in self.available_patches:
                         actions = [
                             {"type": "copy_file", "source": rpa, "destination": "{game_dir}/game/"}
@@ -368,7 +459,13 @@ class PatchRepository:
                         if current_folder_name.lower().startswith(("patch", "r18", "amanatsu_patch", "amanatsu_plus", "senrenbanka"))
                         else current_folder_name
                     )
-                    aid, title = self.match_title_to_app_id(name_candidate)
+                    aid, title = None, None
+                    for cand in readme_candidates:
+                        aid, title = self.match_title_to_app_id(cand)
+                        if aid:
+                            break
+                    if not aid:
+                        aid, title = self.match_title_to_app_id(name_candidate)
                     if aid and aid not in self.available_patches:
                         self.available_patches[aid] = {
                             "steam_app_id": aid,
@@ -388,6 +485,11 @@ class PatchRepository:
                 archives = [f for f in files if any(f.lower().endswith(ext) for ext in [".zip", ".7z", ".rar"])]
                 for arc in archives:
                     aid, title = self.match_title_to_app_id(arc)
+                    if not aid:
+                        for cand in readme_candidates:
+                            aid, title = self.match_title_to_app_id(cand)
+                            if aid:
+                                break
                     if not aid:
                         aid, title = self.match_title_to_app_id(current_folder_name)
                     if aid and aid not in self.available_patches:

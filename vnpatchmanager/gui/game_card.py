@@ -61,7 +61,9 @@ class GameCardMixin:
         # Ensure human-readable name is resolved if placeholder
         cur_name = game_data.get("name", "")
         if not cur_name or cur_name.startswith("Steam App #"):
-            if vn_info.get("vn_title"):
+            if vn_info.get("steam_title"):
+                game_data["name"] = vn_info["steam_title"]
+            elif vn_info.get("vn_title"):
                 game_data["name"] = vn_info["vn_title"]
             elif patch_info and patch_info.get("game_name"):
                 game_data["name"] = patch_info["game_name"]

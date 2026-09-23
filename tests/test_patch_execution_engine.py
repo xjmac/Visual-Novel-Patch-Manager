@@ -956,6 +956,111 @@ def test_restore_via_steam_all_branches(tmp_path):
     with patch("subprocess.Popen", side_effect=OSError("No launcher")):
         assert PatchExecutionEngine.restore_via_steam(game_data, patch_data, lambda m: None) is False
 
+    # 4. AppID not determinable
+    no_id_game = {"name": "Synthetic VN", "path": game_dir}
+    with patch("subprocess.Popen") as mock_popen:
+        assert PatchExecutionEngine.restore_via_steam(no_id_game, None, lambda m: None) is False
+        mock_popen.assert_not_called()
+
+
+def test_restore_via_steam_purges_manifest_extraneous_files(tmp_path):
+    """Tests that restore_via_steam purges all files not recorded in a clean backup manifest."""
+    game_dir = tmp_path / "MarshmallowGame"
+    game_dir.mkdir()
+
+    # Original files recorded in manifest
+    orig_file1 = game_dir / "script.noa"
+    orig_file1.write_text("vanilla script")
+    orig_file2 = game_dir / "title.noa"
+    orig_file2.write_text("vanilla title")
+
+    # Extraneous files added by patch
+    patch1_noa = game_dir / "patch1.noa"
+    patch1_noa.write_text("18+ patch content")
+    hpatch_exe = game_dir / "HPatch.exe"
+    hpatch_exe.write_text("binary patch tool")
+    tracking_file = game_dir / ".patch_applied.json"
+    tracking_file.write_text('{"status": "success"}')
+
+    # Create clean backup with manifest
+    backup_folder = game_dir / BackupManager.BACKUP_DIR_NAME / "backup_20260924_000000"
+    backup_folder.mkdir(parents=True)
+    manifest = {
+        "timestamp": 1234567890.0,
+        "is_clean_original": True,
+        "files": {
+            "script.noa": {"sha256": "fakehash1", "size": 14},
+            "title.noa": {"sha256": "fakehash2", "size": 13},
+        },
+    }
+    with open(backup_folder / "manifest.json", "w") as f:
+        json.dump(manifest, f)
+
+    # Initially, game is recognized as patched due to patch1.noa and tracking file
+    assert PatchExecutionEngine.get_patch_status(game_dir) is True
+
+    game_data = {
+        "name": "Marshmallow All the Way Home",
+        "path": game_dir,
+        "steam_app_id": "1369790",
+    }
+
+    with patch("subprocess.Popen") as mock_popen:
+        success = PatchExecutionEngine.restore_via_steam(game_data, patch_data=None)
+        assert success is True
+        mock_popen.assert_called_once_with(["steam", "steam://validate/1369790"])
+
+    # Extraneous patch files and tracking file must be purged
+    assert not patch1_noa.exists()
+    assert not hpatch_exe.exists()
+    assert not tracking_file.exists()
+
+    # Original files must remain untouched
+    assert orig_file1.exists()
+    assert orig_file2.exists()
+
+    # Post-restore, game is clean and no longer recognized as patched
+    assert PatchExecutionEngine.get_patch_status(game_dir) is False
+
+
+def test_restore_via_steam_purges_signature_files_without_manifest(tmp_path):
+    """Tests that restore_via_steam purges known engine signature files even when no backup exists."""
+    game_dir = tmp_path / "SignatureGame"
+    game_dir.mkdir()
+    (game_dir / "game").mkdir()
+
+    # Add signature files across various engines
+    cat_patch = game_dir / "patch1.noa"
+    cat_patch.write_text("noa patch")
+    renpy_patch = game_dir / "game" / "patch.rpa"
+    renpy_patch.write_text("rpa patch")
+    kiri_patch = game_dir / "adult.xp3"
+    kiri_patch.write_text("xp3 patch")
+    artemis_patch = game_dir / "root.pfs.040"
+    artemis_patch.write_text("pfs patch")
+    patcher_tool = game_dir / "HPatch.exe"
+    patcher_tool.write_text("exe tool")
+
+    assert PatchExecutionEngine.get_patch_status(game_dir) is True
+
+    game_data = {
+        "name": "Multi-Engine VN",
+        "path": game_dir,
+        "steam_app_id": "999888",
+    }
+
+    with patch("subprocess.Popen"):
+        success = PatchExecutionEngine.restore_via_steam(game_data, patch_data=None)
+        assert success is True
+
+    assert not cat_patch.exists()
+    assert not renpy_patch.exists()
+    assert not kiri_patch.exists()
+    assert not artemis_patch.exists()
+    assert not patcher_tool.exists()
+
+    assert PatchExecutionEngine.get_patch_status(game_dir) is False
+
 
 def test_find_proton_experimental_and_custom_sorting(mock_steam_structure):
     steam_root = mock_steam_structure["steam_root"]

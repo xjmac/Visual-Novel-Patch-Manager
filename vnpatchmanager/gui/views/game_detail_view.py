@@ -348,7 +348,9 @@ class GameDetailModal(ctk.CTkToplevel):
                 height=MIN_TOUCH_TARGET,
                 fg_color=COLOR_BORDER_2,
                 hover_color=COLOR_ELEVATION_3,
-                command=lambda: self._invoke_and_close(lambda: self.parent.run_steam_restore(self.game_data)),
+                command=lambda: self._invoke_and_close(
+                    lambda: self.parent.run_steam_restore(self.game_data, patch_data=patch_data, app_id=self.app_id)
+                ),
             )
             btn_steam.pack(side="left", padx=(0, 8))
             self._action_buttons.append(btn_steam)
@@ -360,7 +362,9 @@ class GameDetailModal(ctk.CTkToplevel):
             height=MIN_TOUCH_TARGET,
             fg_color=COLOR_BORDER_2,
             hover_color=COLOR_ELEVATION_3,
-            command=lambda: self._invoke_and_close(lambda: self.parent.run_codec_fix(self.game_data)),
+            command=lambda: self._invoke_and_close(
+                lambda: self.parent.run_fix_video(self.app_id, self.game_data)
+            ),
         )
         btn_codec.pack(side="left", padx=(0, 8))
         self._action_buttons.append(btn_codec)

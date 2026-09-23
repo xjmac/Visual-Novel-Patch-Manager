@@ -613,6 +613,44 @@ def test_run_steam_restore_failure(app_instance, mock_steam_structure):
         assert "Steam Restore Failed" in app_instance.lbl_status.cget("text")
 
 
+def test_run_steam_restore_single_argument_and_codec_fix(app_instance, mock_steam_structure):
+    """Tests run_steam_restore with 1 argument, fallback resolution, and run_codec_fix alias."""
+    game_data = {
+        "name": "Synthetic VN Alpha",
+        "path": mock_steam_structure["game1"]["path"],
+        "library_path": mock_steam_structure["game1"]["library_path"],
+        "steam_app_id": "900001",
+    }
+
+    def sync_thread(target, daemon=None):
+        target()
+        return MagicMock()
+
+    with patch("threading.Thread", side_effect=sync_thread), \
+         patch.object(PatchExecutionEngine, "restore_via_steam", return_value=True) as mock_steam_restore:
+        # Call with 1 positional argument only (the exact failure case the user experienced)
+        app_instance.run_steam_restore(game_data)
+        mock_steam_restore.assert_called_once()
+        assert game_data.get("steam_app_id") == "900001"
+
+    # Test resolution of steam_app_id when missing in game_data
+    game_data_no_id = {
+        "name": "Synthetic VN Alpha",
+        "path": mock_steam_structure["game1"]["path"],
+        "library_path": mock_steam_structure["game1"]["library_path"],
+    }
+    app_instance._all_supported_games = {"900001": game_data_no_id}
+    with patch("threading.Thread", side_effect=sync_thread), \
+         patch.object(PatchExecutionEngine, "restore_via_steam", return_value=True) as mock_steam_restore:
+        app_instance.run_steam_restore(game_data_no_id)
+        assert game_data_no_id.get("steam_app_id") == "900001"
+
+    # Test run_codec_fix convenience alias delegates to run_fix_video
+    with patch.object(app_instance, "run_fix_video") as mock_fix_video:
+        app_instance.run_codec_fix(game_data)
+        mock_fix_video.assert_called_once_with("900001", game_data)
+
+
 def test_ui_button_presence_all_vn_states(app_instance, mock_steam_structure, mock_patch_repo):
     """Regression test ensuring action buttons (Apply, Restore, VNDB Link) are ALWAYS packed across all VN states."""
     app_instance.repo.available_patches = {
@@ -1409,6 +1447,30 @@ def test_ensure_game_mode_focus(app_instance):
     with patch.object(app_instance, "focus_force") as mock_focus:
         app_instance._ensure_game_mode_focus()
         mock_focus.assert_called_once()
+
+
+def test_liminal_border_uninstalled_name_resolution(app_instance):
+    synthetic_game = {
+        "name": "Steam App #3094040",
+        "path": "",
+        "library_path": "",
+        "is_installed": False,
+        "vndb": {
+            "vn_id": "v37116",
+            "vn_title": "Criminal Border",
+            "steam_title": "Liminal Border Part III",
+            "is_vn": True,
+            "has_18plus_en_patch": True,
+            "rating": 7.4,
+        },
+    }
+
+    # Verify status info resolves to steam_title over vn_title
+    status_info = app_instance._compute_status_info("3094040", synthetic_game)
+    assert synthetic_game["name"] == "Liminal Border Part III"
+    assert "liminal border part iii" in status_info["search_haystack"]
+    # vn_title should still be present in the search haystack for easy searchability
+    assert "criminal border" in status_info["search_haystack"]
 
 
 
