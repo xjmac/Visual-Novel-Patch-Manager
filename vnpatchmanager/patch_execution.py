@@ -302,11 +302,41 @@ class PatchExecutionEngine:
             except OSError as e:
                 logger.warning(f"Failed to unlink tracking file: {e}")
 
-        # 2. If actions in patch_data copied specific non-vanilla files, remove them
+        # 2. Purge extraneous files using clean backup manifest if available
+        # When a clean original backup manifest is recorded, any file currently in install_dir
+        # that was not in the original manifest is an untracked patch addition.
+        if BackupManager.has_clean_backup(install_dir):
+            _, manifest = BackupManager.get_latest_backup(install_dir)
+            if manifest and "files" in manifest:
+                orig_files = set(manifest["files"].keys())
+                for root, dirs, files in os.walk(install_dir, topdown=False):
+                    dirs[:] = [d for d in dirs if d != BackupManager.BACKUP_DIR_NAME]
+                    root_path = Path(root)
+                    if BackupManager.BACKUP_DIR_NAME in root_path.parts:
+                        continue
+                    for file_name in files:
+                        full_p = root_path / file_name
+                        rel_p = str(full_p.relative_to(install_dir))
+                        if rel_p not in orig_files and file_name != ".patch_applied.json":
+                            try:
+                                full_p.unlink()
+                                logger.info(f"Purged extraneous patch file: {rel_p}")
+                            except OSError as e:
+                                logger.warning(f"Failed to unlink {full_p}: {e}")
+                    # Remove empty directories (except install_dir and .backup)
+                    if root_path != install_dir and not any(root_path.iterdir()):
+                        try:
+                            root_path.rmdir()
+                        except OSError:
+                            pass
+
+        # 3. If actions in patch_data copied specific non-vanilla files, remove them
         if patch_data:
             actions = patch_data.get('actions', [])
+            patch_src_dir = Path(patch_data.get("patch_source_dir", ""))
             for action in actions:
-                if action.get('type') == 'copy_file':
+                atype = action.get('type')
+                if atype == 'copy_file':
                     dest_str = action.get('destination', '').replace("{game_dir}", str(install_dir))
                     dest_path = Path(dest_str)
                     if dest_path.exists() and not dest_path.is_dir():
@@ -314,8 +344,81 @@ class PatchExecutionEngine:
                             dest_path.unlink()
                         except OSError as e:
                             logger.warning(f"Failed to unlink {dest_path}: {e}")
+                elif atype == 'copy_directory':
+                    dest_str = action.get('destination', '').replace("{game_dir}", str(install_dir))
+                    dest_path = Path(dest_str)
+                    if dest_path.exists() and dest_path != install_dir:
+                        try:
+                            shutil.rmtree(dest_path, ignore_errors=True)
+                        except OSError as e:
+                            logger.warning(f"Failed to remove directory {dest_path}: {e}")
+                elif atype == 'extract_archive':
+                    source_arc = action.get('source', '')
+                    arc_path = patch_src_dir / source_arc if patch_src_dir.exists() else None
+                    dest_str = action.get('destination', '').replace("{game_dir}", str(install_dir))
+                    dest_path = Path(dest_str) if dest_str else install_dir
+                    if arc_path and arc_path.exists():
+                        try:
+                            if source_arc.lower().endswith((".zip", ".tar.gz", ".tgz")):
+                                import zipfile
+                                import tarfile
+                                member_names = []
+                                if zipfile.is_zipfile(arc_path):
+                                    with zipfile.ZipFile(arc_path, "r") as zf:
+                                        member_names = [Path(m).name for m in zf.namelist() if not m.endswith("/")]
+                                elif tarfile.is_tarfile(arc_path):
+                                    with tarfile.open(arc_path, "r:*") as tf:
+                                        member_names = [Path(m.name).name for m in tf.getmembers() if m.isfile()]
+                                for mname in member_names:
+                                    target_m = dest_path / mname
+                                    if target_m.exists() and target_m.is_file():
+                                        try:
+                                            target_m.unlink()
+                                        except OSError as e:
+                                            logger.warning(f"Failed to unlink {target_m}: {e}")
+                        except Exception as e:
+                            logger.warning(f"Error inspecting archive for cleanup: {e}")
 
-        # 3. Clean up dirty backups if any exists that are not clean
+        # 4. Universal purge of known engine patch signature files & patcher executables
+        # Steam depot validation will NEVER remove non-depot files dropped into the game folder.
+        sig_files = [
+            # Ren'Py
+            install_dir / "game" / "patch0x.rpa",
+            install_dir / "game" / "r18.rpa",
+            install_dir / "game" / "patch.rpa",
+            install_dir / "game" / "adult.rpa",
+            # Kirikiri
+            install_dir / "adult.xp3",
+            install_dir / "adultsonly.xp3",
+            install_dir / "adult2.xp3",
+            install_dir / "adult_patch.xp3",
+            install_dir / "patch.xp3",
+            # CatSystem2
+            install_dir / "patch1.noa",
+            install_dir / "patch.noa",
+            # BGI
+            install_dir / "ReadMe-Install Instruction.txt",
+            # Common patch tools
+            install_dir / "HPatch.exe",
+            install_dir / "patch.exe",
+            install_dir / "r18_patch.exe",
+            install_dir / "hpatchz.exe",
+        ]
+        # Artemis PFS increments (*.pfs.04*, *.pfs.05*, root.pfs.01*)
+        for pfs_pattern in ["*.pfs.04*", "*.pfs.05*", "root.pfs.01*"]:
+            for pfs_file in install_dir.glob(pfs_pattern):
+                if pfs_file.is_file():
+                    sig_files.append(pfs_file)
+
+        for sfile in sig_files:
+            if sfile.exists() and sfile.is_file():
+                try:
+                    sfile.unlink()
+                    logger.info(f"Purged patch signature file: {sfile.name}")
+                except OSError as e:
+                    logger.warning(f"Failed to unlink signature file {sfile}: {e}")
+
+        # 5. Clean up dirty backups if any exists that are not clean
         backup_root = install_dir / BackupManager.BACKUP_DIR_NAME
         if backup_root.exists() and not BackupManager.has_clean_backup(install_dir):
             try:
@@ -324,6 +427,12 @@ class PatchExecutionEngine:
                 logger.warning(f"Failed to remove backup root: {e}")
 
         # 4. Launch Steam verification
+        if not app_id:
+            logger.warning(f"Cannot initiate Steam restore: Steam AppID could not be determined for {game_data.get('name')}.")
+            if log_callback:
+                log_callback(f"Failed to initiate Steam verification: AppID not found for {game_data.get('name')}.")
+            return False
+
         if log_callback:
             log_callback(f"Launching Steam verification (AppID {app_id})...")
 

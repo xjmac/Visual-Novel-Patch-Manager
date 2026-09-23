@@ -513,4 +513,86 @@ def test_scan_smb_engine_payload_and_archive_auto_detection(temp_config_dir):
         assert repo.available_patches["900022"]["actions"][0]["source"] == "Kanon_Patch.7z"
 
 
+def test_liminal_border_all_parts_match_and_number_variants(temp_config_dir):
+    cm = ConfigManager()
+    with patch("vnpatchmanager.steam_scanner.SteamScanner.get_installed_games", return_value={}), \
+         patch("vnpatchmanager.steam_scanner.SteamScanner.get_owned_games", return_value={}):
+        repo = PatchRepository(cm)
+
+        # Roman numeral tests
+        assert repo.match_title_to_app_id("Liminal Border Part I")[0] == "2552410"
+        assert repo.match_title_to_app_id("Liminal Border Part II")[0] == "2730350"
+        assert repo.match_title_to_app_id("Liminal Border Part III")[0] == "3094040"
+        assert repo.match_title_to_app_id("Liminal Border Part IV")[0] == "3591440"
+
+        # Arabic numeral tests
+        assert repo.match_title_to_app_id("Liminal Border Part 1")[0] == "2552410"
+        assert repo.match_title_to_app_id("Liminal Border Part 2")[0] == "2730350"
+        assert repo.match_title_to_app_id("Liminal Border Part 3")[0] == "3094040"
+        assert repo.match_title_to_app_id("Liminal Border Part 4")[0] == "3591440"
+
+
+def test_liminal_border_no_cross_part_contamination(temp_config_dir, tmp_path):
+    fake_db = tmp_path / "vndb_conflict.json"
+    fake_db.write_text(json.dumps({
+        "3094040": {
+            "vn_title": "Criminal Border",
+            "steam_title": "Liminal Border Part III",
+            "patch_releases": [
+                {"title": "Liminal Border Part II - 18+ DLC"},
+                {"title": "Liminal Border Part III - 18+ DLC"},
+                {"title": "Liminal Border Part IV - 18+ DLC"}
+            ]
+        },
+        "3591440": {
+            "vn_title": "Criminal Border",
+            "steam_title": "Liminal Border Part IV",
+            "patch_releases": [
+                {"title": "Liminal Border Part IV - 18+ DLC"}
+            ]
+        }
+    }))
+
+    cm = ConfigManager()
+    with patch("vnpatchmanager.steam_scanner.SteamScanner.get_installed_games", return_value={}), \
+         patch("vnpatchmanager.steam_scanner.SteamScanner.get_owned_games", return_value={}):
+        repo = PatchRepository(cm, bundled_db_path=fake_db)
+
+        # Part IV must NOT be hijacked by 3094040
+        aid_4, _ = repo.match_title_to_app_id("Liminal Border Part IV")
+        assert aid_4 == "3591440"
+
+        # Part III must match 3094040
+        aid_3, _ = repo.match_title_to_app_id("Liminal Border Part III")
+        assert aid_3 == "3094040"
+
+
+def test_readme_metadata_inspection_utf16_crbd2(temp_config_dir, tmp_path):
+    patch_dir = tmp_path / "Liminal Border Part IV"
+    patch_dir.mkdir()
+    (patch_dir / "patch.xp3").write_bytes(b"dummy payload")
+
+    # Write UTF-16 LE readme with BOM
+    readme_content = (
+        'This file is the R-18 upgrade patch for the STEAM version of '
+        '"Liminal Border Part 2 / Criminal Border 2nd offence".\n'
+        'Move "patch.xp3" to the installation folder of "Liminal Border Part 2".'
+    )
+    (patch_dir / "readme_CRBD2.txt").write_bytes(b"\xff\xfe" + readme_content.encode("utf-16-le"))
+
+    cm = ConfigManager()
+    cm.config["mode"] = "local"
+    cm.config["local_path"] = str(tmp_path)
+
+    with patch("vnpatchmanager.steam_scanner.SteamScanner.get_installed_games", return_value={}), \
+         patch("vnpatchmanager.steam_scanner.SteamScanner.get_owned_games", return_value={}):
+        repo = PatchRepository(cm)
+        repo.refresh_patches()
+
+        # The patch should be attached to Part II (2730350) despite the folder name being Part IV
+        assert "2730350" in repo.available_patches
+        assert repo.available_patches["2730350"]["steam_app_id"] == "2730350"
+        assert repo.available_patches["2730350"]["game_name"] == "Liminal Border Part II"
+
+
 

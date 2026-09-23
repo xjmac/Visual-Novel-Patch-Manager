@@ -11,15 +11,22 @@ class CoverArtManager:
     """Handles fetching, caching, and generating Steam game cover art banners."""
 
     CACHE_DIR = Path.home() / ".cache" / "vnpatchmanager" / "covers"
+    STEAM_CAPSULE_URL = "https://cdn.akamai.steamstatic.com/steam/apps/{appid}/library_600x900_2x.jpg"
     STEAM_HEADER_URL = "https://cdn.akamai.steamstatic.com/steam/apps/{appid}/header.jpg"
     MAX_CACHE_SIZE = 250
 
-    def __init__(self, cache_dir: Path = None, session: Optional[requests.Session] = None):
+    def __init__(
+        self,
+        cache_dir: Path = None,
+        session: Optional[requests.Session] = None,
+        steamgriddb_client: Optional[Any] = None,
+    ):
         self.cache_dir = cache_dir or self.CACHE_DIR
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self._image_cache = {}
         self._fallback_cache = {}
         self._session = session or requests.Session()
+        self.steamgriddb_client = steamgriddb_client
 
     def _get(self, url: str, headers: Optional[dict] = None, timeout: int = 5):
         client = requests if is_mocked(requests.get) else self._session
@@ -71,7 +78,7 @@ class CoverArtManager:
     def get_cached_path(self, app_id: str) -> Path:
         return self.cache_dir / f"{app_id}.jpg"
 
-    def check_steam_grid(self, app_id: str, steam_root: Path = None) -> bool:
+    def check_steam_grid(self, app_id: str, steam_root: Path = None, portrait_only: bool = False) -> bool:
         """Checks if cover artwork already exists in Steam userdata grid directories."""
         if not steam_root:
             from .steam_scanner import SteamScanner
@@ -85,13 +92,16 @@ class CoverArtManager:
             return False
 
         cache_path = self.get_cached_path(str(app_id))
+        patterns = (f"{app_id}p.jpg", f"{app_id}p.png") if portrait_only else (
+            f"{app_id}p.jpg", f"{app_id}p.png", f"{app_id}.jpg", f"{app_id}.png", f"{app_id}_hero.jpg"
+        )
         for udir in userdata_dir.iterdir():
             if udir.is_dir() and udir.name.isdigit():
                 grid_dir = udir / "config" / "grid"
                 if not grid_dir.exists():
                     continue
 
-                for pattern in (f"{app_id}.jpg", f"{app_id}_hero.jpg", f"{app_id}p.jpg"):
+                for pattern in patterns:
                     cand = grid_dir / pattern
                     if cand.exists() and cand.stat().st_size > 0:
                         try:
@@ -130,22 +140,38 @@ class CoverArtManager:
             logger.warning(f"Failed fetching VNDB cover for {vn_id or title}: {e}")
         return None
 
-    def download_cover(self, app_id: str, game_data: Optional[dict] = None) -> bool:
-        """Attempts to download game cover banner from Steam Grid, Steam CDN, or VNDB Kana API."""
+    def download_cover(
+        self,
+        app_id: str,
+        game_data: Optional[dict] = None,
+        steamgriddb_client: Optional[Any] = None,
+    ) -> bool:
+        """Attempts to download game cover artwork (prioritizing 2:3 portrait capsules) from Steam Grid, Steam CDN, or VNDB Kana API."""
         cache_path = self.get_cached_path(str(app_id))
         if cache_path.exists() and cache_path.stat().st_size > 0:
-            return True
+            is_legacy_wide = False
+            try:
+                with Image.open(cache_path) as im:
+                    w, h = im.size
+                    if w > h * 1.15:
+                        is_legacy_wide = True
+            except Exception:
+                pass
+            if not is_legacy_wide:
+                return True
 
-        # 1. Check local Steam userdata grid files
-        if self.check_steam_grid(str(app_id)):
+        # 1. Check local Steam userdata grid files (prioritizing portrait {app_id}p.jpg)
+        if self.check_steam_grid(str(app_id), portrait_only=True):
             return True
 
         headers = {"User-Agent": "Mozilla/5.0 (Linux; SteamDeck; VNPM)"}
 
-        # 2. Try Steam CDN URLs for app_id
+        # 2. Try Steam Library Capsule URLs (600x900 / 300x450 portrait)
         cdn_urls = [
-            self.STEAM_HEADER_URL.format(appid=app_id),
-            f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg"
+            self.STEAM_CAPSULE_URL.format(appid=app_id),
+            f"https://cdn.akamai.steamstatic.com/steam/apps/{app_id}/library_600x900.jpg",
+            f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/library_600x900_2x.jpg",
+            f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/library_600x900.jpg",
         ]
         for url in cdn_urls:
             try:
@@ -158,47 +184,32 @@ class CoverArtManager:
             except Exception as e:
                 logger.warning(f"Failed downloading {url} for app {app_id}: {e}")
 
-        # 3. Try Steam Store API for app_id
-        try:
-            api_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&filters=basic"
-            resp = self._get(api_url, headers=headers, timeout=4)
-            if resp.status_code == 200:
-                data = resp.json()
-                app_data = data.get(str(app_id), {}).get("data", {})
-                img_url = app_data.get("header_image") or app_data.get("capsule_image")
-                if img_url:
-                    img_resp = self._get(img_url, headers=headers, timeout=4)
-                    if img_resp.status_code == 200 and len(img_resp.content) > 0:
-                        with open(cache_path, "wb") as f:
-                            f.write(img_resp.content)
-                        self.invalidate_memory_cache(str(app_id))
-                        return True
-        except Exception as e:
-            logger.warning(f"Failed fallback download for app {app_id}: {e}")
-
-        # 4. If game_data provided, check matched Steam AppID or VNDB cover
-        if game_data:
-            vndb_meta = game_data.get("vndb", {})
-            matched_aid = vndb_meta.get("matched_app_id")
-            if matched_aid and str(matched_aid) != str(app_id):
-                matched_urls = [
-                    self.STEAM_HEADER_URL.format(appid=matched_aid),
-                    f"https://cdn.cloudflare.steamstatic.com/steam/apps/{matched_aid}/header.jpg"
-                ]
-                for m_url in matched_urls:
-                    try:
-                        resp = self._get(m_url, headers=headers, timeout=4)
-                        if resp.status_code == 200 and len(resp.content) > 0:
+        # 3. Try SteamGridDB for high-res 600x900 capsule artwork
+        sgdb = steamgriddb_client or self.steamgriddb_client
+        if sgdb and hasattr(sgdb, "has_api_key") and sgdb.has_api_key():
+            try:
+                gid = sgdb.get_game_by_steam_appid(str(app_id))
+                if not gid and game_data and game_data.get("name"):
+                    results = sgdb.search_games(game_data["name"])
+                    if results:
+                        gid = results[0].get("id")
+                if gid:
+                    assets = sgdb.get_assets(gid, "capsule")
+                    if assets and assets[0].get("url"):
+                        sgdb_bytes = self.download_image_bytes(assets[0]["url"], timeout=8)
+                        if sgdb_bytes and len(sgdb_bytes) > 0:
                             with open(cache_path, "wb") as f:
-                                f.write(resp.content)
+                                f.write(sgdb_bytes)
                             self.invalidate_memory_cache(str(app_id))
-                            if game_data.get("is_non_steam"):
+                            if game_data and game_data.get("is_non_steam"):
                                 self.set_custom_artwork(str(app_id), cache_path)
                             return True
-                    except Exception:
-                        pass
+            except Exception as e:
+                logger.debug(f"SteamGridDB capsule fetch error for {app_id}: {e}")
 
-            # Fetch via VNDB Kana API
+        # 4. Try VNDB Kana API for Visual Novel cover art (authentic vertical package artwork)
+        if game_data:
+            vndb_meta = game_data.get("vndb", {})
             vn_id = vndb_meta.get("vn_id")
             game_name = game_data.get("name")
             vndb_cover_url = self.fetch_vndb_cover(vn_id=vn_id, title=game_name)
@@ -214,6 +225,65 @@ class CoverArtManager:
                         return True
                 except Exception as e:
                     logger.warning(f"Failed downloading VNDB cover {vndb_cover_url}: {e}")
+
+            matched_aid = vndb_meta.get("matched_app_id")
+            if matched_aid and str(matched_aid) != str(app_id):
+                matched_urls = [
+                    self.STEAM_CAPSULE_URL.format(appid=matched_aid),
+                    f"https://cdn.akamai.steamstatic.com/steam/apps/{matched_aid}/library_600x900.jpg",
+                    f"https://cdn.cloudflare.steamstatic.com/steam/apps/{matched_aid}/library_600x900_2x.jpg",
+                    f"https://cdn.cloudflare.steamstatic.com/steam/apps/{matched_aid}/library_600x900.jpg",
+                ]
+                for m_url in matched_urls:
+                    try:
+                        resp = self._get(m_url, headers=headers, timeout=4)
+                        if resp.status_code == 200 and len(resp.content) > 0:
+                            with open(cache_path, "wb") as f:
+                                f.write(resp.content)
+                            self.invalidate_memory_cache(str(app_id))
+                            if game_data.get("is_non_steam"):
+                                self.set_custom_artwork(str(app_id), cache_path)
+                            return True
+                    except Exception:
+                        pass
+
+        # 4. Try Steam Store API for capsule or fallback
+        try:
+            api_url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&filters=basic"
+            resp = self._get(api_url, headers=headers, timeout=4)
+            if resp.status_code == 200:
+                data = resp.json()
+                app_data = data.get(str(app_id), {}).get("data", {})
+                img_url = app_data.get("capsule_imagev5") or app_data.get("capsule_image") or app_data.get("header_image")
+                if img_url:
+                    img_resp = self._get(img_url, headers=headers, timeout=4)
+                    if img_resp.status_code == 200 and len(img_resp.content) > 0:
+                        with open(cache_path, "wb") as f:
+                            f.write(img_resp.content)
+                        self.invalidate_memory_cache(str(app_id))
+                        return True
+        except Exception as e:
+            logger.warning(f"Failed fallback download for app {app_id}: {e}")
+
+        # 5. Check local Steam userdata grid for any artwork format before downloading wide headers
+        if self.check_steam_grid(str(app_id), portrait_only=False):
+            return True
+
+        # 6. Last resort fallback to wide Steam header if no capsule or VNDB artwork found
+        fallback_headers = [
+            self.STEAM_HEADER_URL.format(appid=app_id),
+            f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg",
+        ]
+        for h_url in fallback_headers:
+            try:
+                resp = self._get(h_url, headers=headers, timeout=4)
+                if resp.status_code == 200 and len(resp.content) > 0:
+                    with open(cache_path, "wb") as f:
+                        f.write(resp.content)
+                    self.invalidate_memory_cache(str(app_id))
+                    return True
+            except Exception:
+                pass
 
         return False
 
@@ -299,8 +369,8 @@ class CoverArtManager:
             return False
 
         try:
-            # 1. If wide or capsule, update local VNPM cover cache
-            if asset_type in ("wide", "capsule"):
+            # 1. If capsule, update local VNPM cover cache
+            if asset_type == "capsule":
                 cache_path = self.get_cached_path(str(app_id))
                 pil_img.convert("RGB").save(cache_path, quality=95)
                 self.invalidate_memory_cache(str(app_id))

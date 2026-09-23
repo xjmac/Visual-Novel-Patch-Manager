@@ -1,10 +1,11 @@
 import json
-import time
-import requests
-import os
 import logging
+import os
+import re
+import time
 from pathlib import Path
-from .utils import find_database_file as _find_db, is_mocked
+import requests
+from .utils import extract_part_numbers, find_database_file as _find_db, is_mocked
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +14,7 @@ WITH steam_releases AS (
     SELECT DISTINCT
         e.value AS steam_appid,
         rel.id AS steam_rel_id,
+        rel.title AS steam_rel_title,
         rel.minage AS steam_minage,
         rel.uncensored AS steam_uncensored,
         COALESCE(rel.released, 20100101) AS steam_released,
@@ -25,7 +27,7 @@ WITH steam_releases AS (
     JOIN releases rel ON rel.id = re.id
     JOIN releases_vn rv ON rv.id = rel.id
     JOIN vn v ON v.id = rv.vid
-    WHERE e.name = 'steam'
+    WHERE e.site = 'steam'
 ),
 patch_releases AS (
     SELECT DISTINCT
@@ -45,6 +47,7 @@ patch_releases AS (
 SELECT
     sr.steam_appid,
     sr.steam_rel_id,
+    sr.steam_rel_title,
     sr.steam_minage,
     sr.steam_uncensored,
     sr.steam_released,
@@ -283,10 +286,20 @@ class VNDBScanner:
                 patch_released = row.get("patch_released") or 20300101
                 steam_released = row.get("steam_released") or 20100101
 
+                steam_rel_title = row.get("steam_rel_title") or ""
+                clean_steam_title = None
+                if steam_rel_title:
+                    clean_steam_title = re.sub(
+                        r"(?i)\s*[-~–—]\s*(?:censored|all-ages|steam|download|package|english)?\s*(?:edition|version|ver\.?|release)\b.*$",
+                        "",
+                        steam_rel_title,
+                    ).strip() or steam_rel_title.strip()
+
                 if aid not in self.cache:
                     self.cache[aid] = {
                         "vn_id": vn_id,
                         "vn_title": vn_title,
+                        "steam_title": clean_steam_title or row.get("steam_title"),
                         "vndb_url": f"https://vndb.org/{vn_id}",
                         "rating": rating_score,
                         "votecount": votes,
@@ -294,13 +307,35 @@ class VNDBScanner:
                         "is_natively_18": is_natively_18,
                         "has_18plus_en_patch": False,
                         "patch_releases": [],
-                        "cached_at": now
+                        "cached_at": now,
                     }
+                elif clean_steam_title and not self.cache[aid].get("steam_title"):
+                    self.cache[aid]["steam_title"] = clean_steam_title
 
                 if patch_id and not is_natively_18:
+                    title_for_part_check = clean_steam_title or self.cache[aid].get("steam_title") or ""
+                    parts_app = extract_part_numbers(title_for_part_check)
+                    parts_patch = extract_part_numbers(patch_title)
+                    is_part_conflict = bool(parts_app and parts_patch and not (parts_app & parts_patch))
+
                     is_relevant_patch = (
-                        (patch_released >= steam_released)
-                        or any(kw in patch_title.lower() for kw in ["steam", "uncensor", "restoration", "r-18", "adult patch", "18+ patch", "18+ dlc", "director"])
+                        not is_part_conflict
+                        and (
+                            (patch_released >= steam_released)
+                            or any(
+                                kw in patch_title.lower()
+                                for kw in [
+                                    "steam",
+                                    "uncensor",
+                                    "restoration",
+                                    "r-18",
+                                    "adult patch",
+                                    "18+ patch",
+                                    "18+ dlc",
+                                    "director",
+                                ]
+                            )
+                        )
                     )
                     if is_relevant_patch:
                         entry = self.cache[aid]
@@ -310,7 +345,7 @@ class VNDBScanner:
                                 "id": patch_id,
                                 "title": patch_title,
                                 "url": f"https://vndb.org/{patch_id}",
-                                "minage": minage
+                                "minage": minage,
                             })
 
             self.cache["_last_snapshot_sync"] = now

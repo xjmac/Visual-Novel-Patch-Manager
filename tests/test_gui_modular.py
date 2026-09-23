@@ -51,7 +51,7 @@ def test_gui_constants():
     assert COLOR_SURFACE_DARK.startswith("#")
     assert COLOR_PRIMARY_BLUE.startswith("#")
     assert THUMB_SIZE_CAPSULE == (180, 270)
-    assert GRID_CARD_BANNER_SIZE == (280, 130)
+    assert GRID_CARD_BANNER_SIZE == (180, 270)
 
 
 def test_steamgriddb_client_download_image_bytes():
