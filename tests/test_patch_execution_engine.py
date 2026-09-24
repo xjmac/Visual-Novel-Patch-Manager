@@ -336,10 +336,18 @@ def test_apply_patch_run_proton_executable_success(temp_config_dir, mock_steam_s
     assert "patch_installer.exe" in executed_cmd[2]
     assert executed_cmd[3] == "/SILENT"
 
-    # Assert Windows Z: path formatting
-    win_path = str(mock_steam_structure["game1"]["path"]).replace("/", "\\")
-    win_dir_expected = f'"Z:{win_path}"'
-    assert executed_cmd[4] == f"/DIR={win_dir_expected}"
+    # Proton must be aimed at the sibling staging tree, not the live install.
+    live_game = Path(mock_steam_structure["game1"]["path"])
+    dir_arg = executed_cmd[4]
+    assert dir_arg.startswith('/DIR="Z:')
+    assert dir_arg.endswith('"')
+    staged_win = dir_arg[len('/DIR="'):-1]
+    staged_linux = Path(staged_win[2:].replace("\\", "/"))
+    assert staged_linux != live_game
+    assert staged_linux.parent == live_game.parent
+    assert ".vnpm-stage-" in staged_linux.name
+    assert (live_game / "game.exe").read_text() == "dummy game executable"
+    assert (live_game / ".patch_applied.json").exists()
 
     # Assert Environment Variables
     assert executed_env["STEAM_COMPAT_APP_ID"] == "900001"
@@ -469,6 +477,7 @@ def test_apply_patch_cleans_up_temp_on_failure(temp_config_dir, mock_steam_struc
         "library_path": tmp_path / "Steam"
     }
     game_data["path"].mkdir(parents=True)
+    (game_data["path"] / "keep.txt").write_text("untouched")
 
     patch_data = {
         "steam_app_id": 1001,
@@ -494,9 +503,12 @@ def test_apply_patch_cleans_up_temp_on_failure(temp_config_dir, mock_steam_struc
         with pytest.raises(Exception):
             PatchExecutionEngine.apply_patch(game_data, patch_data, cm, lambda m: None)
 
-    assert len(created_temp_dirs) == 1
-    # Check that temp directory was cleaned up
-    assert not Path(created_temp_dirs[0]).exists()
+    assert created_temp_dirs
+    for created in created_temp_dirs:
+        assert not Path(created).exists()
+    assert (game_data["path"] / "keep.txt").read_text() == "untouched"
+    assert not (game_data["path"] / "missing.txt").exists()
+    assert not list(game_data["path"].parent.glob(f".{game_data['path'].name}.vnpm-stage-*"))
 
 
 def test_rollback_patch_success(temp_config_dir, mock_steam_structure, mock_patch_repo):
@@ -974,9 +986,12 @@ def test_restore_via_steam_purges_manifest_extraneous_files(tmp_path):
     orig_file2 = game_dir / "title.noa"
     orig_file2.write_text("vanilla title")
 
-    # Extraneous files added by patch
+    # Extraneous files added by patch. Saves must survive the purge.
     patch1_noa = game_dir / "patch1.noa"
     patch1_noa.write_text("18+ patch content")
+    save_file = game_dir / "game" / "saves" / "1-1.save"
+    save_file.parent.mkdir(parents=True)
+    save_file.write_text("played after backup")
     hpatch_exe = game_dir / "HPatch.exe"
     hpatch_exe.write_text("binary patch tool")
     tracking_file = game_dir / ".patch_applied.json"
@@ -1015,9 +1030,10 @@ def test_restore_via_steam_purges_manifest_extraneous_files(tmp_path):
     assert not hpatch_exe.exists()
     assert not tracking_file.exists()
 
-    # Original files must remain untouched
+    # Original files must remain untouched, including saves absent from the manifest
     assert orig_file1.exists()
     assert orig_file2.exists()
+    assert save_file.read_text() == "played after backup"
 
     # Post-restore, game is clean and no longer recognized as patched
     assert PatchExecutionEngine.get_patch_status(game_dir) is False

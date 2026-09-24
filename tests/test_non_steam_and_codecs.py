@@ -210,6 +210,123 @@ def test_cover_art_set_custom_artwork(mock_steam_userdata, tmp_path):
     assert (grid_dir / "555555_icon.jpg").exists()
 
 
+def _other_game_shortcuts() -> bytes:
+    return vdf.binary_dumps({
+        "shortcuts": {
+            "0": {
+                "appid": 1,
+                "AppName": "Other Game",
+                "Exe": '"/games/other.exe"',
+                "StartDir": '"/games/"',
+                "icon": "",
+                "ShortcutPath": "",
+                "LaunchOptions": "",
+                "IsHidden": 0,
+                "AllowDesktopConfig": 1,
+                "AllowOverlay": 1,
+                "OpenVR": 0,
+                "Devkit": 0,
+                "DevkitGameID": "",
+                "DevkitOverrideAppID": 0,
+                "LastPlayTime": 0,
+                "tags": {},
+            }
+        }
+    })
+
+
+def _novel_exe(tmp_path):
+    game_dir = tmp_path / "SyntheticNovelGame"
+    game_dir.mkdir()
+    exe = game_dir / "SyntheticNovelGame.exe"
+    exe.write_text("binary")
+    return game_dir
+
+
+def test_register_preserves_existing_shortcut(mock_steam_userdata, tmp_path):
+    shortcuts_file = mock_steam_userdata["config_dir"] / "shortcuts.vdf"
+    shortcuts_file.write_bytes(_other_game_shortcuts())
+    mgr = NonSteamManager(steam_root=mock_steam_userdata["steam_root"])
+    success, _, _ = mgr.register_non_steam_game(
+        game_path=_novel_exe(tmp_path),
+        app_name="Synthetic Novel Game",
+    )
+    assert success is True
+
+    with open(shortcuts_file, "rb") as handle:
+        shortcuts = vdf.binary_loads(handle.read())["shortcuts"]
+    names = {entry["AppName"]: entry["Exe"] for entry in shortcuts.values()}
+    assert names["Other Game"] == '"/games/other.exe"'
+    assert "Synthetic Novel Game" in names
+
+
+def test_register_refuses_corrupt_shortcuts_vdf(mock_steam_userdata, tmp_path):
+    shortcuts_file = mock_steam_userdata["config_dir"] / "shortcuts.vdf"
+    original = b"not-a-shortcuts-vdf"
+    shortcuts_file.write_bytes(original)
+    mgr = NonSteamManager(steam_root=mock_steam_userdata["steam_root"])
+    success, msg, appid_32 = mgr.register_non_steam_game(
+        game_path=_novel_exe(tmp_path),
+        app_name="Synthetic Novel Game",
+    )
+    assert success is False
+    assert "could not be updated safely" in msg
+    assert shortcuts_file.read_bytes() == original
+    assert list(shortcuts_file.parent.glob("*.vnpm-partial")) == []
+    assert appid_32 is not None
+    assert not (mock_steam_userdata["grid_dir"] / f"{appid_32}p.jpg").exists()
+    assert not (mock_steam_userdata["grid_dir"] / f"{appid_32}.jpg").exists()
+
+
+def test_register_write_failure_keeps_original_bytes(mock_steam_userdata, tmp_path):
+    shortcuts_file = mock_steam_userdata["config_dir"] / "shortcuts.vdf"
+    original = _other_game_shortcuts()
+    shortcuts_file.write_bytes(original)
+    mgr = NonSteamManager(steam_root=mock_steam_userdata["steam_root"])
+    with patch("os.replace", side_effect=OSError("disk full")):
+        success, _, _ = mgr.register_non_steam_game(
+            game_path=_novel_exe(tmp_path),
+            app_name="Synthetic Novel Game",
+        )
+    assert success is False
+    assert shortcuts_file.read_bytes() == original
+    assert list(shortcuts_file.parent.glob("*.vnpm-partial")) == []
+
+
+def test_remove_leaves_corrupt_shortcuts_vdf_unchanged(mock_steam_userdata):
+    shortcuts_file = mock_steam_userdata["config_dir"] / "shortcuts.vdf"
+    original = b"not-a-shortcuts-vdf"
+    shortcuts_file.write_bytes(original)
+    mgr = NonSteamManager(steam_root=mock_steam_userdata["steam_root"])
+    success, msg = mgr.remove_non_steam_game("Synthetic Novel Game", appid_32=1)
+    assert success is False
+    assert "not found" in msg
+    assert shortcuts_file.read_bytes() == original
+
+
+def test_remove_write_failure_keeps_grid_art(mock_steam_userdata, tmp_path):
+    portrait = tmp_path / "art.jpg"
+    portrait.write_bytes(b"portrait")
+    mgr = NonSteamManager(steam_root=mock_steam_userdata["steam_root"])
+    success, _, appid_32 = mgr.register_non_steam_game(
+        game_path=_novel_exe(tmp_path),
+        app_name="Synthetic Novel Game",
+        custom_artwork={"portrait": portrait},
+    )
+    assert success is True
+    portrait_out = mock_steam_userdata["grid_dir"] / f"{appid_32}p.jpg"
+    assert portrait_out.exists()
+    shortcuts_file = mock_steam_userdata["config_dir"] / "shortcuts.vdf"
+    before = shortcuts_file.read_bytes()
+
+    with patch("os.replace", side_effect=OSError("disk full")):
+        removed, _ = mgr.remove_non_steam_game("Synthetic Novel Game", appid_32=appid_32)
+
+    assert removed is False
+    assert shortcuts_file.read_bytes() == before
+    assert portrait_out.read_bytes() == b"portrait"
+
+
 def test_remove_non_steam_game(mock_steam_userdata, tmp_path):
     steam_root = mock_steam_userdata["steam_root"]
     game_dir = tmp_path / "SyntheticNovelGame"

@@ -3,7 +3,11 @@ Unit tests for SteamOS console-grade UX overhaul, theme system,
 poster card, game detail modal, and IPC service.
 """
 
+import hashlib
+import os
+import threading
 import time
+from pathlib import Path
 from unittest.mock import patch, MagicMock
 from PIL import Image
 import customtkinter as ctk
@@ -21,7 +25,10 @@ from vnpatchmanager.gui.theme import (
 )
 from vnpatchmanager.gui.views.poster_card import create_poster_card
 from vnpatchmanager.gui.views.game_detail_view import show_game_detail_modal
+from vnpatchmanager.codec_fixer import CodecFixer
+from vnpatchmanager.install_lock import LOCK_DIR
 from vnpatchmanager.ipc_service import VNPMService, IPCServer, VNPMClient
+from vnpatchmanager.patch_execution import PatchExecutionEngine
 
 
 def test_theme_system_tokens():
@@ -267,8 +274,133 @@ def test_ipc_service_methods(tmp_path):
     assert res_s["success"] is False
 
     # Test fix_codecs on missing app
-    res_c = service.fix_codecs("999999")
-    assert res_c["success"] is False
+    with patch.object(CodecFixer, "apply_video_fixes") as mock_fix:
+        res_c = service.fix_codecs("999999")
+        assert res_c["success"] is False
+        mock_fix.assert_not_called()
+
+
+def _steam_library_game(tmp_path, app_id="100"):
+    """One installed game whose library root is the Steam directory, not steamapps."""
+    steam_root = tmp_path / "Steam"
+    install = steam_root / "steamapps" / "common" / "Game"
+    install.mkdir(parents=True)
+    games = {
+        app_id: {
+            "name": "Game",
+            "path": install,
+            "library_path": steam_root,
+            "is_installed": True,
+            "is_non_steam": False,
+        }
+    }
+    patch_data = {
+        "steam_app_id": app_id,
+        "actions": [],
+        "patch_source_dir": str(tmp_path),
+    }
+    return steam_root, install, app_id, games, patch_data
+
+
+def _service_for_games(tmp_path, app_id, games, patch_data):
+    cm = MagicMock()
+    cm.config = {"mode": "local", "local_path": str(tmp_path)}
+    service = VNPMService(config_manager=cm)
+    service.repo.refresh_patches = MagicMock()
+    service.repo.available_patches = {str(app_id): patch_data}
+    service.steam_scanner.get_installed_games = MagicMock(return_value=games)
+    service.steam_scanner.get_owned_games = MagicMock(return_value={})
+    return service
+
+
+def test_apply_patch_uses_scanner_library_root(tmp_path):
+    """Proton's library root is the scanner value, not install.parent.parent."""
+    steam_root, install, app_id, games, patch_data = _steam_library_game(tmp_path)
+    service = _service_for_games(tmp_path, app_id, games, patch_data)
+    recorded = {}
+
+    def _record(game_data, patch, config_manager, log_callback=None):
+        recorded.update(game_data)
+        if log_callback:
+            log_callback("staged")
+        return True
+
+    with patch.object(PatchExecutionEngine, "apply_patch", side_effect=_record):
+        result = service.apply_patch(app_id)
+
+    assert result["success"] is True
+    assert result["logs"] == ["staged"]
+    assert Path(recorded["library_path"]) == steam_root
+    assert Path(recorded["library_path"]) != steam_root / "steamapps"
+    assert Path(recorded["library_path"]) != install.parent.parent
+
+
+def test_fix_codecs_calls_apply_video_fixes(tmp_path):
+    """fix_codecs uses CodecFixer.apply_video_fixes and no removed helpers."""
+    _steam_root, _install, app_id, games, patch_data = _steam_library_game(tmp_path, app_id="222")
+    service = _service_for_games(tmp_path, app_id, games, patch_data)
+    service.steam_scanner.get_steam_root = MagicMock(return_value=tmp_path / "Steam")
+
+    assert not hasattr(CodecFixer, "get_compat_data_path")
+    assert not hasattr(CodecFixer, "apply_all_fixes")
+
+    with patch.object(CodecFixer, "apply_video_fixes", return_value=(True, "fixed")) as mock_fix:
+        result = service.fix_codecs(app_id)
+
+    assert result["success"] is True
+    assert result["message"] == "fixed"
+    assert result["error"] is None
+    mock_fix.assert_called_once_with(str(app_id))
+
+
+def test_install_lock_blocks_second_caller(tmp_path):
+    """A second apply_patch for the same install waits until the first releases."""
+    _steam_root, install, app_id, games, patch_data = _steam_library_game(tmp_path, app_id="333")
+    first = _service_for_games(tmp_path, app_id, games, patch_data)
+    second = _service_for_games(tmp_path, app_id, games, patch_data)
+
+    first_inside = threading.Event()
+    release_first = threading.Event()
+    second_inside = threading.Event()
+    entered_early = threading.Event()
+    results = []
+
+    def _engine(*_args, **_kwargs):
+        if not first_inside.is_set():
+            first_inside.set()
+            release_first.wait(timeout=3)
+            return True
+        if not release_first.is_set():
+            entered_early.set()
+        second_inside.set()
+        return True
+
+    def _run(service):
+        results.append(service.apply_patch(app_id))
+
+    with patch.object(PatchExecutionEngine, "apply_patch", side_effect=_engine):
+        holder = threading.Thread(target=_run, args=(first,))
+        waiter = threading.Thread(target=_run, args=(second,))
+        holder.start()
+        assert first_inside.wait(timeout=3)
+        waiter.start()
+        time.sleep(0.25)
+        assert not second_inside.is_set()
+        assert not entered_early.is_set()
+        release_first.set()
+        assert second_inside.wait(timeout=3)
+        holder.join(timeout=3)
+        waiter.join(timeout=3)
+
+    assert not holder.is_alive()
+    assert not waiter.is_alive()
+    assert not entered_early.is_set()
+    assert len(results) == 2
+    assert all(item["success"] is True for item in results)
+
+    digest_path = LOCK_DIR / f"{hashlib.sha256(str(Path(install).resolve()).encode()).hexdigest()}.lock"
+    assert digest_path.exists()
+    assert os.stat(digest_path).st_mode & 0o777 == 0o600
 
 
 def test_ipc_server_client_roundtrip(tmp_path):
@@ -302,3 +434,37 @@ def test_ipc_server_client_roundtrip(tmp_path):
         server.stop()
         time.sleep(0.05)
         assert not sock_path.exists()
+
+
+def test_game_detail_modal_uses_get_hero_image(tmp_path):
+    """Verifies that GameDetailModal calls get_hero_image for its landscape banner."""
+    root = ctk.CTk()
+    root.withdraw()
+
+    cover_mgr = MagicMock()
+    pil_dummy = Image.new("RGB", (640, 220), color="purple")
+    ctk_img = ctk.CTkImage(light_image=pil_dummy, dark_image=pil_dummy, size=(640, 220))
+    cover_mgr.get_hero_image.return_value = ctk_img
+    root.cover_manager = cover_mgr
+    root.repo = MagicMock()
+    root.repo.available_patches = {}
+
+    game_data = {"name": "Muv-Luv photonflowers*", "path": str(tmp_path)}
+    status_info = {"is_patched": False, "vn_info": {}}
+
+    modal = show_game_detail_modal(
+        parent=root,
+        app_id="889700",
+        game_data=game_data,
+        status_info=status_info,
+    )
+
+    assert modal is not None
+    cover_mgr.get_hero_image.assert_called_once()
+    call_args, call_kwargs = cover_mgr.get_hero_image.call_args
+    assert call_args[0] == "889700"
+    assert call_kwargs.get("title") == "Muv-Luv photonflowers*"
+    assert call_kwargs.get("size") == (640, 220)
+
+    root.destroy()
+

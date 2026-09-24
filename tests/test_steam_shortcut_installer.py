@@ -6,6 +6,7 @@ from scripts.add_to_steam import (
     calculate_shortcut_appid,
     find_steam_userdata_dirs,
     register_shortcut,
+    remove_shortcut,
     APP_NAME,
 )
 
@@ -88,6 +89,88 @@ def test_register_shortcut_and_grid_artwork(tmp_path):
     with open(shortcuts_file, "rb") as f:
         data_2 = vdf.binary_loads(f.read())
     assert len(data_2.get("shortcuts", {})) == 1
+
+
+def _foreign_shortcut() -> bytes:
+    return vdf.binary_dumps({
+        "shortcuts": {
+            "0": {
+                "appid": 1,
+                "AppName": "Other Game",
+                "Exe": '"/games/other.exe"',
+                "StartDir": '"/games/"',
+                "icon": "",
+                "ShortcutPath": "",
+                "LaunchOptions": "",
+                "IsHidden": 0,
+                "AllowDesktopConfig": 1,
+                "AllowOverlay": 1,
+                "OpenVR": 0,
+                "Devkit": 0,
+                "DevkitGameID": "",
+                "DevkitOverrideAppID": 0,
+                "LastPlayTime": 0,
+                "tags": {},
+            }
+        }
+    })
+
+
+def test_register_shortcut_refuses_corrupt_vdf(tmp_path):
+    user_dir = tmp_path / "userdata" / "98765432"
+    config_dir = user_dir / "config"
+    config_dir.mkdir(parents=True)
+    shortcuts_file = config_dir / "shortcuts.vdf"
+    original = b"not-a-shortcuts-vdf"
+    shortcuts_file.write_bytes(original)
+
+    assets_dir = tmp_path / "assets"
+    assets_dir.mkdir()
+    (assets_dir / "steam_grid_portrait.jpg").write_bytes(b"mock_portrait")
+    (assets_dir / "steam_icon.jpg").write_bytes(b"mock_icon")
+    exe_path = tmp_path / "bin" / "vnpm"
+    exe_path.parent.mkdir(parents=True)
+    exe_path.write_text("#!/bin/bash\necho vnpm")
+
+    assert register_shortcut(exe_path, assets_dir, [user_dir]) == 0
+    assert shortcuts_file.read_bytes() == original
+    assert list(config_dir.glob("*.vnpm-partial")) == []
+    _, appid_32 = calculate_shortcut_appid(str(exe_path), APP_NAME)
+    assert not (config_dir / "grid" / f"{appid_32}p.jpg").exists()
+
+
+def test_register_shortcut_preserves_other_entries(tmp_path):
+    user_dir = tmp_path / "userdata" / "98765432"
+    config_dir = user_dir / "config"
+    config_dir.mkdir(parents=True)
+    shortcuts_file = config_dir / "shortcuts.vdf"
+    shortcuts_file.write_bytes(_foreign_shortcut())
+
+    assets_dir = tmp_path / "assets"
+    assets_dir.mkdir()
+    exe_path = tmp_path / "bin" / "vnpm"
+    exe_path.parent.mkdir(parents=True)
+    exe_path.write_text("#!/bin/bash\necho vnpm")
+
+    assert register_shortcut(exe_path, assets_dir, [user_dir]) == 1
+    with open(shortcuts_file, "rb") as handle:
+        shortcuts = vdf.binary_loads(handle.read())["shortcuts"]
+    names = {entry["AppName"]: entry["Exe"] for entry in shortcuts.values()}
+    assert names["Other Game"] == '"/games/other.exe"'
+    assert names[APP_NAME] == f'"{exe_path}"'
+
+
+def test_remove_shortcut_leaves_corrupt_vdf_unchanged(tmp_path):
+    user_dir = tmp_path / "userdata" / "98765432"
+    config_dir = user_dir / "config"
+    config_dir.mkdir(parents=True)
+    shortcuts_file = config_dir / "shortcuts.vdf"
+    original = b"not-a-shortcuts-vdf"
+    shortcuts_file.write_bytes(original)
+
+    with patch("scripts.add_to_steam.find_steam_userdata_dirs", return_value=[user_dir]):
+        assert remove_shortcut() == 0
+    assert shortcuts_file.read_bytes() == original
 
 
 def test_register_shortcut_no_profiles():

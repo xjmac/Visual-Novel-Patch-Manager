@@ -17,6 +17,12 @@ except ImportError:
     print("Warning: 'vdf' package not installed. Skipping Steam shortcut registration.")
     sys.exit(0)
 
+if getattr(vdf, "binary_dumps", None) is None:
+    print("Warning: 'vdf' package not installed. Skipping Steam shortcut registration.")
+    sys.exit(0)
+
+from vnpatchmanager.shortcuts_vdf import ShortcutsVdfError, load_shortcuts_vdf, write_shortcuts_vdf
+
 APP_NAME = "VN Patch Manager"
 
 
@@ -81,17 +87,11 @@ def register_shortcut(
         grid_dir.mkdir(parents=True, exist_ok=True)
 
         shortcuts_file = config_dir / "shortcuts.vdf"
-        shortcuts_data = {"shortcuts": {}}
-
-        if shortcuts_file.exists():
-            try:
-                with open(shortcuts_file, "rb") as f:
-                    content = f.read()
-                    if content:
-                        shortcuts_data = vdf.binary_loads(content)
-            except Exception as e:
-                print(f"Warning: Failed to parse {shortcuts_file}: {e}")
-                shortcuts_data = {"shortcuts": {}}
+        try:
+            shortcuts_data = load_shortcuts_vdf(shortcuts_file)
+        except ShortcutsVdfError as e:
+            print(f"Warning: Failed to parse {shortcuts_file}: {e}")
+            continue
 
         shortcuts = shortcuts_data.setdefault("shortcuts", {})
 
@@ -126,11 +126,9 @@ def register_shortcut(
             "tags": {}
         }
 
-        # Save binary shortcuts.vdf
         try:
-            with open(shortcuts_file, "wb") as f:
-                f.write(vdf.binary_dumps(shortcuts_data))
-        except Exception as e:
+            write_shortcuts_vdf(shortcuts_file, shortcuts_data)
+        except OSError as e:
             print(f"Error saving {shortcuts_file}: {e}")
             continue
 
@@ -170,9 +168,8 @@ def remove_shortcut(app_name: str = APP_NAME) -> int:
             continue
 
         try:
-            with open(shortcuts_file, "rb") as f:
-                shortcuts_data = vdf.binary_loads(f.read())
-        except Exception as e:
+            shortcuts_data = load_shortcuts_vdf(shortcuts_file)
+        except ShortcutsVdfError as e:
             print(f"Error reading {shortcuts_file}: {e}")
             continue
 
@@ -193,23 +190,22 @@ def remove_shortcut(app_name: str = APP_NAME) -> int:
         if len(new_shortcuts) != len(shortcuts):
             shortcuts_data["shortcuts"] = new_shortcuts
             try:
-                with open(shortcuts_file, "wb") as f:
-                    f.write(vdf.binary_dumps(shortcuts_data))
-                removed_count += 1
-                print(f"✅ Removed '{app_name}' from Steam profile {user_dir.name}.")
-            except Exception as e:
+                write_shortcuts_vdf(shortcuts_file, shortcuts_data)
+            except OSError as e:
                 print(f"Error saving {shortcuts_file}: {e}")
+                continue
+            removed_count += 1
+            print(f"✅ Removed '{app_name}' from Steam profile {user_dir.name}.")
 
-        # Remove deployed artwork
-        if grid_dir.exists():
-            for art_file in grid_dir.iterdir():
-                for aid in matched_appids:
-                    aid_32 = str(aid & 0xFFFFFFFF)
-                    if art_file.name.startswith(aid_32):
-                        try:
-                            art_file.unlink()
-                        except OSError:
-                            pass
+            if grid_dir.exists():
+                for art_file in grid_dir.iterdir():
+                    for aid in matched_appids:
+                        aid_32 = str(aid & 0xFFFFFFFF)
+                        if art_file.name.startswith(aid_32):
+                            try:
+                                art_file.unlink()
+                            except OSError:
+                                pass
 
     return removed_count
 
