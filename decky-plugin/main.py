@@ -63,13 +63,22 @@ class Plugin:
         return self._call(lambda: self.client.get_status())
 
     async def get_library_games(self) -> Dict[str, Any]:
+        """Queue a library scan and return its job id. The panel polls get_job."""
+        return self._call(lambda: self.client.scan_games())
+
+    async def get_job(self, job_id: str) -> Dict[str, Any]:
+        return self._call(lambda: self.client.get_job(job_id))
+
+    async def list_jobs(self) -> Dict[str, Any]:
         if not self.client:
             return _failure(_MISSING_CLIENT)
         try:
-            games = self.client.scan_games()
+            jobs = self.client.list_jobs()
         except Exception as exc:
             return _failure(str(exc))
-        return {"success": True, "games": games}
+        if not isinstance(jobs, list):
+            return _failure("Job list was not returned")
+        return {"success": True, "jobs": jobs}
 
     async def apply_patch(self, app_id: str) -> Dict[str, Any]:
         return self._call(lambda: self.client.apply_patch(app_id))

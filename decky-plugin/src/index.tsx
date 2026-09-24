@@ -7,7 +7,7 @@ import {
   ButtonItem,
   Field,
 } from "@decky/ui";
-import { useState, useEffect, VFC } from "react";
+import { useState, useEffect, useRef, VFC } from "react";
 import { FaBook } from "react-icons/fa";
 
 interface GameEntry {
@@ -25,12 +25,23 @@ interface PluginPayload {
   error?: string;
   games?: Record<string, GameEntry>;
   message?: string;
+  job_id?: string;
+  method?: string;
+  status?: string;
+  result?: unknown;
+  logs?: string[];
+  jobs?: PluginPayload[];
 }
+
+const POLL_MS = 1000;
+const MUTATION_METHODS = ["apply_patch", "restore_backup", "fix_codecs", "restore_via_steam"];
 
 const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
   const [games, setGames] = useState<Record<string, GameEntry>>({});
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState("Ready");
+  const alive = useRef(true);
+  const timer = useRef<number | undefined>(undefined);
 
   const resultError = (result: PluginPayload | undefined, fallback: string) => {
     if (result && typeof result.error === "string" && result.error) {
@@ -39,22 +50,118 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
     return fallback;
   };
 
-  const refreshLibrary = async () => {
+  const clearTimer = () => {
+    if (timer.current !== undefined) {
+      window.clearTimeout(timer.current);
+      timer.current = undefined;
+    }
+  };
+
+  const delay = () => new Promise<void>((resolve) => {
+    timer.current = window.setTimeout(() => resolve(), POLL_MS);
+  });
+
+  const callMethod = async (method: string, args: object): Promise<PluginPayload | undefined> => {
+    const res = await serverAPI.callPluginMethod<object, PluginPayload>(method, args);
+    if (!res.success) {
+      return undefined;
+    }
+    return res.result;
+  };
+
+  const latestLog = (job: PluginPayload, fallback: string) => {
+    if (job.logs && job.logs.length > 0) {
+      return job.logs[job.logs.length - 1];
+    }
+    return fallback;
+  };
+
+  const pollJob = async (jobId: string, fallback: string): Promise<PluginPayload | undefined> => {
+    while (alive.current) {
+      const job = await callMethod("get_job", { job_id: jobId });
+      if (!alive.current) {
+        return undefined;
+      }
+      if (!job || job.success === false) {
+        setStatusMsg(resultError(job, "Lost contact with the daemon"));
+        return undefined;
+      }
+      if (job.status === "queued" || job.status === "running") {
+        setStatusMsg(latestLog(job, fallback));
+        await delay();
+        continue;
+      }
+      return job;
+    }
+    return undefined;
+  };
+
+  const applyScanResult = (job: PluginPayload) => {
+    const gamesResult = job.result;
+    if (
+      job.status === "succeeded" &&
+      gamesResult &&
+      typeof gamesResult === "object" &&
+      !Array.isArray(gamesResult)
+    ) {
+      const found = gamesResult as Record<string, GameEntry>;
+      setGames(found);
+      setStatusMsg("Found " + Object.keys(found).length + " VNs");
+      return;
+    }
+    if (job.status === "failed") {
+      setStatusMsg(job.error || "Scan failed");
+      return;
+    }
+    if (job.status === "missing") {
+      setStatusMsg("Job missing");
+      return;
+    }
+    setStatusMsg("Scan failed");
+  };
+
+  const finishMutation = (job: PluginPayload, done: string) => {
+    if (job.status === "missing") {
+      setStatusMsg("Job missing");
+      return false;
+    }
+    if (job.status === "failed") {
+      setStatusMsg(job.error || "Unknown error");
+      return false;
+    }
+    const outcome = job.result as { success?: boolean; error?: string } | undefined;
+    if (outcome && outcome.success) {
+      setStatusMsg(done);
+      return true;
+    }
+    setStatusMsg((outcome && outcome.error) || "Unknown error");
+    return false;
+  };
+
+  const runScan = async () => {
     setLoading(true);
     setStatusMsg("Scanning visual novels...");
     try {
-      const res = await serverAPI.callPluginMethod<{}, PluginPayload>("get_library_games", {});
-      const payload = res.result;
-      if (res.success && payload?.success && payload.games && typeof payload.games === "object") {
-        setGames(payload.games);
-        setStatusMsg("Found " + Object.keys(payload.games).length + " VNs");
-      } else {
-        setStatusMsg(resultError(payload, "Daemon not connected (run 'vnpm --daemon')"));
+      const ticket = await callMethod("get_library_games", {});
+      if (!alive.current) {
+        return;
+      }
+      if (!ticket?.success || !ticket.job_id) {
+        setStatusMsg(resultError(ticket, "Daemon not connected (run 'vnpm --daemon')"));
+        return;
+      }
+      const job = await pollJob(ticket.job_id, "Scanning visual novels...");
+      if (job) {
+        applyScanResult(job);
       }
     } catch (e) {
-      setStatusMsg("Error: " + e);
+      if (alive.current) {
+        setStatusMsg("Error: " + e);
+      }
     } finally {
-      setLoading(false);
+      if (alive.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -62,29 +169,91 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
     setLoading(true);
     setStatusMsg(working);
     try {
-      const res = await serverAPI.callPluginMethod<{ app_id: string }, PluginPayload>(method, { app_id: appId });
-      if (res.success && res.result?.success) {
-        setStatusMsg(done);
-        await refreshLibrary();
-      } else {
-        setStatusMsg(resultError(res.result, "Unknown error"));
+      const ticket = await callMethod(method, { app_id: appId });
+      if (!alive.current) {
+        return;
+      }
+      if (!ticket?.success || !ticket.job_id) {
+        setStatusMsg(resultError(ticket, "Unknown error"));
+        return;
+      }
+      const job = await pollJob(ticket.job_id, working);
+      if (job && finishMutation(job, done)) {
+        await runScan();
       }
     } catch (e) {
-      setStatusMsg("Error: " + e);
+      if (alive.current) {
+        setStatusMsg("Error: " + e);
+      }
     } finally {
-      setLoading(false);
+      if (alive.current) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    refreshLibrary();
+    alive.current = true;
+
+    const boot = async () => {
+      try {
+        const listed = await callMethod("list_jobs", {});
+        const jobs = listed?.jobs ?? [];
+        const mutation = jobs.find((job) =>
+          !!job.job_id &&
+          (job.status === "queued" || job.status === "running") &&
+          !!job.method &&
+          MUTATION_METHODS.indexOf(job.method) >= 0
+        );
+        if (mutation?.job_id) {
+          setLoading(true);
+          const job = await pollJob(mutation.job_id, "Working...");
+          if (job && finishMutation(job, "Finished")) {
+            await runScan();
+          } else if (alive.current) {
+            setLoading(false);
+          }
+          return;
+        }
+        const scan = jobs.find((job) =>
+          job.method === "scan_games" &&
+          !!job.job_id &&
+          (job.status === "queued" || job.status === "running")
+        );
+        if (scan?.job_id) {
+          setLoading(true);
+          setStatusMsg("Scanning visual novels...");
+          const job = await pollJob(scan.job_id, "Scanning visual novels...");
+          if (job) {
+            applyScanResult(job);
+          }
+          if (alive.current) {
+            setLoading(false);
+          }
+          return;
+        }
+      } catch (e) {
+        if (alive.current) {
+          setStatusMsg("Error: " + e);
+        }
+      }
+      if (alive.current) {
+        await runScan();
+      }
+    };
+
+    boot();
+    return () => {
+      alive.current = false;
+      clearTimer();
+    };
   }, []);
 
   return (
     <PanelSection title="VN Patch Manager">
       <PanelSectionRow>
         <Field label="Status" description={statusMsg}>
-          <ButtonItem onClick={refreshLibrary} disabled={loading}>
+          <ButtonItem onClick={runScan} disabled={loading}>
             Refresh
           </ButtonItem>
         </Field>

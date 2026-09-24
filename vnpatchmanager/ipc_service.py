@@ -6,9 +6,12 @@ and local automation without requiring a GUI.
 
 import os
 import json
+import queue
 import socket
 import logging
 import threading
+import time
+import uuid
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
@@ -21,10 +24,20 @@ from .patch_execution import PatchExecutionEngine
 from .codec_fixer import CodecFixer
 from .install_lock import install_lock
 from .vndb_scanner import VNDBScanner
+from .types import GameData, PatchData, ScanGameSummary
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_SOCKET_PATH = Path.home() / ".cache" / "vnpatchmanager" / "vnpm.sock"
+
+_JOB_METHODS = frozenset({
+    "scan_games",
+    "apply_patch",
+    "restore_backup",
+    "restore_via_steam",
+    "fix_codecs",
+})
+_FINISHED_JOB_CAP = 64
 
 
 class VNPMService:
@@ -46,7 +59,7 @@ class VNPMService:
             "steam_root": str(self.steam_scanner.get_steam_root() or ""),
         }
 
-    def scan_games(self) -> Dict[str, Any]:
+    def scan_games(self) -> Dict[str, ScanGameSummary]:
         """Scans visual novels and available patches, returning full library state."""
         self.repo.refresh_patches()
         installed_steam = self.steam_scanner.get_installed_games()
@@ -97,7 +110,7 @@ class VNPMService:
             return ""
         return str(raw)
 
-    def _engine_game(self, gdata: Dict[str, Any], app_id: str) -> Dict[str, Any]:
+    def _engine_game(self, gdata: ScanGameSummary, app_id: str) -> GameData:
         """Game dict the engines accept, using the scanned library root."""
         return {
             "name": gdata.get("name", "Unknown"),
@@ -108,14 +121,14 @@ class VNPMService:
             "is_installed": gdata.get("is_installed", True),
         }
 
-    def _use_provided_game(self, game_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _use_provided_game(self, game_data: GameData) -> GameData:
         """Copy a caller-supplied game record and fill a missing library root."""
         resolved = dict(game_data)
         if resolved.get("library_path") in (None, ""):
             resolved["library_path"] = ""
         return resolved
 
-    def _scanned_game(self, app_id: str) -> Optional[Dict[str, Any]]:
+    def _scanned_game(self, app_id: str) -> Optional[GameData]:
         games = self.scan_games()
         gdata = games.get(str(app_id))
         if not gdata or not gdata.get("path"):
@@ -150,8 +163,8 @@ class VNPMService:
     def apply_patch(
         self,
         app_id: str,
-        game_data: Optional[Dict[str, Any]] = None,
-        patch_data: Optional[Dict[str, Any]] = None,
+        game_data: Optional[GameData] = None,
+        patch_data: Optional[PatchData] = None,
         log_callback: Optional[Callable[[str], None]] = None,
     ) -> Dict[str, Any]:
         """Applies available patch for the specified app_id.
@@ -188,7 +201,7 @@ class VNPMService:
     def restore_backup(
         self,
         app_id: str,
-        game_data: Optional[Dict[str, Any]] = None,
+        game_data: Optional[GameData] = None,
         log_callback: Optional[Callable[[str], None]] = None,
     ) -> Dict[str, Any]:
         """Rolls back a game to its clean pre-patch backup state."""
@@ -209,8 +222,8 @@ class VNPMService:
     def restore_via_steam(
         self,
         app_id: str,
-        game_data: Optional[Dict[str, Any]] = None,
-        patch_data: Optional[Dict[str, Any]] = None,
+        game_data: Optional[GameData] = None,
+        patch_data: Optional[PatchData] = None,
         log_callback: Optional[Callable[[str], None]] = None,
     ) -> Dict[str, Any]:
         """Purges patch artifacts and initiates Steam validation for a game."""
@@ -234,7 +247,11 @@ class VNPMService:
             ),
         )
 
-    def fix_codecs(self, app_id: str) -> Dict[str, Any]:
+    def fix_codecs(
+        self,
+        app_id: str,
+        log_callback: Optional[Callable[[str], None]] = None,
+    ) -> Dict[str, Any]:
         """Applies Proton video codec fixes for a game prefix."""
         game_data = self._scanned_game(app_id)
         if game_data is None:
@@ -252,7 +269,7 @@ class VNPMService:
             outcome["message"] = message
             return success
 
-        result = self._run_mutation(str(game_data.get("path") or ""), None, _apply)
+        result = self._run_mutation(str(game_data.get("path") or ""), log_callback, _apply)
         if "message" not in outcome:
             return result
         success = bool(outcome["success"])
@@ -267,8 +284,14 @@ class IPCServer:
         self.service = service or VNPMService()
         self.socket_path = socket_path or DEFAULT_SOCKET_PATH
         self.running = False
+        self._accepting = False
         self._server_sock = None
         self._thread = None
+        self._jobs: Dict[str, Dict[str, Any]] = {}
+        self._job_order: list[str] = []
+        self._jobs_lock = threading.Lock()
+        self._work: queue.Queue = queue.Queue()
+        self._worker: Optional[threading.Thread] = None
 
     def start(self, background: bool = False):
         """Starts the socket server listening for connections."""
@@ -288,6 +311,9 @@ class IPCServer:
         except OSError:
             pass
 
+        self._accepting = True
+        self._worker = threading.Thread(target=self._worker_loop, name="VNPMJobQueue", daemon=True)
+        self._worker.start()
         self.running = True
         logger.info(f"VNPM IPC server listening on {self.socket_path}")
 
@@ -298,8 +324,16 @@ class IPCServer:
             self._accept_loop()
 
     def stop(self):
-        """Stops the IPC server and cleans up the socket."""
+        """Stops the IPC server and cleans up the socket.
+
+        Queued work is left behind. The job already inside the engine is not
+        cancelled. One sentinel asks the worker to exit once that job returns.
+        """
+        self._accepting = False
         self.running = False
+        if self._worker is not None:
+            self._work.put(None)
+            self._worker = None
         if self._server_sock:
             try:
                 self._server_sock.close()
@@ -346,18 +380,16 @@ class IPCServer:
         params = req.get("params", {})
 
         try:
+            if not isinstance(params, dict):
+                params = {}
             if method == "get_status":
                 res = self.service.get_status()
-            elif method == "scan_games":
-                res = self.service.scan_games()
-            elif method == "apply_patch":
-                res = self.service.apply_patch(params.get("app_id"))
-            elif method == "restore_backup":
-                res = self.service.restore_backup(params.get("app_id"))
-            elif method == "restore_via_steam":
-                res = self.service.restore_via_steam(params.get("app_id"))
-            elif method == "fix_codecs":
-                res = self.service.fix_codecs(params.get("app_id"))
+            elif method in _JOB_METHODS:
+                res = self._enqueue(method, params)
+            elif method == "get_job":
+                res = self._get_job(params.get("job_id"))
+            elif method == "list_jobs":
+                res = self._list_jobs()
             elif method == "stop":
                 threading.Thread(target=self.stop, daemon=True).start()
                 res = {"status": "stopping"}
@@ -368,6 +400,120 @@ class IPCServer:
         except Exception as e:
             logger.error(f"Error handling RPC method {method}: {e}")
             return {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32000, "message": str(e)}}
+
+    def _enqueue(self, method: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Record a job and hand it to the single worker. The caller returns now."""
+        if not self._accepting:
+            raise RuntimeError("server is stopping")
+        job_id = uuid.uuid4().hex
+        record = {
+            "job_id": job_id,
+            "method": method,
+            "status": "queued",
+            "result": None,
+            "error": None,
+            "logs": [],
+            "params": dict(params),
+        }
+        with self._jobs_lock:
+            self._jobs[job_id] = record
+            self._job_order.append(job_id)
+        self._work.put(job_id)
+        return {"job_id": job_id, "method": method, "status": "queued"}
+
+    def _worker_loop(self) -> None:
+        while True:
+            job_id = self._work.get()
+            if job_id is None:
+                return
+            try:
+                self._execute_job(job_id)
+            except Exception as exc:
+                logger.error("Job %s crashed outside the service call: %s", job_id, exc, exc_info=True)
+
+    def _execute_job(self, job_id: str) -> None:
+        with self._jobs_lock:
+            record = self._jobs.get(job_id)
+            if record is None:
+                return
+            record["status"] = "running"
+            method = record["method"]
+            params = dict(record["params"])
+
+        def _log(message: str) -> None:
+            with self._jobs_lock:
+                current = self._jobs.get(job_id)
+                if current is not None:
+                    current["logs"].append(str(message))
+
+        try:
+            result = self._call_service(method, params, _log)
+        except Exception as exc:
+            logger.error("Job %s (%s) failed: %s", job_id, method, exc)
+            with self._jobs_lock:
+                current = self._jobs.get(job_id)
+                if current is not None:
+                    current["status"] = "failed"
+                    current["error"] = str(exc)
+                self._trim_finished_locked()
+            return
+
+        with self._jobs_lock:
+            current = self._jobs.get(job_id)
+            if current is not None:
+                current["status"] = "succeeded"
+                current["result"] = result
+            self._trim_finished_locked()
+
+    def _call_service(self, method: str, params: Dict[str, Any], log: Callable[[str], None]) -> Any:
+        app_id = params.get("app_id")
+        if method == "scan_games":
+            return self.service.scan_games()
+        if method == "apply_patch":
+            return self.service.apply_patch(app_id, log_callback=log)
+        if method == "restore_backup":
+            return self.service.restore_backup(app_id, log_callback=log)
+        if method == "restore_via_steam":
+            return self.service.restore_via_steam(app_id, log_callback=log)
+        if method == "fix_codecs":
+            return self.service.fix_codecs(app_id, log_callback=log)
+        raise RuntimeError(f"Method '{method}' is not a job")
+
+    def _public_locked(self, record: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "job_id": record["job_id"],
+            "method": record["method"],
+            "status": record["status"],
+            "result": record["result"],
+            "error": record["error"],
+            "logs": list(record["logs"]),
+        }
+
+    def _get_job(self, job_id: Any) -> Dict[str, Any]:
+        if not isinstance(job_id, str) or not job_id:
+            shown = job_id if isinstance(job_id, str) else None
+            return {"job_id": shown, "status": "missing"}
+        with self._jobs_lock:
+            record = self._jobs.get(job_id)
+            if record is None:
+                return {"job_id": job_id, "status": "missing"}
+            return self._public_locked(record)
+
+    def _list_jobs(self) -> list:
+        with self._jobs_lock:
+            return [self._public_locked(self._jobs[job_id]) for job_id in reversed(self._job_order)]
+
+    def _trim_finished_locked(self) -> None:
+        finished = [
+            job_id for job_id in self._job_order
+            if self._jobs[job_id]["status"] in ("succeeded", "failed")
+        ]
+        extra = len(finished) - _FINISHED_JOB_CAP
+        if extra <= 0:
+            return
+        for job_id in finished[:extra]:
+            self._job_order.remove(job_id)
+            del self._jobs[job_id]
 
 
 class VNPMClient:
@@ -410,23 +556,46 @@ class VNPMClient:
 
         raise RuntimeError("Connection closed without response")
 
+    def submit(self, method: str, params: Optional[Dict[str, Any]] = None, timeout: float = 30.0) -> Dict[str, Any]:
+        """Enqueue long work. Returns the job ticket without waiting for it."""
+        return self.call(method, params, timeout=timeout)
+
+    def get_job(self, job_id: str, timeout: float = 30.0) -> Dict[str, Any]:
+        return self.call("get_job", {"job_id": job_id}, timeout=timeout)
+
+    def list_jobs(self, timeout: float = 30.0) -> list:
+        return self.call("list_jobs", timeout=timeout)
+
+    def wait_job(self, job_id: str, timeout: float, poll_interval: float = 0.25) -> Dict[str, Any]:
+        """Poll until the job is terminal. The Decky plugin does not call this."""
+        deadline = time.monotonic() + timeout
+        while True:
+            record = self.get_job(job_id)
+            status = record.get("status") if isinstance(record, dict) else None
+            if status in ("succeeded", "failed", "missing"):
+                return record
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(f"Job {job_id} still {status} after {timeout} seconds")
+            time.sleep(min(poll_interval, remaining))
+
     def get_status(self) -> Dict[str, Any]:
         return self.call("get_status")
 
     def scan_games(self) -> Dict[str, Any]:
-        return self.call("scan_games")
+        return self.submit("scan_games")
 
     def apply_patch(self, app_id: str) -> Dict[str, Any]:
-        return self.call("apply_patch", {"app_id": str(app_id)})
+        return self.submit("apply_patch", {"app_id": str(app_id)})
 
     def restore_backup(self, app_id: str) -> Dict[str, Any]:
-        return self.call("restore_backup", {"app_id": str(app_id)})
+        return self.submit("restore_backup", {"app_id": str(app_id)})
 
     def restore_via_steam(self, app_id: str) -> Dict[str, Any]:
-        return self.call("restore_via_steam", {"app_id": str(app_id)})
+        return self.submit("restore_via_steam", {"app_id": str(app_id)})
 
     def fix_codecs(self, app_id: str) -> Dict[str, Any]:
-        return self.call("fix_codecs", {"app_id": str(app_id)})
+        return self.submit("fix_codecs", {"app_id": str(app_id)})
 
 
 def run_ipc_server():

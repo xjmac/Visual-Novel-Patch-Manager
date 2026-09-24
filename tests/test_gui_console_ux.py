@@ -548,16 +548,181 @@ def test_ipc_server_client_roundtrip(tmp_path):
         assert status_res["status"] == "ok"
         assert status_res["version"] == "0.2.0"
 
-        games_res = client.scan_games()
+        scan_ticket = client.scan_games()
+        assert scan_ticket["status"] == "queued"
+        assert scan_ticket["method"] == "scan_games"
+        scan_job = client.wait_job(scan_ticket["job_id"], timeout=3)
+        assert scan_job["status"] == "succeeded"
+        games_res = scan_job["result"]
         assert "123" in games_res
         assert games_res["123"]["name"] == "Game 123"
 
-        steam_res = client.restore_via_steam("123")
-        assert steam_res["success"] is True
+        steam_ticket = client.restore_via_steam("123")
+        assert steam_ticket["status"] == "queued"
+        steam_job = client.wait_job(steam_ticket["job_id"], timeout=3)
+        assert steam_job["status"] == "succeeded"
+        assert steam_job["result"]["success"] is True
     finally:
         server.stop()
         time.sleep(0.05)
         assert not sock_path.exists()
+
+
+def _job_server(tmp_path, service, name="jobs.sock"):
+    sock_path = tmp_path / name
+    server = IPCServer(service=service, socket_path=sock_path)
+    server.start(background=True)
+    deadline = time.monotonic() + 2
+    while not sock_path.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    return server, VNPMClient(socket_path=sock_path)
+
+
+def test_ipc_job_returns_before_the_service_call(tmp_path):
+    """A queued apply returns a job id while the service method is still blocked."""
+    started = threading.Event()
+    release = threading.Event()
+
+    def block(app_id, log_callback=None):
+        started.set()
+        assert release.wait(timeout=3)
+        if log_callback is not None:
+            log_callback("copied files")
+        return {"success": True, "logs": ["copied files"]}
+
+    service = MagicMock()
+    service.get_status.return_value = {"status": "ok"}
+    service.apply_patch.side_effect = block
+    server, client = _job_server(tmp_path, service)
+    try:
+        ticket = client.apply_patch("42")
+        assert ticket["method"] == "apply_patch"
+        assert ticket["status"] == "queued"
+        assert ticket["job_id"]
+        assert started.wait(timeout=3)
+
+        mid = client.get_job(ticket["job_id"])
+        assert mid["status"] in ("queued", "running")
+
+        started_at = time.monotonic()
+        status = client.get_status()
+        assert status["status"] == "ok"
+        assert time.monotonic() - started_at < 1
+
+        release.set()
+        done = client.wait_job(ticket["job_id"], timeout=3)
+        assert done["status"] == "succeeded"
+        assert done["result"]["success"] is True
+        assert "copied files" in done["logs"]
+    finally:
+        release.set()
+        server.stop()
+
+
+def test_ipc_jobs_run_one_at_a_time(tmp_path):
+    """The second mutation stays queued until the first service call returns."""
+    entered = threading.Event()
+    release = threading.Event()
+    calls = []
+
+    def apply(app_id, log_callback=None):
+        calls.append(str(app_id))
+        if len(calls) == 1:
+            entered.set()
+            assert release.wait(timeout=3)
+        return {"success": True}
+
+    service = MagicMock()
+    service.apply_patch.side_effect = apply
+    server, client = _job_server(tmp_path, service, name="serial.sock")
+    try:
+        first = client.apply_patch("1")
+        assert entered.wait(timeout=3)
+        second = client.apply_patch("2")
+        assert client.get_job(second["job_id"])["status"] == "queued"
+        listed = client.list_jobs()
+        assert [job["job_id"] for job in listed[:2]] == [second["job_id"], first["job_id"]]
+
+        release.set()
+        done = client.wait_job(second["job_id"], timeout=3)
+        assert done["status"] == "succeeded"
+        assert calls == ["1", "2"]
+    finally:
+        release.set()
+        server.stop()
+
+
+def test_ipc_job_keeps_service_failure_and_exception_apart(tmp_path):
+    """A success-false dict is a finished job. An exception is status failed."""
+    service = MagicMock()
+    service.apply_patch.return_value = {"success": False, "error": "no patch"}
+    service.restore_backup.side_effect = RuntimeError("disk failed")
+    server, client = _job_server(tmp_path, service, name="fail.sock")
+    try:
+        quiet = client.apply_patch("9")
+        assert quiet["status"] == "queued"
+        done = client.wait_job(quiet["job_id"], timeout=3)
+        assert done["status"] == "succeeded"
+        assert done["result"]["success"] is False
+        assert done["result"]["error"] == "no patch"
+
+        blown = client.restore_backup("9")
+        assert blown["status"] == "queued"
+        failed = client.wait_job(blown["job_id"], timeout=3)
+        assert failed["status"] == "failed"
+        assert failed["error"] == "disk failed"
+
+        missing = client.get_job("missing-job")
+        assert missing == {"job_id": "missing-job", "status": "missing"}
+    finally:
+        server.stop()
+
+
+def test_ipc_finished_jobs_drop_the_oldest(tmp_path):
+    """Finished jobs stay in memory up to the cap, oldest first."""
+    service = MagicMock()
+    service.scan_games.return_value = {"library": True}
+    server, client = _job_server(tmp_path, service, name="cap.sock")
+    try:
+        ids = [client.scan_games()["job_id"] for _ in range(70)]
+        last = client.wait_job(ids[-1], timeout=3)
+        assert last["status"] == "succeeded"
+        listed = client.list_jobs()
+        kept = {job["job_id"] for job in listed}
+        assert len(listed) == 64
+        assert ids[-1] in kept
+        assert ids[0] not in kept
+    finally:
+        server.stop()
+
+
+def test_decky_plugin_methods_return_job_tickets():
+    """Decky apply and scan return the daemon ticket and do not wait for it."""
+    import asyncio
+    import importlib.util
+
+    path = Path(__file__).resolve().parents[1] / "decky-plugin" / "main.py"
+    spec = importlib.util.spec_from_file_location("decky_vnpm_main", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+
+    plugin = module.Plugin()
+    client = MagicMock()
+    client.scan_games.return_value = {"job_id": "scan-1", "method": "scan_games", "status": "queued"}
+    client.apply_patch.return_value = {"job_id": "apply-1", "method": "apply_patch", "status": "queued"}
+    client.wait_job.side_effect = AssertionError("plugin waited on the job")
+    plugin.client = client
+
+    applied = asyncio.run(plugin.apply_patch("42"))
+    assert applied["success"] is True
+    assert applied["job_id"] == "apply-1"
+    assert applied["status"] == "queued"
+
+    scanned = asyncio.run(plugin.get_library_games())
+    assert scanned["success"] is True
+    assert scanned["job_id"] == "scan-1"
+    client.wait_job.assert_not_called()
 
 
 def test_game_detail_modal_uses_get_hero_image(tmp_path):
