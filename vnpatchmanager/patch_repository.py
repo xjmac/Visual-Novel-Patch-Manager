@@ -4,6 +4,9 @@ import re
 import difflib
 import logging
 from pathlib import Path
+from typing import Dict
+
+from .types import PatchData
 from .utils import extract_part_numbers, find_database_file as _find_db
 
 logger = logging.getLogger(__name__)
@@ -26,7 +29,7 @@ class PatchRepository:
     def __init__(self, config_manager, bundled_db_path: Path = None):
         self.cm = config_manager
         self.bundled_db_path = bundled_db_path or self.find_database_file()
-        self.available_patches = {} # Map AppID -> Patch config data
+        self.available_patches: Dict[str, PatchData] = {}
         self._title_map = None
 
     ROMAN_NUMERAL_MAP = {

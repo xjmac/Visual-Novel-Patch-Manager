@@ -11,6 +11,7 @@ from typing import Any, Callable, Dict, Optional, Union
 from .steam_scanner import SteamScanner
 from .backup_manager import BackupManager
 from .exceptions import BackupError, PatchSecurityError, PatchExtractionError, ProtonExecutionError
+from .types import GameData, PatchData
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +163,7 @@ class PatchExecutionEngine:
     @staticmethod
     def get_patch_status(
         game_install_path: Optional[Union[str, Path]],
-        patch_data: Optional[Dict[str, Any]] = None,
+        patch_data: Optional[PatchData] = None,
         vn_info: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """
@@ -375,15 +376,15 @@ class PatchExecutionEngine:
         return candidates[0][1]
 
     @staticmethod
-    def rollback_patch(game_data, log_callback=None):
+    def rollback_patch(game_data: GameData, log_callback=None):
         """Rolls back applied patches and restores original game files."""
         install_dir = Path(game_data['path'])
         return BackupManager.restore_backup(install_dir, log_callback)
 
     @staticmethod
     def restore_via_steam(
-        game_data: Dict[str, Any],
-        patch_data: Optional[Dict[str, Any]] = None,
+        game_data: GameData,
+        patch_data: Optional[PatchData] = None,
         log_callback: Optional[Callable[[str], None]] = None,
     ) -> bool:
         """
@@ -632,8 +633,8 @@ class PatchExecutionEngine:
 
     @staticmethod
     def apply_patch(
-        game_data: Dict[str, Any],
-        patch_data: Dict[str, Any],
+        game_data: GameData,
+        patch_data: PatchData,
         config_manager: Any,
         log_callback: Callable[[str], None],
     ) -> bool:

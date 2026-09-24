@@ -28,7 +28,7 @@ from .exceptions import (
     SteamScanError,
     ShortcutsVdfError,
 )
-from .types import GameData, PatchData, VNInfo
+from .types import GameData, PatchAction, PatchData, ScanGameSummary, VNInfo
 
 __all__ = [
     "CONFIG_DIR",
@@ -61,7 +61,9 @@ __all__ = [
     "SteamScanError",
     "ShortcutsVdfError",
     "GameData",
+    "PatchAction",
     "PatchData",
+    "ScanGameSummary",
     "VNInfo",
 ]
 
