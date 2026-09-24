@@ -29,13 +29,25 @@ A lightweight, automated Visual Novel patch manager designed to streamline patch
   - Wine/Proton execution support for Windows `.exe` patch installers.
 
 - **🛡️ Built-in Backup & Rollback System**
-  - Automatically snapshots replaced/modified files before applying any patch.
-  - Single-click restore to easily revert a game to its clean, unpatched state.
-  - Steam file validation trigger to verify integrity through Steam client if needed.
+  - Applies a patch to a full clone of the install, writes the backup only after every action succeeds, then swaps that checked tree into place.
+  - Restore builds a checked tree beside the install and swaps it in only after the staged hashes match.
+  - Keeps live saves: any path under `save`, `saves`, or `savedata`, and any `*.save` file, is copied from the running install and is left in place across rollback.
+  - Can ask Steam to validate the game's files when a local restore is not enough.
+
+- **🎯 Non-Steam Shortcuts**
+  - The installer adds VN Patch Manager itself as a non-Steam game, with portrait, wide capsule, hero, and icon art.
+  - The app can also register a visual novel in Steam's `shortcuts.vdf`. The update is written to a temporary file and moved into place with `os.replace`. Steam rewrites `shortcuts.vdf` when it exits.
 
 - **📱 Steam Deck & Touch-Friendly UI**
-  - Modern, responsive dark UI built with CustomTkinter.
-  - Seamless operation in Steam Deck Desktop Mode (or launched via Game Mode as a non-Steam shortcut).
+  - Modern, responsive dark UI built with CustomTkinter, including gamepad navigation in the desktop window.
+  - Seamless operation in Steam Deck Desktop Mode, or launched via Game Mode as a non-Steam shortcut.
+
+- **🔌 Game Mode Daemon**
+  - `vnpm --daemon` (also `--service`) serves JSON-RPC on `~/.cache/vnpatchmanager/vnpm.sock` for the Decky Loader plugin. Long calls return a job id, and the plugin polls for the result.
+  - Plugin setup is documented in [decky-plugin/README.md](decky-plugin/README.md).
+
+- **🎬 Codec Fixes**
+  - Applies Proton video codec fixes for a Steam app from the desktop window or from the daemon.
 
 ---
 
@@ -72,6 +84,8 @@ cd Visual-Novel-Patch-Manager
 ./start.sh
 ```
 
+`./start.sh` creates a repository-local `.venv`, installs `requirements.txt`, and forwards any extra arguments to the app (for example `./start.sh --list`).
+
 ---
 
 ## 🗑️ Uninstallation
@@ -84,24 +98,47 @@ curl -sSL https://raw.githubusercontent.com/xjmac/Visual-Novel-Patch-Manager/mai
 
 ---
 
+## ⌨️ Command Line
+
+With the package installed, `vnpm` opens the CustomTkinter window. `python vnpatchmanager.py` does the same. `pyproject.toml` registers the `vnpm` console script as `vnpatchmanager:main`.
+
+| Flag | Behavior |
+|---|---|
+| `--version`, `-V` | Print the version and exit |
+| `--debug`, `-d` | Enable verbose debug logging |
+| `--list`, `-l` | List detected visual novels and patch statuses without opening the window |
+| `--daemon`, `--service` | Run the headless JSON-RPC daemon for the Decky Loader plugin |
+| `--sync-vndb` | Force-refresh the local VNDB database snapshot |
+| `--export-licenses [FILE]` | Read Steam AppIDs from `FILE` (default `raw_licenses.txt`) and export names |
+| `--output-file`, `-o FILE` | Output path for `--export-licenses` (default `my_steam_games.txt`) |
+
+---
+
 ## 🛠️ Project Structure
 
 ```text
 Visual-Novel-Patch-Manager/
 ├── vnpatchmanager/           # Core application package
-│   ├── backup_manager.py     # Backup creation, tracking, and rollback logic
-│   ├── config_manager.py     # User settings and persistent configurations
-│   ├── cover_art_manager.py  # Local caching & fetching of game cover art
-│   ├── gui.py                # CustomTkinter graphical user interface
-│   ├── patch_execution.py    # Patch installation (archive extract & exe execution)
-│   ├── patch_repository.py   # Local & SMB repository patch discovery
-│   ├── steam_scanner.py      # Steam library & game manifest detection
-│   └── vndb_scanner.py       # VNDB database matching & metadata lookup
-├── scripts/                  # Helper utilities & database sync tools
-├── tests/                    # Automated unit & integration tests
-├── start.sh                  # One-click automated setup & launcher script
+│   ├── gui/                  # CustomTkinter window, gamepad navigation, modals
+│   ├── cli.py                # vnpm entry: GUI, --list, --daemon, VNDB, licenses
+│   ├── ipc_service.py        # JSON-RPC daemon and job queue
+│   ├── patch_execution.py    # Staging apply, confinement, Proton, Steam verify
+│   ├── backup_manager.py     # Save-safe restore and interrupted-swap recovery
+│   ├── non_steam_manager.py  # shortcuts.vdf registration
+│   ├── codec_fixer.py        # Proton video codec fixes
+│   ├── steam_scanner.py      # Steam library and game manifest detection
+│   ├── vndb_scanner.py       # VNDB database matching and metadata lookup
+│   ├── patch_repository.py   # Local and SMB patch discovery
+│   └── cover_art_manager.py  # Local caching and fetching of game cover art
+├── decky-plugin/             # SteamOS Game Mode Quick Access plugin
+├── scripts/                  # add_to_steam.py and VNDB/license helpers
+├── tests/                    # Automated unit and integration tests
+├── install.sh                # User install into ~/.local/share/vnpm/venv
+├── uninstall.sh              # Remove the app, venv, and Steam shortcuts
+├── start.sh                  # Dev launcher; creates .venv from requirements.txt
+├── pyproject.toml            # Package metadata, vnpm script, dev extra
+├── requirements.txt          # Runtime dependencies only
 ├── vnpatchmanager.py         # Main entry point script
-├── requirements.txt          # Python dependencies
 ├── LICENSE                   # MIT License
 └── README.md                 # Project documentation
 ```
@@ -110,11 +147,13 @@ Visual-Novel-Patch-Manager/
 
 ## 🧪 Running Tests
 
-To run the test suite:
+`./start.sh` creates `.venv` and installs runtime packages from `requirements.txt`. That environment does not include pytest. `./install.sh` uses `~/.local/share/vnpm/venv` and also does not include pytest.
+
+Install the `dev` extra (pytest, pytest-cov, and ruff), then run the suite with the same interpreter. Python 3.10 through 3.14 are supported. CustomTkinter tests need a display; on a headless machine, `xvfb-run` provides one:
 
 ```bash
-source .venv/bin/activate
-pytest --cov=vnpatchmanager tests/
+python -m pip install -e ".[dev]"
+xvfb-run -a python -m pytest --cov=vnpatchmanager --cov-fail-under=80 tests/
 ```
 
 ---
