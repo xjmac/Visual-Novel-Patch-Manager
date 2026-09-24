@@ -8,10 +8,11 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
     - uses: actions/checkout@v4
@@ -24,7 +25,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -e ".[dev]"
+        python -m pip install -e ".[dev]"
 
     - name: Lint with ruff
       run: |
@@ -32,4 +33,7 @@ jobs:
 
     - name: Run tests with coverage
       run: |
-        pytest --cov=vnpatchmanager --cov-report=term-missing --cov-fail-under=80 tests/
+        sudo apt-get update
+        sudo apt-get install -y xvfb
+        python -m pytest --version
+        xvfb-run -a python -m pytest --cov=vnpatchmanager --cov-report=term-missing --cov-fail-under=80 tests/

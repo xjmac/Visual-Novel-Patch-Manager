@@ -46,7 +46,12 @@ def show_artwork_browser_modal(app, app_id: str, game_data: dict):
     modal.geometry("820x620")
     modal.configure(fg_color=COLOR_MODAL_CANVAS)
     modal.transient(app)
-    modal.grab_set()
+    # A withdrawn parent is not viewable yet. Grab is optional; opening the dialog is not.
+    modal.update_idletasks()
+    try:
+        modal.grab_set()
+    except Exception:
+        logger.debug("Could not grab the artwork browser")
 
     # Modal Header Bar
     header_frame = ctk.CTkFrame(modal, fg_color=COLOR_SURFACE_DARK, corner_radius=0, height=60)

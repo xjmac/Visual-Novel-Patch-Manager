@@ -14,6 +14,14 @@ from .exceptions import BackupError, PatchSecurityError, PatchExtractionError, P
 
 logger = logging.getLogger(__name__)
 
+# Patch sources are copied here so Proton does not mmap a NAS mount and so
+# extraction does not fill the small /tmp tmpfs used on SteamOS. The game
+# clone stays a sibling of the install; this directory is not that clone.
+PATCH_SOURCE_ROOT = Path.home() / ".cache" / "vnpatchmanager" / "patch-sources"
+
+_SUPPORTED_ARCHIVE_SUFFIXES = ".zip, .tar, .tar.gz, .tgz, .tar.bz2, .tbz2, .tar.xz, .txz, .7z, .rar"
+
+
 class PatchExecutionEngine:
     """Handles the actual copying of files and execution of Proton patches."""
 
@@ -59,6 +67,97 @@ class PatchExecutionEngine:
                             f"Path traversal detected: {item_path.name} escapes {extract_dir}"
                         )
 
+    @staticmethod
+    def _resolve_action_destination(destination: Optional[str], root: Path) -> Path:
+        """Resolve a patch destination and require it to stay inside ``root``.
+
+        ``{game_dir}`` is replaced with ``root``. A relative path is anchored at
+        ``root``. ``resolve()`` collapses ``..`` and follows existing symlinks.
+        Nothing is created.
+        """
+        root_resolved = Path(root).resolve()
+        raw = destination if destination else "{game_dir}"
+        replaced = raw.replace("{game_dir}", str(root_resolved))
+        candidate = Path(replaced)
+        if not candidate.is_absolute():
+            candidate = root_resolved / candidate
+        resolved = candidate.resolve()
+        if not resolved.is_relative_to(root_resolved):
+            raise PatchSecurityError(
+                f"Destination escapes the install directory: {destination}"
+            )
+        return resolved
+
+    @staticmethod
+    def _reject_archive_member(name: str, extract_dir: Path) -> None:
+        """Reject a member name that would leave ``extract_dir``. Does not extract."""
+        normalized = (name or "").replace("\\", "/").strip()
+        if not normalized:
+            raise PatchSecurityError("Archive member path is empty")
+        drive_prefix = len(normalized) >= 2 and normalized[0].isalpha() and normalized[1] == ":"
+        if normalized.startswith("/") or drive_prefix:
+            raise PatchSecurityError(f"Archive member escapes the extract directory: {name}")
+        if any(part == ".." for part in normalized.split("/")):
+            raise PatchSecurityError(f"Archive member escapes the extract directory: {name}")
+        extract_resolved = Path(extract_dir).resolve()
+        candidate = (extract_resolved / normalized).resolve()
+        if not candidate.is_relative_to(extract_resolved):
+            raise PatchSecurityError(f"Archive member escapes the extract directory: {name}")
+
+    @staticmethod
+    def _run_archive_listing(cmd: list, archive_name: str) -> str:
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+        except OSError as exc:
+            raise PatchExtractionError(f"Failed to list archive {archive_name}: {exc}") from exc
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or "").strip()
+            raise PatchExtractionError(
+                f"Failed to list archive {archive_name} (code {result.returncode}). {detail}"
+            )
+        return result.stdout or ""
+
+    @staticmethod
+    def _list_7z_members(archive: Path) -> list:
+        stdout = PatchExecutionEngine._run_archive_listing(
+            ["7z", "l", "-ba", "-slt", str(archive)],
+            archive.name,
+        )
+        ignored = {archive.name, str(archive), str(archive.resolve())}
+        names = []
+        for line in stdout.splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("Path = "):
+                continue
+            value = stripped.split(" = ", 1)[1]
+            if value in ignored:
+                continue
+            names.append(value)
+        if not names:
+            raise PatchExtractionError(f"7z listing produced no members: {archive.name}")
+        return names
+
+    @staticmethod
+    def _list_unrar_members(archive: Path) -> list:
+        stdout = PatchExecutionEngine._run_archive_listing(
+            ["unrar", "lb", "-p-", str(archive)],
+            archive.name,
+        )
+        names = [line.strip() for line in stdout.splitlines() if line.strip()]
+        if not names:
+            raise PatchExtractionError(f"unrar listing produced no members: {archive.name}")
+        return names
+
+    @staticmethod
+    def _reject_listed_members(names: list, extract_dir: Path) -> None:
+        for name in names:
+            PatchExecutionEngine._reject_archive_member(name, extract_dir)
 
     @staticmethod
     def get_patch_status(
@@ -92,6 +191,11 @@ class PatchExecutionEngine:
                 atype = action.get("type")
                 source = action.get("source", "")
                 destination = action.get("destination", "{game_dir}/")
+                try:
+                    PatchExecutionEngine._resolve_action_destination(destination, game_path)
+                except PatchSecurityError as exc:
+                    logger.warning("Skipping patch status check outside the install: %s", exc)
+                    continue
 
                 dest_clean = destination.replace("{game_dir}", "").strip("/\\")
                 target_dir = (game_path / dest_clean) if dest_clean else game_path
@@ -338,18 +442,22 @@ class PatchExecutionEngine:
             patch_src_dir = Path(patch_data.get("patch_source_dir", ""))
             for action in actions:
                 atype = action.get('type')
+                if atype not in ('copy_file', 'copy_directory', 'extract_archive'):
+                    continue
+                raw_dest = action.get('destination', '')
+                try:
+                    dest_path = PatchExecutionEngine._resolve_action_destination(raw_dest, install_dir)
+                except PatchSecurityError as exc:
+                    logger.warning("Skipping patch cleanup outside the install: %s", exc)
+                    continue
                 if atype == 'copy_file':
-                    dest_str = action.get('destination', '').replace("{game_dir}", str(install_dir))
-                    dest_path = Path(dest_str)
                     if dest_path.exists() and not dest_path.is_dir():
                         try:
                             dest_path.unlink()
                         except OSError as e:
                             logger.warning(f"Failed to unlink {dest_path}: {e}")
                 elif atype == 'copy_directory':
-                    dest_str = action.get('destination', '').replace("{game_dir}", str(install_dir))
-                    dest_path = Path(dest_str)
-                    if dest_path.exists() and dest_path != install_dir:
+                    if dest_path.exists() and dest_path != install_dir.resolve():
                         try:
                             shutil.rmtree(dest_path, ignore_errors=True)
                         except OSError as e:
@@ -357,8 +465,6 @@ class PatchExecutionEngine:
                 elif atype == 'extract_archive':
                     source_arc = action.get('source', '')
                     arc_path = patch_src_dir / source_arc if patch_src_dir.exists() else None
-                    dest_str = action.get('destination', '').replace("{game_dir}", str(install_dir))
-                    dest_path = Path(dest_str) if dest_str else install_dir
                     if arc_path and arc_path.exists():
                         try:
                             if source_arc.lower().endswith((".zip", ".tar.gz", ".tgz")):
@@ -561,11 +667,14 @@ class PatchExecutionEngine:
             stage_root = game_staging
             PatchExecutionEngine._require_live_unchanged(install_dir, live_baseline)
 
-            # Stage patch sources locally (Crucial for Proton executing off NAS mounts).
-            # This temp stays on the default temp filesystem. The game shadow above is
-            # a sibling of the install so the final rename stays on one filesystem.
+            # Stage patch sources on the home cache disk. Proton must not mmap a NAS
+            # mount, and the default temp directory is a small tmpfs on SteamOS.
+            # The game shadow above stays a sibling of the install so the final
+            # rename stays on one filesystem.
             log_callback("Staging patch files to a local temporary folder...")
-            temp_dir = tempfile.mkdtemp(prefix=f"vnpatch_{app_id}_")
+            PATCH_SOURCE_ROOT.mkdir(parents=True, exist_ok=True)
+            os.chmod(PATCH_SOURCE_ROOT, 0o700)
+            temp_dir = tempfile.mkdtemp(prefix=f"vnpatch_{app_id}_", dir=PATCH_SOURCE_ROOT)
             working_source = Path(temp_dir)
 
             if mode == 'smb':
@@ -590,9 +699,8 @@ class PatchExecutionEngine:
 
                 if action_type == 'copy_file':
                     src_file = working_source / action.get('source', '')
-                    # Resolve {game_dir} template
-                    dest_str = action.get('destination', '').replace("{game_dir}", str(stage_root))
-                    dest_path = Path(dest_str)
+                    raw_dest = action.get('destination', '')
+                    dest_path = PatchExecutionEngine._resolve_action_destination(raw_dest, stage_root)
 
                     logger.debug(f"Attempting to copy from '{src_file}' to '{dest_path}'")
 
@@ -603,7 +711,7 @@ class PatchExecutionEngine:
                         PatchExecutionEngine._merge_tree(src_file, dest_path)
                     else:
                         # If destination ends in a slash, treat it as a directory to copy into
-                        if dest_str.endswith('/') or dest_path.is_dir():
+                        if raw_dest.endswith('/') or dest_path.is_dir():
                             dest_path.mkdir(parents=True, exist_ok=True)
                             BackupManager._place_file(src_file, dest_path / src_file.name)
                         else:
@@ -611,8 +719,8 @@ class PatchExecutionEngine:
 
                 elif action_type == 'extract_inno_setup':
                     exe_file = working_source / action.get('source', '')
-                    dest_str = action.get('destination', '{game_dir}').replace("{game_dir}", str(stage_root))
-                    dest_path = Path(dest_str)
+                    raw_dest = action.get('destination', '{game_dir}')
+                    dest_path = PatchExecutionEngine._resolve_action_destination(raw_dest, stage_root)
 
                     if not shutil.which("innoextract"):
                         raise PatchExtractionError("innoextract is not installed. Please install it (sudo pacman -S innoextract).")
@@ -658,39 +766,62 @@ class PatchExecutionEngine:
 
                 elif action_type == 'extract_archive':
                     arc_file = working_source / action.get('source', '')
-                    dest_str = action.get('destination', '{game_dir}').replace("{game_dir}", str(stage_root))
-                    dest_path = Path(dest_str)
-                    dest_path.mkdir(parents=True, exist_ok=True)
+                    raw_dest = action.get('destination', '{game_dir}')
+                    dest_path = PatchExecutionEngine._resolve_action_destination(raw_dest, stage_root)
 
                     if not arc_file.exists():
                         raise PatchExtractionError(f"Archive file not found: {arc_file}")
 
                     log_callback(f"Extracting {arc_file.name} to game directory...")
                     extract_tmp = working_source / f"extracted_{arc_file.stem}"
-                    extract_tmp.mkdir(exist_ok=True)
+                    arc_name = arc_file.name.lower()
 
-                    if arc_file.name.lower().endswith('.zip'):
+                    if arc_name.endswith('.zip'):
                         import zipfile
+                        dest_path.mkdir(parents=True, exist_ok=True)
+                        extract_tmp.mkdir(exist_ok=True)
                         with zipfile.ZipFile(arc_file, 'r') as zf:
                             PatchExecutionEngine._safe_extract_zip(zf, extract_tmp)
-                    elif arc_file.name.lower().endswith(('.tar.gz', '.tar.bz2', '.tar.xz', '.tar', '.tgz', '.tbz2', '.txz')):
+                    elif arc_name.endswith(('.tar.gz', '.tar.bz2', '.tar.xz', '.tar', '.tgz', '.tbz2', '.txz')):
                         import tarfile
+                        dest_path.mkdir(parents=True, exist_ok=True)
+                        extract_tmp.mkdir(exist_ok=True)
                         with tarfile.open(arc_file, 'r') as tar:
                             PatchExecutionEngine._safe_extract_tar(tar, extract_tmp)
                     elif arc_file.suffix.lower() == '.7z':
-                        if shutil.which("7z"):
-                            subprocess.run(["7z", "x", "-y", f"-o{extract_tmp}", str(arc_file)], check=True)
-                        else:
+                        if not shutil.which("7z"):
                             raise PatchExtractionError("7z tool not found. Please install p7zip (sudo pacman -S p7zip).")
+                        PatchExecutionEngine._reject_listed_members(
+                            PatchExecutionEngine._list_7z_members(arc_file),
+                            extract_tmp,
+                        )
+                        dest_path.mkdir(parents=True, exist_ok=True)
+                        extract_tmp.mkdir(exist_ok=True)
+                        subprocess.run(["7z", "x", "-y", f"-o{extract_tmp}", str(arc_file)], check=True)
                     elif arc_file.suffix.lower() == '.rar':
                         if shutil.which("unrar"):
+                            PatchExecutionEngine._reject_listed_members(
+                                PatchExecutionEngine._list_unrar_members(arc_file),
+                                extract_tmp,
+                            )
+                            dest_path.mkdir(parents=True, exist_ok=True)
+                            extract_tmp.mkdir(exist_ok=True)
                             subprocess.run(["unrar", "x", "-o+", str(arc_file), str(extract_tmp)], check=True)
                         elif shutil.which("7z"):
+                            PatchExecutionEngine._reject_listed_members(
+                                PatchExecutionEngine._list_7z_members(arc_file),
+                                extract_tmp,
+                            )
+                            dest_path.mkdir(parents=True, exist_ok=True)
+                            extract_tmp.mkdir(exist_ok=True)
                             subprocess.run(["7z", "x", "-y", f"-o{extract_tmp}", str(arc_file)], check=True)
                         else:
                             raise PatchExtractionError("unrar or 7z tool not found. Please install unrar or 7z.")
                     else:
-                        shutil.unpack_archive(str(arc_file), str(extract_tmp))
+                        raise PatchExtractionError(
+                            f"Unsupported archive type '{arc_file.name}'. "
+                            f"Supported suffixes: {_SUPPORTED_ARCHIVE_SUFFIXES}."
+                        )
 
                     PatchExecutionEngine._validate_extracted_tree(extract_tmp)
 

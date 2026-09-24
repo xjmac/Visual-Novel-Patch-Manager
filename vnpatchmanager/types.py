@@ -1,8 +1,7 @@
 """Type definitions and TypedDict schemas for Visual Novel Patch Manager."""
 
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
-from typing_extensions import TypedDict
+from typing import Any, Callable, Dict, List, Optional, TypedDict, Union
 
 LogCallback = Callable[[str], None]
 

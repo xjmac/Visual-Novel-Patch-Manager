@@ -37,7 +37,12 @@ def show_add_non_steam_modal(app):
     modal.geometry("620x520")
     modal.configure(fg_color=COLOR_SURFACE_DARK)
     modal.transient(app)
-    modal.grab_set()
+    # A withdrawn parent is not viewable yet. Grab is optional; opening the dialog is not.
+    modal.update_idletasks()
+    try:
+        modal.grab_set()
+    except Exception:
+        logger.debug("Could not grab the non-Steam modal")
 
     ctk.CTkLabel(
         modal,
