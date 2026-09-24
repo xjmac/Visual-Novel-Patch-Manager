@@ -1,7 +1,11 @@
 import pytest
 from pathlib import Path
+from typing import Dict, List, get_type_hints
 from unittest.mock import MagicMock
 import vnpatchmanager
+from vnpatchmanager.ipc_service import VNPMService
+from vnpatchmanager.patch_execution import PatchExecutionEngine
+from vnpatchmanager.types import GameData, PatchAction, PatchData, ScanGameSummary
 from vnpatchmanager.utils import find_database_file, is_mocked
 from vnpatchmanager.exceptions import (
     VNPatchError,
@@ -52,6 +56,19 @@ def test_exception_hierarchy():
         assert isinstance(err, VNPatchError)
         assert isinstance(err, Exception)
         assert str(err) == "Test error"
+
+
+def test_boundary_typed_dicts():
+    apply_hints = get_type_hints(PatchExecutionEngine.apply_patch)
+    assert apply_hints["game_data"] is GameData
+    assert apply_hints["patch_data"] is PatchData
+
+    scan_hints = get_type_hints(VNPMService.scan_games)
+    assert scan_hints["return"] == Dict[str, ScanGameSummary]
+
+    assert get_type_hints(PatchAction)["args"] == List[str]
+    assert vnpatchmanager.ScanGameSummary is ScanGameSummary
+    assert vnpatchmanager.PatchAction is PatchAction
 
 
 def test_init_lazy_getattr():
