@@ -147,13 +147,26 @@ class GameDetailModal(ctk.CTkToplevel):
         # 1. Hero Artwork Banner
         cover_mgr = getattr(self.parent, "cover_manager", None)
         if cover_mgr:
-            hero_img = cover_mgr.get_cover_image(
-                self.app_id,
-                title=self.game_data.get("name", ""),
-                size=(min(760, HERO_BANNER_SIZE[0]), HERO_BANNER_SIZE[1]),
-            )
-            lbl_hero = ctk.CTkLabel(scroll_content, text="", image=hero_img, corner_radius=CARD_RADIUS)
-            lbl_hero.grid(row=0, column=0, sticky="ew", pady=(0, 12))
+            hero_img = None
+            if hasattr(cover_mgr, "get_hero_image"):
+                hero_img = cover_mgr.get_hero_image(
+                    self.app_id,
+                    title=self.game_data.get("name", ""),
+                    size=(min(760, HERO_BANNER_SIZE[0]), HERO_BANNER_SIZE[1]),
+                    game_data=self.game_data,
+                )
+            if not isinstance(hero_img, ctk.CTkImage) and hasattr(cover_mgr, "get_cover_image"):
+                cover_img = cover_mgr.get_cover_image(
+                    self.app_id,
+                    title=self.game_data.get("name", ""),
+                    size=(min(760, HERO_BANNER_SIZE[0]), HERO_BANNER_SIZE[1]),
+                )
+                if isinstance(cover_img, ctk.CTkImage):
+                    hero_img = cover_img
+
+            if isinstance(hero_img, ctk.CTkImage):
+                lbl_hero = ctk.CTkLabel(scroll_content, text="", image=hero_img, corner_radius=CARD_RADIUS)
+                lbl_hero.grid(row=0, column=0, sticky="ew", pady=(0, 12))
 
         # 2. Metadata Cards Container
         meta_container = ctk.CTkFrame(

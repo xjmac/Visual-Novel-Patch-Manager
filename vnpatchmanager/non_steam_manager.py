@@ -11,6 +11,7 @@ try:
 except ImportError:
     vdf = None
 
+from .shortcuts_vdf import ShortcutsVdfError, load_shortcuts_vdf, write_shortcuts_vdf
 from .steam_scanner import SteamScanner
 from .vndb_scanner import VNDBScanner
 from .cover_art_manager import CoverArtManager
@@ -250,16 +251,11 @@ class NonSteamManager:
             grid_dir.mkdir(parents=True, exist_ok=True)
 
             shortcuts_file = config_dir / "shortcuts.vdf"
-            shortcuts_dict = {"shortcuts": {}}
-
-            if shortcuts_file.exists():
-                try:
-                    with open(shortcuts_file, "rb") as f:
-                        data = vdf.binary_loads(f.read())
-                        if isinstance(data, dict) and "shortcuts" in data:
-                            shortcuts_dict = data
-                except Exception as e:
-                    logger.warning(f"Failed to read existing shortcuts.vdf in {user_dir}: {e}")
+            try:
+                shortcuts_dict = load_shortcuts_vdf(shortcuts_file)
+            except ShortcutsVdfError as e:
+                logger.warning(f"Failed to read existing shortcuts.vdf in {user_dir}: {e}")
+                continue
 
             shortcuts = shortcuts_dict.get("shortcuts", {})
 
@@ -299,14 +295,13 @@ class NonSteamManager:
             shortcuts_dict["shortcuts"] = shortcuts
 
             try:
-                with open(shortcuts_file, "wb") as f:
-                    f.write(vdf.binary_dumps(shortcuts_dict))
-                added_profiles += 1
-            except Exception as e:
+                write_shortcuts_vdf(shortcuts_file, shortcuts_dict)
+            except OSError as e:
                 logger.error(f"Error saving {shortcuts_file}: {e}")
                 continue
+            added_profiles += 1
 
-            # Deploy Artwork (Default or Custom)
+            # Deploy Artwork (Default or Custom) only after the shortcut file is in place.
             if custom_artwork:
                 if custom_artwork.get("portrait") and Path(custom_artwork["portrait"]).exists():
                     shutil.copy2(custom_artwork["portrait"], grid_dir / f"{appid_32}p.jpg")
@@ -318,6 +313,13 @@ class NonSteamManager:
                     shutil.copy2(custom_artwork["logo"], grid_dir / f"{appid_32}_logo.png")
                 if custom_artwork.get("icon") and Path(custom_artwork["icon"]).exists():
                     shutil.copy2(custom_artwork["icon"], grid_dir / f"{appid_32}_icon.jpg")
+
+        if added_profiles == 0:
+            return (
+                False,
+                f"Refused to update shortcuts.vdf for '{app_name}': existing file could not be updated safely.",
+                appid_32,
+            )
 
         # Auto-fetch VNDB/Steam cover artwork if no custom artwork provided
         if not custom_artwork and appid_32:
@@ -371,9 +373,8 @@ class NonSteamManager:
                 continue
 
             try:
-                with open(shortcuts_file, "rb") as f:
-                    shortcuts_dict = vdf.binary_loads(f.read())
-            except Exception as e:
+                shortcuts_dict = load_shortcuts_vdf(shortcuts_file)
+            except ShortcutsVdfError as e:
                 logger.warning(f"Failed to read {shortcuts_file}: {e}")
                 continue
 
@@ -403,27 +404,26 @@ class NonSteamManager:
             if matched:
                 shortcuts_dict["shortcuts"] = new_shortcuts
                 try:
-                    with open(shortcuts_file, "wb") as f:
-                        f.write(vdf.binary_dumps(shortcuts_dict))
-                    removed_profiles += 1
-                except Exception as e:
+                    write_shortcuts_vdf(shortcuts_file, shortcuts_dict)
+                except OSError as e:
                     logger.error(f"Failed to write updated {shortcuts_file}: {e}")
+                    continue
+                removed_profiles += 1
 
-            # Clean up grid artwork if appid_32 known
-            if appid_32 and grid_dir.exists():
-                for art_pattern in (
-                    f"{appid_32}p.jpg",
-                    f"{appid_32}.jpg",
-                    f"{appid_32}_hero.jpg",
-                    f"{appid_32}_logo.png",
-                    f"{appid_32}_icon.jpg"
-                ):
-                    art_f = grid_dir / art_pattern
-                    if art_f.exists():
-                        try:
-                            art_f.unlink()
-                        except Exception:
-                            pass
+                if appid_32 and grid_dir.exists():
+                    for art_pattern in (
+                        f"{appid_32}p.jpg",
+                        f"{appid_32}.jpg",
+                        f"{appid_32}_hero.jpg",
+                        f"{appid_32}_logo.png",
+                        f"{appid_32}_icon.jpg"
+                    ):
+                        art_f = grid_dir / art_pattern
+                        if art_f.exists():
+                            try:
+                                art_f.unlink()
+                            except Exception:
+                                pass
 
         if removed_profiles > 0:
             return True, f"Successfully removed '{app_name}' from {removed_profiles} Steam profile(s)."

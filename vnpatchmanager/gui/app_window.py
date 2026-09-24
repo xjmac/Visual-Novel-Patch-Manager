@@ -18,12 +18,11 @@ except ImportError:
             raise RuntimeError("customtkinter is required to instantiate VNPatchManagerApp GUI")
     ctk = type("ctk", (), {"CTk": _FallbackCTk})
 
-from ..codec_fixer import CodecFixer
 from ..config_manager import ConfigManager
 from ..controller_manager import GamepadControllerManager
 from ..cover_art_manager import CoverArtManager
+from ..ipc_service import VNPMService
 from ..non_steam_manager import NonSteamManager
-from ..patch_execution import PatchExecutionEngine
 from ..patch_repository import PatchRepository
 from ..steam_scanner import SteamScanner
 from ..steamgriddb_client import SteamGridDBClient
@@ -39,7 +38,6 @@ from .constants import (
     COLOR_ACCENT_GREEN_HOVER,
     COLOR_TEXT_WHITE,
     COLOR_STATUS_GREEN,
-    COLOR_STATUS_YELLOW,
     COLOR_STATUS_RED,
     MIN_WIDTH_DEFAULT,
     MIN_HEIGHT_DEFAULT,
@@ -105,6 +103,7 @@ class VNPatchManagerApp(
 
         # Initialize Core Systems
         self.config_manager = ConfigManager()
+        self.service = VNPMService(config_manager=self.config_manager)
         self.steam_scanner = SteamScanner()
         self.repo = PatchRepository(self.config_manager)
         self.cover_manager = CoverArtManager()
@@ -439,6 +438,8 @@ class VNPatchManagerApp(
                         is_new = self.cover_manager.download_cover(app_id, game_data=gdata)
                         if is_new:
                             self.run_on_main_thread(lambda aid=app_id: self._refresh_banner(aid))
+                        if hasattr(self.cover_manager, "download_hero"):
+                            self.cover_manager.download_hero(app_id, game_data=gdata)
                     except Exception:
                         pass
 
@@ -461,6 +462,10 @@ class VNPatchManagerApp(
         self.progress_bar.configure(mode="determinate")
         self.progress_bar.set(0)
 
+    def _status_log(self, message: str) -> None:
+        """Mirror an engine log line onto the footer from a worker thread."""
+        self.run_on_main_thread(lambda m=message: self.lbl_status.configure(text=m))
+
     def run_patch(self, game_data, patch_data):
         """Executes patch installation on a background worker thread."""
         if not game_data.get("is_installed", True) or not game_data.get("path") or not Path(game_data["path"]).exists():
@@ -475,14 +480,18 @@ class VNPatchManagerApp(
         self.progress_bar.configure(mode="indeterminate")
         self.progress_bar.start()
 
+        app_id = str((patch_data or {}).get("steam_app_id") or game_data.get("steam_app_id") or "")
+
         def _patch_task():
             try:
-                PatchExecutionEngine.apply_patch(
-                    game_data,
-                    patch_data,
-                    self.config_manager,
-                    lambda msg: self.run_on_main_thread(lambda m=msg: self.lbl_status.configure(text=m)),
+                result = self.service.apply_patch(
+                    app_id,
+                    game_data=game_data,
+                    patch_data=patch_data,
+                    log_callback=self._status_log,
                 )
+                if not result.get("success"):
+                    raise RuntimeError(result.get("error") or "Patch failed")
                 self.run_on_main_thread(lambda: self.after(2000, self.refresh_data))
             except Exception:
                 logger.error("Patch task failed", exc_info=True)
@@ -503,12 +512,17 @@ class VNPatchManagerApp(
         self.progress_bar.configure(mode="indeterminate")
         self.progress_bar.start()
 
+        app_id = str(game_data.get("steam_app_id") or "")
+
         def _rollback_task():
             try:
-                PatchExecutionEngine.rollback_patch(
-                    game_data,
-                    lambda msg: self.run_on_main_thread(lambda m=msg: self.lbl_status.configure(text=m)),
+                result = self.service.restore_backup(
+                    app_id,
+                    game_data=game_data,
+                    log_callback=self._status_log,
                 )
+                if not result.get("success"):
+                    raise RuntimeError(result.get("error") or "Rollback failed")
                 self.run_on_main_thread(lambda: self.after(2000, self.refresh_data))
             except Exception as e:
                 logger.error(f"ROLLBACK ERROR: {e}", exc_info=True)
@@ -543,11 +557,14 @@ class VNPatchManagerApp(
 
         def _steam_task():
             try:
-                PatchExecutionEngine.restore_via_steam(
-                    game_data,
-                    patch_data,
-                    lambda msg: self.run_on_main_thread(lambda m=msg: self.lbl_status.configure(text=m)),
+                result = self.service.restore_via_steam(
+                    str(resolved_app_id or ""),
+                    game_data=game_data,
+                    patch_data=patch_data,
+                    log_callback=self._status_log,
                 )
+                if not result.get("success"):
+                    raise RuntimeError(result.get("error") or "Steam restore failed")
                 self.run_on_main_thread(lambda: self.after(2000, self.refresh_data))
             except Exception as e:
                 logger.error(f"STEAM RESTORE ERROR: {e}", exc_info=True)
@@ -573,16 +590,14 @@ class VNPatchManagerApp(
 
         def _fix_task():
             try:
-                success, msg = CodecFixer.apply_video_fixes(str(app_id))
+                result = self.service.fix_codecs(str(app_id))
+                if not result.get("success"):
+                    raise RuntimeError(result.get("error") or result.get("message") or "Video fix failed")
+                msg = result.get("message") or ""
                 self.run_on_main_thread(self._stop_progress)
-                if success:
-                    self.run_on_main_thread(
-                        lambda m=msg: self.lbl_status.configure(text=f"✅ {m}", text_color=COLOR_STATUS_GREEN)
-                    )
-                else:
-                    self.run_on_main_thread(
-                        lambda m=msg: self.lbl_status.configure(text=f"⚠️ {m}", text_color=COLOR_STATUS_YELLOW)
-                    )
+                self.run_on_main_thread(
+                    lambda m=msg: self.lbl_status.configure(text=f"✅ {m}", text_color=COLOR_STATUS_GREEN)
+                )
             except Exception as e:
                 err_msg = str(e)
                 logger.error(f"Error applying video fixes: {err_msg}", exc_info=True)

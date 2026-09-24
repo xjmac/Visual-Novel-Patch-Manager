@@ -10,7 +10,7 @@ from typing import Any, Callable, Dict, Optional, Union
 
 from .steam_scanner import SteamScanner
 from .backup_manager import BackupManager
-from .exceptions import PatchSecurityError, PatchExtractionError, ProtonExecutionError
+from .exceptions import BackupError, PatchSecurityError, PatchExtractionError, ProtonExecutionError
 
 logger = logging.getLogger(__name__)
 
@@ -318,6 +318,8 @@ class PatchExecutionEngine:
                         full_p = root_path / file_name
                         rel_p = str(full_p.relative_to(install_dir))
                         if rel_p not in orig_files and file_name != ".patch_applied.json":
+                            if BackupManager.is_protected_save_path(rel_p):
+                                continue
                             try:
                                 full_p.unlink()
                                 logger.info(f"Purged extraneous patch file: {rel_p}")
@@ -458,6 +460,71 @@ class PatchExecutionEngine:
             return False
 
     @staticmethod
+    def _fingerprint_install(install_dir: Path) -> Dict[str, tuple]:
+        """Stat fingerprint of the live install, excluding the backup store."""
+        fingerprint: Dict[str, tuple] = {}
+        install_dir = Path(install_dir)
+        if not install_dir.exists():
+            return fingerprint
+        for root, dirs, files in os.walk(install_dir, followlinks=False):
+            dirs[:] = [d for d in dirs if d != BackupManager.BACKUP_DIR_NAME]
+            root_path = Path(root)
+            if BackupManager.BACKUP_DIR_NAME in root_path.parts:
+                continue
+            for name in files:
+                path = root_path / name
+                try:
+                    st = path.lstat() if path.is_symlink() else path.stat()
+                except OSError:
+                    continue
+                rel = str(path.relative_to(install_dir))
+                fingerprint[rel] = (st.st_dev, st.st_ino, st.st_size, getattr(st, "st_mtime_ns", st.st_mtime))
+        return fingerprint
+
+    @staticmethod
+    def _require_live_unchanged(install_dir: Path, baseline: Dict[str, tuple]) -> None:
+        current = PatchExecutionEngine._fingerprint_install(install_dir)
+        if current != baseline:
+            raise PatchExtractionError("Live install was modified during staging; aborting commit.")
+
+    @staticmethod
+    def _merge_tree(src_dir: Path, dest_dir: Path) -> None:
+        """Copy ``src_dir`` into ``dest_dir`` without writing through hardlinked files."""
+        src_dir = Path(src_dir)
+        dest_dir = Path(dest_dir)
+        if dest_dir.is_symlink() or (dest_dir.exists() and not dest_dir.is_dir()):
+            dest_dir.unlink()
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        for root, dirs, files in os.walk(src_dir, followlinks=False):
+            root_path = Path(root)
+            target_root = dest_dir / root_path.relative_to(src_dir)
+            target_root.mkdir(parents=True, exist_ok=True)
+            kept_dirs = []
+            for directory in dirs:
+                dir_path = root_path / directory
+                if dir_path.is_symlink():
+                    link_dest = target_root / directory
+                    if link_dest.is_dir() and not link_dest.is_symlink():
+                        shutil.rmtree(link_dest)
+                    elif link_dest.exists() or link_dest.is_symlink():
+                        link_dest.unlink()
+                    link_dest.symlink_to(os.readlink(dir_path))
+                    continue
+                kept_dirs.append(directory)
+            dirs[:] = kept_dirs
+            for name in files:
+                src_file = root_path / name
+                dest_file = target_root / name
+                if src_file.is_symlink():
+                    if dest_file.is_dir() and not dest_file.is_symlink():
+                        shutil.rmtree(dest_file)
+                    elif dest_file.exists() or dest_file.is_symlink():
+                        dest_file.unlink()
+                    dest_file.symlink_to(os.readlink(src_file))
+                    continue
+                BackupManager._place_file(src_file, dest_file)
+
+    @staticmethod
     def apply_patch(
         game_data: Dict[str, Any],
         patch_data: Dict[str, Any],
@@ -473,23 +540,30 @@ class PatchExecutionEngine:
         actions = patch_data.get('actions', [])
 
         temp_dir = None
+        game_staging = None
+        swapped = False
         working_source = Path(source_dir)
 
         try:
             log_callback(f"Starting patch for {game_data['name']}...")
+            BackupManager.recover_interrupted_swap(install_dir)
+            if not install_dir.exists():
+                raise BackupError(f"Game directory does not exist: {install_dir}")
 
-            # 0. Backup original files before applying patch if no backup exists
-            if not BackupManager.has_backup(install_dir):
-                log_callback("Creating backup of original game files and computing SHA256 checksums...")
-                BackupManager.create_backup(
-                    install_dir,
-                    app_id,
-                    game_data['name'],
-                    patch_source_dir=source_dir,
-                    log_callback=log_callback
-                )
+            # Fingerprint the live tree before any staging so a leaked write aborts the commit.
+            live_baseline = PatchExecutionEngine._fingerprint_install(install_dir)
+            game_staging = BackupManager.make_staging_dir(install_dir)
+            BackupManager._clone_tree(
+                install_dir,
+                game_staging,
+                skip_dir_names={BackupManager.BACKUP_DIR_NAME},
+            )
+            stage_root = game_staging
+            PatchExecutionEngine._require_live_unchanged(install_dir, live_baseline)
 
-            # 1. Stage files locally (Crucial for Proton executing off NAS mounts)
+            # Stage patch sources locally (Crucial for Proton executing off NAS mounts).
+            # This temp stays on the default temp filesystem. The game shadow above is
+            # a sibling of the install so the final rename stays on one filesystem.
             log_callback("Staging patch files to a local temporary folder...")
             temp_dir = tempfile.mkdtemp(prefix=f"vnpatch_{app_id}_")
             working_source = Path(temp_dir)
@@ -517,7 +591,7 @@ class PatchExecutionEngine:
                 if action_type == 'copy_file':
                     src_file = working_source / action.get('source', '')
                     # Resolve {game_dir} template
-                    dest_str = action.get('destination', '').replace("{game_dir}", str(install_dir))
+                    dest_str = action.get('destination', '').replace("{game_dir}", str(stage_root))
                     dest_path = Path(dest_str)
 
                     logger.debug(f"Attempting to copy from '{src_file}' to '{dest_path}'")
@@ -526,19 +600,18 @@ class PatchExecutionEngine:
                         raise PatchExtractionError(f"Source file/folder does not exist: {src_file}")
 
                     if src_file.is_dir():
-                        shutil.copytree(src_file, dest_path, dirs_exist_ok=True)
+                        PatchExecutionEngine._merge_tree(src_file, dest_path)
                     else:
                         # If destination ends in a slash, treat it as a directory to copy into
                         if dest_str.endswith('/') or dest_path.is_dir():
                             dest_path.mkdir(parents=True, exist_ok=True)
-                            shutil.copy2(src_file, dest_path)
+                            BackupManager._place_file(src_file, dest_path / src_file.name)
                         else:
-                            dest_path.parent.mkdir(parents=True, exist_ok=True)
-                            shutil.copy2(src_file, dest_path)
+                            BackupManager._place_file(src_file, dest_path)
 
                 elif action_type == 'extract_inno_setup':
                     exe_file = working_source / action.get('source', '')
-                    dest_str = action.get('destination', '{game_dir}').replace("{game_dir}", str(install_dir))
+                    dest_str = action.get('destination', '{game_dir}').replace("{game_dir}", str(stage_root))
                     dest_path = Path(dest_str)
 
                     if not shutil.which("innoextract"):
@@ -581,11 +654,11 @@ class PatchExecutionEngine:
                     PatchExecutionEngine._validate_extracted_tree(extract_tmp)
 
                     log_callback("Copying extracted files to game directory...")
-                    shutil.copytree(source_copy_dir, dest_path, dirs_exist_ok=True)
+                    PatchExecutionEngine._merge_tree(source_copy_dir, dest_path)
 
                 elif action_type == 'extract_archive':
                     arc_file = working_source / action.get('source', '')
-                    dest_str = action.get('destination', '{game_dir}').replace("{game_dir}", str(install_dir))
+                    dest_str = action.get('destination', '{game_dir}').replace("{game_dir}", str(stage_root))
                     dest_path = Path(dest_str)
                     dest_path.mkdir(parents=True, exist_ok=True)
 
@@ -621,7 +694,7 @@ class PatchExecutionEngine:
 
                     PatchExecutionEngine._validate_extracted_tree(extract_tmp)
 
-                    shutil.copytree(extract_tmp, dest_path, dirs_exist_ok=True)
+                    PatchExecutionEngine._merge_tree(extract_tmp, dest_path)
 
                 elif action_type == 'run_proton_executable':
                     exe_file = working_source / action.get('source', '')
@@ -633,13 +706,13 @@ class PatchExecutionEngine:
 
                     # Proton/Wine maps the Linux root (/) to the Windows Z: drive.
                     # We must convert the path for Windows installers to understand it.
-                    raw_win_dir = "Z:" + str(install_dir).replace('/', '\\')
+                    raw_win_dir = "Z:" + str(stage_root).replace('/', '\\')
                     # Wrap in literal quotes to protect spaces in Windows command line parsing
                     win_install_dir = f'"{raw_win_dir}"'
 
                     args = []
                     for arg in action.get('args', []):
-                        arg_str = arg.replace("{game_dir}", str(install_dir))
+                        arg_str = arg.replace("{game_dir}", str(stage_root))
                         arg_str = arg_str.replace("{game_dir_win}", win_install_dir)
                         args.append(arg_str)
 
@@ -673,8 +746,27 @@ class PatchExecutionEngine:
                 else:
                     raise PatchExtractionError(f"Unknown patch action type: '{action_type}'. Check patch.json for errors.")
 
-            # 3. Create the hidden tracking file
-            tracking_file = install_dir / ".patch_applied.json"
+            PatchExecutionEngine._require_live_unchanged(install_dir, live_baseline)
+
+            # Backup the still-pristine live tree into the staging directory, then swap.
+            if BackupManager.has_backup(install_dir):
+                BackupManager._clone_tree(
+                    install_dir / BackupManager.BACKUP_DIR_NAME,
+                    stage_root / BackupManager.BACKUP_DIR_NAME,
+                )
+            else:
+                log_callback("Creating backup of original game files and computing SHA256 checksums...")
+                BackupManager.create_backup(
+                    install_dir,
+                    app_id,
+                    game_data['name'],
+                    patch_source_dir=source_dir,
+                    log_callback=log_callback,
+                    backup_parent=stage_root,
+                )
+            PatchExecutionEngine._require_live_unchanged(install_dir, live_baseline)
+
+            tracking_file = stage_root / ".patch_applied.json"
             metadata = {
                 "steam_app_id": app_id,
                 "game_name": game_data['name'],
@@ -685,6 +777,8 @@ class PatchExecutionEngine:
             with open(tracking_file, 'w') as f:
                 json.dump(metadata, f)
 
+            BackupManager.commit_directory_swap(stage_root, install_dir)
+            swapped = True
             log_callback(f"Patch successfully applied to {game_data['name']}!")
             return True
 
@@ -693,6 +787,9 @@ class PatchExecutionEngine:
             log_callback(f"Error applying patch: {str(e)}")
             raise e
         finally:
-            # 4. Cleanup temporary files if SMB was used
             if temp_dir and Path(temp_dir).exists():
                 shutil.rmtree(temp_dir, ignore_errors=True)
+            if game_staging is not None and Path(game_staging).exists() and not swapped:
+                shutil.rmtree(game_staging, ignore_errors=True)
+            if install_dir.exists():
+                BackupManager.recover_interrupted_swap(install_dir)

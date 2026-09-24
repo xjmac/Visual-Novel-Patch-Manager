@@ -369,5 +369,196 @@ def test_download_cover_capsule_priority_and_vndb_fallback(tmp_path):
         assert "https://t.vndb.org/cv/41/107441.jpg" in called_urls
 
 
+def test_get_cached_hero_path(tmp_path):
+    mgr = CoverArtManager(cache_dir=tmp_path)
+    path = mgr.get_cached_hero_path("889700")
+    assert path == tmp_path / "889700_hero.jpg"
+
+
+def test_check_steam_library_hero_folder_and_flat(tmp_path):
+    steam_root = tmp_path / "Steam"
+    lib_dir = steam_root / "appcache" / "librarycache"
+    app_dir = lib_dir / "889700"
+    app_dir.mkdir(parents=True, exist_ok=True)
+
+    hero_file = app_dir / "library_hero.jpg"
+    hero_file.write_bytes(b"steam hero banner bytes")
+
+    cache_dir = tmp_path / "cache"
+    mgr = CoverArtManager(cache_dir=cache_dir)
+
+    assert mgr.check_steam_library_hero("889700", steam_root=steam_root) is True
+    assert (cache_dir / "889700_hero.jpg").read_bytes() == b"steam hero banner bytes"
+
+    # Flat file test
+    (lib_dir / "777777_header.jpg").write_bytes(b"flat header bytes")
+    assert mgr.check_steam_library_hero("777777", steam_root=steam_root) is True
+    assert (cache_dir / "777777_hero.jpg").read_bytes() == b"flat header bytes"
+
+
+def test_check_steam_library_hero_userdata_grid(tmp_path):
+    steam_root = tmp_path / "Steam"
+    grid_dir = steam_root / "userdata" / "123456" / "config" / "grid"
+    grid_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save a wide image
+    wide_img = Image.new("RGB", (920, 430), color="purple")
+    wide_img.save(grid_dir / "555555.jpg")
+
+    cache_dir = tmp_path / "cache"
+    mgr = CoverArtManager(cache_dir=cache_dir)
+    assert mgr.check_steam_library_hero("555555", steam_root=steam_root) is True
+    assert (cache_dir / "555555_hero.jpg").exists()
+
+
+def test_download_hero_cached_and_cdn(tmp_path):
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    mgr = CoverArtManager(cache_dir=cache_dir)
+
+    # 1. Existing cached landscape image
+    hero_file = cache_dir / "1234_hero.jpg"
+    im = Image.new("RGB", (1920, 620), color="green")
+    im.save(hero_file)
+    assert mgr.download_hero("1234") is True
+
+    # 2. Existing corrupt/portrait image -> unlinks and downloads from CDN
+    bad_hero = cache_dir / "5678_hero.jpg"
+    portrait = Image.new("RGB", (600, 900), color="red")
+    portrait.save(bad_hero)
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.content = b"cdn hero bytes"
+
+    with patch.object(mgr, "_get", return_value=mock_resp):
+        assert mgr.download_hero("5678") is True
+        assert (cache_dir / "5678_hero.jpg").read_bytes() == b"cdn hero bytes"
+
+
+def test_download_hero_steamgriddb(tmp_path):
+    cache_dir = tmp_path / "cache"
+    mgr = CoverArtManager(cache_dir=cache_dir)
+
+    mock_sgdb = MagicMock()
+    mock_sgdb.has_api_key.return_value = True
+    mock_sgdb.get_game_by_steam_appid.return_value = 999
+    mock_sgdb.get_assets.return_value = [{"url": "https://sgdb.example/hero.jpg"}]
+
+    with patch.object(mgr, "check_steam_library_hero", return_value=False), \
+         patch.object(mgr, "_get", side_effect=Exception("CDN offline")), \
+         patch.object(mgr, "download_image_bytes", return_value=b"sgdb hero bytes"):
+        assert mgr.download_hero("999", steamgriddb_client=mock_sgdb) is True
+        assert (cache_dir / "999_hero.jpg").read_bytes() == b"sgdb hero bytes"
+
+
+def test_get_hero_image_cached_and_fallback(tmp_path):
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    mgr = CoverArtManager(cache_dir=cache_dir)
+
+    # 1. Fallback when not cached
+    fallback_hero = mgr.get_hero_image("111111", title="Cyber Novel", size=(640, 220))
+    assert isinstance(fallback_hero, ctk.CTkImage)
+    assert fallback_hero._size == (640, 220)
+
+    # Memory cache hit
+    assert mgr.get_hero_image("111111", title="Cyber Novel", size=(640, 220)) is fallback_hero
+
+    # 2. Disk cache load
+    im = Image.new("RGB", (1920, 620), color="blue")
+    im.save(cache_dir / "222222_hero.jpg")
+
+    cached_hero = mgr.get_hero_image("222222", size=(640, 220))
+    assert isinstance(cached_hero, ctk.CTkImage)
+    assert cached_hero._size == (640, 220)
+
+
+def test_set_specific_grid_asset_hero_updates_cache(tmp_path):
+    cache_dir = tmp_path / "cache"
+    mgr = CoverArtManager(cache_dir=cache_dir)
+
+    import io
+    im = Image.new("RGB", (1920, 620), color="yellow")
+    buf = io.BytesIO()
+    im.save(buf, format="JPEG")
+    raw_bytes = buf.getvalue()
+
+    assert mgr.set_specific_grid_asset("333333", "hero", raw_bytes) is True
+    assert (cache_dir / "333333_hero.jpg").exists()
+
+
+def test_get_hero_image_local_steam_discovery(tmp_path):
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    mgr = CoverArtManager(cache_dir=cache_dir)
+
+    def mock_check(app_id):
+        hero_p = mgr.get_cached_hero_path(app_id)
+        im = Image.new("RGB", (1920, 620), color="cyan")
+        im.save(hero_p)
+        return True
+
+    with patch.object(mgr, "check_steam_library_hero", side_effect=mock_check):
+        hero_img = mgr.get_hero_image("444444", size=(640, 220))
+        assert isinstance(hero_img, ctk.CTkImage)
+        assert hero_img._size == (640, 220)
+
+
+def test_download_hero_non_steam_matched_app_id(tmp_path):
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    mgr = CoverArtManager(cache_dir=cache_dir)
+
+    def mock_get(url, *args, **kwargs):
+        resp = MagicMock()
+        if "888111" in url:
+            resp.status_code = 200
+            resp.content = b"matched hero bytes"
+        else:
+            resp.status_code = 404
+            resp.content = b""
+        return resp
+
+    game_data = {
+        "name": "Non Steam Novel",
+        "vndb": {"matched_app_id": "888111"}
+    }
+
+    with patch.object(mgr, "check_steam_library_hero", return_value=False), \
+         patch.object(mgr, "_get", side_effect=mock_get):
+        res = mgr.download_hero("non_steam_1", game_data=game_data)
+        assert res is True
+        assert (cache_dir / "non_steam_1_hero.jpg").read_bytes() == b"matched hero bytes"
+
+
+def test_download_image_bytes_and_set_specific_asset(tmp_path):
+    mgr = CoverArtManager(cache_dir=tmp_path)
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.content = b"fake image bytes"
+
+    with patch.object(mgr, "_get", return_value=mock_resp):
+        data = mgr.download_image_bytes("https://example.com/art.jpg")
+        assert data == b"fake image bytes"
+
+    # None check
+    assert mgr.download_image_bytes("") is None
+
+    # Test download_and_set_specific_asset
+    im = Image.new("RGB", (1920, 620), color="pink")
+    import io
+    buf = io.BytesIO()
+    im.save(buf, format="JPEG")
+    valid_bytes = buf.getvalue()
+
+    with patch.object(mgr, "download_image_bytes", return_value=valid_bytes):
+        assert mgr.download_and_set_specific_asset("121212", "hero", "https://example.com/hero.jpg") is True
+        assert (tmp_path / "121212_hero.jpg").exists()
+
+
+
+
+
 
 

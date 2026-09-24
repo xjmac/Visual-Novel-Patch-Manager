@@ -26,6 +26,7 @@ from .exceptions import (
     ConfigError,
     NetworkError,
     SteamScanError,
+    ShortcutsVdfError,
 )
 from .types import GameData, PatchData, VNInfo
 
@@ -58,6 +59,7 @@ __all__ = [
     "ConfigError",
     "NetworkError",
     "SteamScanError",
+    "ShortcutsVdfError",
     "GameData",
     "PatchData",
     "VNInfo",

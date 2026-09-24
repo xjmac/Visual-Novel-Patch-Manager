@@ -10,7 +10,7 @@ import socket
 import logging
 import threading
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any, Callable, Dict, Optional
 
 from .version import APP_NAME, APP_VERSION
 from .config_manager import ConfigManager
@@ -19,6 +19,7 @@ from .patch_repository import PatchRepository
 from .backup_manager import BackupManager
 from .patch_execution import PatchExecutionEngine
 from .codec_fixer import CodecFixer
+from .install_lock import install_lock
 from .vndb_scanner import VNDBScanner
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,7 @@ class VNPMService:
                 "is_non_steam": gdata.get("is_non_steam", False),
                 "is_installed": gdata.get("is_installed", True),
                 "path": str(install_path or ""),
+                "library_path": self._library_path_value(gdata),
                 "has_local_patch": app_id in self.repo.available_patches,
                 "is_patched": is_patched,
                 "has_backup": has_backup,
@@ -80,89 +82,182 @@ class VNPMService:
             }
         return summary
 
-    def apply_patch(self, app_id: str) -> Dict[str, Any]:
-        """Applies available patch for the specified app_id."""
-        self.repo.refresh_patches()
-        patch_data = self.repo.available_patches.get(str(app_id))
-        if not patch_data:
-            return {"success": False, "error": f"No patch available for app {app_id}"}
+    @staticmethod
+    def _library_path_value(gdata: Dict[str, Any]) -> str:
+        """Scanner library root, or an empty string when the record has none.
 
+        Steam records store the library root (the directory that contains
+        ``steamapps``). Non-Steam records store the executable parent.
+        Callers must not rebuild this as ``Path(install).parent.parent``.
+        """
+        if "library_path" not in gdata:
+            return ""
+        raw = gdata.get("library_path")
+        if raw is None or raw == "":
+            return ""
+        return str(raw)
+
+    def _engine_game(self, gdata: Dict[str, Any], app_id: str) -> Dict[str, Any]:
+        """Game dict the engines accept, using the scanned library root."""
+        return {
+            "name": gdata.get("name", "Unknown"),
+            "path": str(gdata.get("path") or ""),
+            "library_path": self._library_path_value(gdata),
+            "is_non_steam": gdata.get("is_non_steam", False),
+            "steam_app_id": str(gdata.get("steam_app_id") or app_id or ""),
+            "is_installed": gdata.get("is_installed", True),
+        }
+
+    def _use_provided_game(self, game_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Copy a caller-supplied game record and fill a missing library root."""
+        resolved = dict(game_data)
+        if resolved.get("library_path") in (None, ""):
+            resolved["library_path"] = ""
+        return resolved
+
+    def _scanned_game(self, app_id: str) -> Optional[Dict[str, Any]]:
         games = self.scan_games()
         gdata = games.get(str(app_id))
         if not gdata or not gdata.get("path"):
-            return {"success": False, "error": f"Game {app_id} is not installed"}
+            return None
+        return self._engine_game(gdata, str(app_id))
 
-        game_data = {
-            "name": gdata["name"],
-            "path": gdata["path"],
-            "library_path": str(Path(gdata["path"]).parent.parent),
-            "is_non_steam": gdata.get("is_non_steam", False),
-        }
+    def _run_mutation(
+        self,
+        install_path: str,
+        log_callback: Optional[Callable[[str], None]],
+        operation: Callable[[Callable[[str], None]], Any],
+    ) -> Dict[str, Any]:
+        """Hold the per-install lock around one engine call and collect logs."""
+        if not install_path:
+            return {"success": False, "error": "Game install path is missing", "logs": []}
 
-        logs = []
+        logs: list[str] = []
+
+        def _log(message: str) -> None:
+            logs.append(str(message))
+            if log_callback is not None:
+                log_callback(message)
+
         try:
-            success = PatchExecutionEngine.apply_patch(
+            with install_lock(Path(install_path)):
+                success = operation(_log)
+        except Exception as exc:
+            logger.error("VNPMService mutation failed: %s", exc, exc_info=True)
+            return {"success": False, "error": str(exc), "logs": logs}
+        return {"success": bool(success), "logs": logs}
+
+    def apply_patch(
+        self,
+        app_id: str,
+        game_data: Optional[Dict[str, Any]] = None,
+        patch_data: Optional[Dict[str, Any]] = None,
+        log_callback: Optional[Callable[[str], None]] = None,
+    ) -> Dict[str, Any]:
+        """Applies available patch for the specified app_id.
+
+        IPC callers pass only ``app_id``. The desktop window passes the game
+        record and patch manifest it has already resolved.
+        """
+        if game_data is None:
+            self.repo.refresh_patches()
+            if patch_data is None:
+                patch_data = self.repo.available_patches.get(str(app_id))
+            if not patch_data:
+                return {"success": False, "error": f"No patch available for app {app_id}"}
+            game_data = self._scanned_game(app_id)
+            if game_data is None:
+                return {"success": False, "error": f"Game {app_id} is not installed"}
+        else:
+            if not patch_data:
+                return {"success": False, "error": f"No patch available for app {app_id}"}
+            game_data = self._use_provided_game(game_data)
+
+        install_path = str(game_data.get("path") or "")
+        return self._run_mutation(
+            install_path,
+            log_callback,
+            lambda _log: PatchExecutionEngine.apply_patch(
                 game_data,
                 patch_data,
                 self.config_manager,
-                log_callback=lambda m: logs.append(m),
-            )
-            return {"success": success, "logs": logs}
-        except Exception as e:
-            logger.error(f"IPC apply_patch error: {e}")
-            return {"success": False, "error": str(e), "logs": logs}
+                log_callback=_log,
+            ),
+        )
 
-    def restore_backup(self, app_id: str) -> Dict[str, Any]:
+    def restore_backup(
+        self,
+        app_id: str,
+        game_data: Optional[Dict[str, Any]] = None,
+        log_callback: Optional[Callable[[str], None]] = None,
+    ) -> Dict[str, Any]:
         """Rolls back a game to its clean pre-patch backup state."""
-        games = self.scan_games()
-        gdata = games.get(str(app_id))
-        if not gdata or not gdata.get("path"):
-            return {"success": False, "error": f"Game {app_id} not found"}
+        if game_data is None:
+            game_data = self._scanned_game(app_id)
+            if game_data is None:
+                return {"success": False, "error": f"Game {app_id} not found"}
+        else:
+            game_data = self._use_provided_game(game_data)
 
-        install_dir = Path(gdata["path"])
-        logs = []
-        try:
-            success = BackupManager.restore_backup(install_dir, log_callback=lambda m: logs.append(m))
-            return {"success": success, "logs": logs}
-        except Exception as e:
-            return {"success": False, "error": str(e), "logs": logs}
+        install_path = str(game_data.get("path") or "")
+        return self._run_mutation(
+            install_path,
+            log_callback,
+            lambda _log: PatchExecutionEngine.rollback_patch(game_data, log_callback=_log),
+        )
 
-    def restore_via_steam(self, app_id: str) -> Dict[str, Any]:
+    def restore_via_steam(
+        self,
+        app_id: str,
+        game_data: Optional[Dict[str, Any]] = None,
+        patch_data: Optional[Dict[str, Any]] = None,
+        log_callback: Optional[Callable[[str], None]] = None,
+    ) -> Dict[str, Any]:
         """Purges patch artifacts and initiates Steam validation for a game."""
-        games = self.scan_games()
-        gdata = games.get(str(app_id))
-        if not gdata or not gdata.get("path"):
-            return {"success": False, "error": f"Game {app_id} not found"}
+        if game_data is None:
+            game_data = self._scanned_game(app_id)
+            if game_data is None:
+                return {"success": False, "error": f"Game {app_id} not found"}
+            if patch_data is None:
+                patch_data = self.repo.available_patches.get(str(app_id))
+        else:
+            game_data = self._use_provided_game(game_data)
 
-        patch_data = self.repo.available_patches.get(str(app_id))
-        logs = []
-        try:
-            success = PatchExecutionEngine.restore_via_steam(
-                gdata,
+        install_path = str(game_data.get("path") or "")
+        return self._run_mutation(
+            install_path,
+            log_callback,
+            lambda _log: PatchExecutionEngine.restore_via_steam(
+                game_data,
                 patch_data=patch_data,
-                log_callback=lambda m: logs.append(m),
-            )
-            return {"success": success, "logs": logs}
-        except Exception as e:
-            return {"success": False, "error": str(e), "logs": logs}
+                log_callback=_log,
+            ),
+        )
 
     def fix_codecs(self, app_id: str) -> Dict[str, Any]:
         """Applies Proton video codec fixes for a game prefix."""
-        games = self.scan_games()
-        gdata = games.get(str(app_id))
-        if not gdata or not gdata.get("path"):
+        game_data = self._scanned_game(app_id)
+        if game_data is None:
             return {"success": False, "error": f"Game {app_id} not found"}
 
         steam_root = self.steam_scanner.get_steam_root()
         if not steam_root:
             return {"success": False, "error": "Steam root directory not found"}
 
-        prefix_path = CodecFixer.get_compat_data_path(str(app_id), steam_root)
-        if not prefix_path:
-            return {"success": False, "error": f"No Wine prefix found for {app_id}"}
+        outcome: Dict[str, Any] = {}
 
-        success = CodecFixer.apply_all_fixes(prefix_path)
-        return {"success": success, "prefix": str(prefix_path)}
+        def _apply(_log: Callable[[str], None]) -> bool:
+            success, message = CodecFixer.apply_video_fixes(str(app_id))
+            outcome["success"] = success
+            outcome["message"] = message
+            return success
+
+        result = self._run_mutation(str(game_data.get("path") or ""), None, _apply)
+        if "message" not in outcome:
+            return result
+        success = bool(outcome["success"])
+        message = outcome["message"]
+        return {"success": success, "message": message, "error": None if success else message, "logs": result.get("logs", [])}
 
 
 class IPCServer:

@@ -78,6 +78,9 @@ class CoverArtManager:
     def get_cached_path(self, app_id: str) -> Path:
         return self.cache_dir / f"{app_id}.jpg"
 
+    def get_cached_hero_path(self, app_id: str) -> Path:
+        return self.cache_dir / f"{app_id}_hero.jpg"
+
     def check_steam_grid(self, app_id: str, steam_root: Path = None, portrait_only: bool = False) -> bool:
         """Checks if cover artwork already exists in Steam userdata grid directories."""
         if not steam_root:
@@ -111,6 +114,92 @@ class CoverArtManager:
                             return True
                         except Exception as e:
                             logger.warning(f"Error copying grid image {cand}: {e}")
+        return False
+
+    def check_steam_library_hero(self, app_id: str, steam_root: Path = None) -> bool:
+        """Checks if landscape hero/header artwork already exists in Steam librarycache or userdata grid."""
+        if not steam_root:
+            from .steam_scanner import SteamScanner
+            steam_root = SteamScanner.get_steam_root()
+
+        if not steam_root:
+            return False
+
+        hero_cache_path = self.get_cached_hero_path(str(app_id))
+
+        # 1. Search Steam librarycache folders
+        app_cache_dirs = [
+            steam_root / "appcache" / "librarycache",
+        ]
+        userdata_dir = steam_root / "userdata"
+        if userdata_dir.exists():
+            for udir in userdata_dir.iterdir():
+                if udir.is_dir() and udir.name.isdigit():
+                    app_cache_dirs.append(udir / "config" / "librarycache")
+
+        for c_dir in app_cache_dirs:
+            if not c_dir.exists():
+                continue
+            # Subdirectory check: {app_id}/library_hero.jpg, {app_id}/header.jpg, etc.
+            app_sub = c_dir / str(app_id)
+            if app_sub.is_dir():
+                for name in ("library_hero.jpg", "header.jpg", "library_header.jpg"):
+                    cand = app_sub / name
+                    if cand.exists() and cand.stat().st_size > 0:
+                        try:
+                            import shutil
+                            shutil.copy2(cand, hero_cache_path)
+                            self.invalidate_memory_cache(str(app_id))
+                            return True
+                        except Exception as e:
+                            logger.warning(f"Error copying librarycache hero {cand}: {e}")
+
+            # Flat file check: {app_id}_library_hero.jpg, {app_id}_header.jpg, etc.
+            for pat in (f"{app_id}_library_hero.jpg", f"{app_id}_header.jpg", f"{app_id}_library_header.jpg"):
+                cand = c_dir / pat
+                if cand.exists() and cand.stat().st_size > 0:
+                    try:
+                        import shutil
+                        shutil.copy2(cand, hero_cache_path)
+                        self.invalidate_memory_cache(str(app_id))
+                        return True
+                    except Exception as e:
+                        logger.warning(f"Error copying librarycache flat hero {cand}: {e}")
+
+        # 2. Search Steam userdata grid directories: {app_id}_hero.jpg, {app_id}.jpg (if landscape)
+        if userdata_dir.exists():
+            for udir in userdata_dir.iterdir():
+                if udir.is_dir() and udir.name.isdigit():
+                    grid_dir = udir / "config" / "grid"
+                    if not grid_dir.exists():
+                        continue
+                    # Prefer explicit hero files first
+                    for pat in (f"{app_id}_hero.jpg", f"{app_id}_hero.png"):
+                        cand = grid_dir / pat
+                        if cand.exists() and cand.stat().st_size > 0:
+                            try:
+                                import shutil
+                                shutil.copy2(cand, hero_cache_path)
+                                self.invalidate_memory_cache(str(app_id))
+                                return True
+                            except Exception as e:
+                                logger.warning(f"Error copying grid hero {cand}: {e}")
+
+                    # Wide header files in grid: {app_id}.jpg, {app_id}.png
+                    for pat in (f"{app_id}.jpg", f"{app_id}.png", f"{app_id}_header.jpg"):
+                        cand = grid_dir / pat
+                        if cand.exists() and cand.stat().st_size > 0:
+                            try:
+                                with Image.open(cand) as im:
+                                    w, h = im.size
+                                    if w >= h:
+                                        import shutil
+                                        shutil.copy2(cand, hero_cache_path)
+                                        self.invalidate_memory_cache(str(app_id))
+                                        return True
+                            except Exception:
+                                pass
+
         return False
 
     def fetch_vndb_cover(self, vn_id: str = None, title: str = None) -> Optional[str]:
@@ -287,17 +376,114 @@ class CoverArtManager:
 
         return False
 
+    def download_hero(
+        self,
+        app_id: str,
+        game_data: Optional[dict] = None,
+        steamgriddb_client: Optional[Any] = None,
+    ) -> bool:
+        """Attempts to obtain a landscape hero banner for the visual novel detail view."""
+        hero_path = self.get_cached_hero_path(str(app_id))
+        if hero_path.exists() and hero_path.stat().st_size > 0:
+            is_valid = True
+            try:
+                with Image.open(hero_path) as im:
+                    w, h = im.size
+                    if w < h:
+                        is_valid = False
+            except Exception:
+                is_valid = False
+            if is_valid:
+                return True
+            else:
+                try:
+                    hero_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+
+        # 1. Check local Steam librarycache and grid
+        if self.check_steam_library_hero(str(app_id)):
+            return True
+
+        headers = {"User-Agent": "Mozilla/5.0 (Linux; SteamDeck; VNPM)"}
+
+        # 2. Try Steam CDN landscape URLs (hero and header)
+        cdn_urls = [
+            f"https://cdn.akamai.steamstatic.com/steam/apps/{app_id}/library_hero.jpg",
+            f"https://cdn.akamai.steamstatic.com/steam/apps/{app_id}/header.jpg",
+            f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/library_hero.jpg",
+            f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg",
+        ]
+        for url in cdn_urls:
+            try:
+                resp = self._get(url, headers=headers, timeout=4)
+                if resp.status_code == 200 and len(resp.content) > 0:
+                    with open(hero_path, "wb") as f:
+                        f.write(resp.content)
+                    self.invalidate_memory_cache(str(app_id))
+                    return True
+            except Exception as e:
+                logger.debug(f"Failed downloading hero {url} for app {app_id}: {e}")
+
+        # 3. Try SteamGridDB for hero / wide assets
+        sgdb = steamgriddb_client or self.steamgriddb_client
+        if sgdb and hasattr(sgdb, "has_api_key") and sgdb.has_api_key():
+            try:
+                gid = sgdb.get_game_by_steam_appid(str(app_id))
+                if not gid and game_data and game_data.get("name"):
+                    results = sgdb.search_games(game_data["name"])
+                    if results:
+                        gid = results[0].get("id")
+                if gid:
+                    for asset_type in ("hero", "wide"):
+                        assets = sgdb.get_assets(gid, asset_type)
+                        if assets and assets[0].get("url"):
+                            sgdb_bytes = self.download_image_bytes(assets[0]["url"], timeout=8)
+                            if sgdb_bytes and len(sgdb_bytes) > 0:
+                                with open(hero_path, "wb") as f:
+                                    f.write(sgdb_bytes)
+                                self.invalidate_memory_cache(str(app_id))
+                                return True
+            except Exception as e:
+                logger.debug(f"SteamGridDB hero fetch error for {app_id}: {e}")
+
+        # 4. Fallback for non-Steam or matched app id
+        if game_data:
+            vndb_meta = game_data.get("vndb", {})
+            matched_aid = vndb_meta.get("matched_app_id")
+            if matched_aid and str(matched_aid) != str(app_id):
+                matched_urls = [
+                    f"https://cdn.akamai.steamstatic.com/steam/apps/{matched_aid}/library_hero.jpg",
+                    f"https://cdn.akamai.steamstatic.com/steam/apps/{matched_aid}/header.jpg",
+                    f"https://cdn.cloudflare.steamstatic.com/steam/apps/{matched_aid}/library_hero.jpg",
+                    f"https://cdn.cloudflare.steamstatic.com/steam/apps/{matched_aid}/header.jpg",
+                ]
+                for m_url in matched_urls:
+                    try:
+                        resp = self._get(m_url, headers=headers, timeout=4)
+                        if resp.status_code == 200 and len(resp.content) > 0:
+                            with open(hero_path, "wb") as f:
+                                f.write(resp.content)
+                            self.invalidate_memory_cache(str(app_id))
+                            return True
+                    except Exception:
+                        pass
+
+        return False
+
     def invalidate_memory_cache(self, app_id: str = None):
         """Clears memory cache for a given app_id or all app_ids."""
         if app_id is None:
             self._image_cache.clear()
             self._fallback_cache.clear()
         else:
+            aid_str = str(app_id)
+            hero_aid_str = f"{aid_str}_hero"
             for k in list(self._image_cache.keys()):
-                if k[0] == str(app_id):
+                if k[0] in (aid_str, hero_aid_str):
                     del self._image_cache[k]
             for k in list(self._fallback_cache.keys()):
-                if k[0] == str(app_id):
+                if k[0] in (aid_str, hero_aid_str):
                     del self._fallback_cache[k]
 
     def set_custom_artwork(self, app_id: str, image_path: Path, steam_root: Path = None) -> bool:
@@ -369,10 +555,14 @@ class CoverArtManager:
             return False
 
         try:
-            # 1. If capsule, update local VNPM cover cache
+            # 1. If capsule or hero/wide, update local VNPM cache
             if asset_type == "capsule":
                 cache_path = self.get_cached_path(str(app_id))
                 pil_img.convert("RGB").save(cache_path, quality=95)
+                self.invalidate_memory_cache(str(app_id))
+            elif asset_type in ("hero", "wide"):
+                hero_path = self.get_cached_hero_path(str(app_id))
+                pil_img.convert("RGB").save(hero_path, quality=95)
                 self.invalidate_memory_cache(str(app_id))
 
             # 2. Save into Steam userdata grid directories
@@ -507,3 +697,59 @@ class CoverArtManager:
             self._fallback_cache.pop(next(iter(self._fallback_cache)))
         self._fallback_cache[fallback_key] = ctk_img
         return ctk_img
+
+    def get_hero_image(
+        self,
+        app_id: str,
+        title: str = "",
+        size: tuple[int, int] = (640, 220),
+        game_data: Optional[dict] = None,
+    ):
+        """Retrieves a CTkImage hero banner for the visual novel detail view."""
+        import customtkinter as ctk
+
+        cache_key = (f"{app_id}_hero", size)
+        hero_path = self.get_cached_hero_path(str(app_id))
+
+        if cache_key in self._image_cache:
+            return self._image_cache[cache_key]
+
+        # 1. Check disk cache
+        if hero_path.exists() and hero_path.stat().st_size > 0:
+            try:
+                pil_img = Image.open(hero_path).convert("RGB")
+                pil_img = ImageOps.fit(pil_img, size, method=Image.Resampling.BICUBIC)
+                ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=size)
+                if len(self._image_cache) >= self.MAX_CACHE_SIZE:
+                    self._image_cache.pop(next(iter(self._image_cache)))
+                self._image_cache[cache_key] = ctk_img
+                return ctk_img
+            except Exception as e:
+                logger.warning(f"Failed to process cached hero image {hero_path}: {e}")
+
+        # 2. Synchronous local Steam library discovery
+        if self.check_steam_library_hero(str(app_id)):
+            if hero_path.exists() and hero_path.stat().st_size > 0:
+                try:
+                    pil_img = Image.open(hero_path).convert("RGB")
+                    pil_img = ImageOps.fit(pil_img, size, method=Image.Resampling.BICUBIC)
+                    ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=size)
+                    if len(self._image_cache) >= self.MAX_CACHE_SIZE:
+                        self._image_cache.pop(next(iter(self._image_cache)))
+                    self._image_cache[cache_key] = ctk_img
+                    return ctk_img
+                except Exception as e:
+                    logger.warning(f"Failed to process local hero image {hero_path}: {e}")
+
+        # 3. Fallback procedural banner
+        fallback_key = (f"{app_id}_hero", title or "", size)
+        if fallback_key in self._fallback_cache:
+            return self._fallback_cache[fallback_key]
+
+        pil_img = self.generate_fallback_image(title or str(app_id), size)
+        ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=size)
+        if len(self._fallback_cache) >= self.MAX_CACHE_SIZE:
+            self._fallback_cache.pop(next(iter(self._fallback_cache)))
+        self._fallback_cache[fallback_key] = ctk_img
+        return ctk_img
+

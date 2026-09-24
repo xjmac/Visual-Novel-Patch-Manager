@@ -2,11 +2,12 @@ import os
 import json
 import shutil
 import hashlib
+import tempfile
 import time
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Iterable, Optional, Tuple, Union
 from .exceptions import BackupError
 
 logger = logging.getLogger(__name__)
@@ -16,6 +17,171 @@ class BackupManager:
 
     BACKUP_DIR_NAME = ".backup"
     MANIFEST_NAME = "manifest.json"
+    _SAVE_DIR_NAMES = frozenset({"save", "saves", "savedata"})
+    _OLD_SUFFIX = ".vnpm-old"
+    _STAGE_PREFIX = ".vnpm-stage-"
+
+    @staticmethod
+    def is_protected_save_path(relative_path: Union[str, Path]) -> bool:
+        """Return True for user save files that rollback must not delete or overwrite.
+
+        A path is protected when any component is ``save``, ``saves``, or ``savedata``,
+        or when the filename ends with ``.save``. Matching is case-insensitive.
+        """
+        text = str(relative_path).replace("\\", "/")
+        rel = Path(text)
+        if rel.name.lower().endswith(".save"):
+            return True
+        return any(part.lower() in BackupManager._SAVE_DIR_NAMES for part in rel.parts)
+
+    @staticmethod
+    def _old_tree_path(install_dir: Path) -> Path:
+        return install_dir.parent / f".{install_dir.name}{BackupManager._OLD_SUFFIX}"
+
+    @staticmethod
+    def recover_interrupted_swap(install_dir: Union[str, Path]) -> None:
+        """Finish or undo a directory swap that stopped between the two renames.
+
+        If the install path is missing and ``.vnpm-old`` exists, the previous tree
+        is renamed back. If both exist, the swap already finished and the sibling
+        is leftover, so it is removed. The leftover is never renamed over a live install.
+        """
+        install_dir = Path(install_dir)
+        old = BackupManager._old_tree_path(install_dir)
+        if old.exists() and not install_dir.exists():
+            logger.warning("Recovering interrupted install swap for %s", install_dir)
+            os.replace(old, install_dir)
+        elif old.exists() and install_dir.exists():
+            shutil.rmtree(old, ignore_errors=True)
+
+    @staticmethod
+    def make_staging_dir(install_dir: Union[str, Path]) -> Path:
+        """Create a sibling staging directory on the same filesystem as the install."""
+        install_dir = Path(install_dir)
+        return Path(tempfile.mkdtemp(
+            prefix=f".{install_dir.name}{BackupManager._STAGE_PREFIX}",
+            dir=str(install_dir.parent),
+        ))
+
+    @staticmethod
+    def commit_directory_swap(staging: Union[str, Path], install_dir: Union[str, Path]) -> None:
+        """Replace ``install_dir`` with ``staging`` via two same-filesystem renames.
+
+        On failure of the second rename, the previous tree is moved back when that
+        rename itself succeeds. A crash that skips that rollback leaves the complete
+        previous tree at ``.vnpm-old``.
+        """
+        install_dir = Path(install_dir)
+        staging = Path(staging)
+        BackupManager.recover_interrupted_swap(install_dir)
+        if not install_dir.exists():
+            raise BackupError(f"Game directory does not exist: {install_dir}")
+        if not staging.exists():
+            raise BackupError(f"Staging directory does not exist: {staging}")
+        if staging.stat().st_dev != install_dir.stat().st_dev:
+            raise BackupError("Staging directory is not on the same filesystem as the game install.")
+
+        old = BackupManager._old_tree_path(install_dir)
+        if old.exists():
+            shutil.rmtree(old)
+        os.replace(install_dir, old)
+        try:
+            os.replace(staging, install_dir)
+        except Exception:
+            try:
+                if not install_dir.exists() and old.exists():
+                    os.replace(old, install_dir)
+            except Exception as rollback_exc:
+                logger.error("Failed to roll back directory swap for %s: %s", install_dir, rollback_exc)
+            raise
+        shutil.rmtree(old, ignore_errors=True)
+
+    @staticmethod
+    def _place_file(src: Path, dest: Path) -> None:
+        """Copy ``src`` onto ``dest`` through a same-directory temp name and ``os.replace``.
+
+        ``os.replace`` swaps the directory entry, so a hardlinked ``dest`` is not
+        written through. A crash during the copy leaves the previous ``dest`` in place.
+        If the copy produces no file, ``dest`` is left unchanged and the caller checks.
+        """
+        src = Path(src)
+        dest = Path(dest)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if dest.is_symlink():
+            dest.unlink()
+        elif dest.is_dir():
+            shutil.rmtree(dest)
+        partial = dest.with_name(dest.name + ".vnpm-partial")
+        if partial.is_symlink() or (partial.exists() and not partial.is_dir()):
+            partial.unlink()
+        elif partial.is_dir():
+            shutil.rmtree(partial)
+        try:
+            shutil.copy2(src, partial)
+            if not partial.exists():
+                return
+            os.replace(partial, dest)
+        finally:
+            if partial.exists():
+                try:
+                    partial.unlink()
+                except OSError:
+                    pass
+
+    @staticmethod
+    def _clone_tree(
+        src: Path,
+        dest: Path,
+        skip_dir_names: Optional[Iterable[str]] = None,
+    ) -> None:
+        """Reproduce ``src`` at ``dest``, hardlinking files when the filesystem allows.
+
+        Directory symlinks are not followed. File symlinks are recreated. ``OSError``
+        from ``os.link`` (exFAT, FAT, cross-device) falls back to ``_place_file``.
+        """
+        src = Path(src)
+        dest = Path(dest)
+        if not src.exists() and not src.is_symlink():
+            return
+        if src.is_symlink():
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            if not dest.exists() and not dest.is_symlink():
+                dest.symlink_to(os.readlink(src))
+            return
+        if not src.is_dir():
+            BackupManager._place_file(src, dest)
+            return
+
+        skip = set(skip_dir_names or ())
+        dest.mkdir(parents=True, exist_ok=True)
+        for root, dirs, files in os.walk(src, followlinks=False):
+            root_path = Path(root)
+            target_root = dest / root_path.relative_to(src)
+            target_root.mkdir(parents=True, exist_ok=True)
+            kept_dirs = []
+            for directory in dirs:
+                dir_path = root_path / directory
+                if directory in skip:
+                    continue
+                if dir_path.is_symlink():
+                    link_dest = target_root / directory
+                    if not link_dest.exists() and not link_dest.is_symlink():
+                        link_dest.symlink_to(os.readlink(dir_path))
+                    continue
+                kept_dirs.append(directory)
+            dirs[:] = kept_dirs
+            for name in files:
+                src_file = root_path / name
+                dest_file = target_root / name
+                if dest_file.exists() or dest_file.is_symlink():
+                    continue
+                if src_file.is_symlink():
+                    dest_file.symlink_to(os.readlink(src_file))
+                    continue
+                try:
+                    os.link(src_file, dest_file, follow_symlinks=False)
+                except OSError:
+                    BackupManager._place_file(src_file, dest_file)
 
     @staticmethod
     def compute_sha256(file_path: Path) -> str:
@@ -80,10 +246,12 @@ class BackupManager:
         game_name: str,
         patch_source_dir: Optional[Union[str, Path]] = None,
         log_callback: Optional[Callable[[str], None]] = None,
+        backup_parent: Optional[Union[str, Path]] = None,
     ) -> Path:
         """
         Computes SHA256 checksums of all original game files, stores them in
-        .backup/<timestamp>/ with a manifest.json.
+        .backup/<timestamp>/ with a manifest.json. Pass ``backup_parent`` to write
+        that directory under a staging tree instead of the live install.
         Checks for patch file hash collisions to detect pre-patched games.
         """
         install_dir = Path(game_install_path)
@@ -94,7 +262,8 @@ class BackupManager:
         iso_str = datetime.fromtimestamp(now, tz=timezone.utc).isoformat()
         folder_tag = datetime.fromtimestamp(now, tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
 
-        backup_dir = install_dir / BackupManager.BACKUP_DIR_NAME / f"backup_{folder_tag}"
+        parent = Path(backup_parent) if backup_parent is not None else install_dir
+        backup_dir = parent / BackupManager.BACKUP_DIR_NAME / f"backup_{folder_tag}"
         files_backup_dir = backup_dir / "files"
         files_backup_dir.mkdir(parents=True, exist_ok=True)
 
@@ -173,15 +342,36 @@ class BackupManager:
         return backup_dir
 
     @staticmethod
+    def _overlay_live_saves(install_dir: Path, staging: Path) -> None:
+        """Copy protected save files from the live install onto the staged tree."""
+        if not install_dir.exists():
+            return
+        for root, dirs, files in os.walk(install_dir, followlinks=False):
+            dirs[:] = [d for d in dirs if d != BackupManager.BACKUP_DIR_NAME]
+            root_path = Path(root)
+            if BackupManager.BACKUP_DIR_NAME in root_path.parts:
+                continue
+            for file_name in files:
+                full_path = root_path / file_name
+                rel = full_path.relative_to(install_dir)
+                if not BackupManager.is_protected_save_path(rel):
+                    continue
+                BackupManager._place_file(full_path, staging / rel)
+
+    @staticmethod
     def restore_backup(
         game_install_path: Union[str, Path],
         log_callback: Optional[Callable[[str], None]] = None,
     ) -> bool:
         """
-        Restores original game files from the latest backup atomically,
-        verifying SHA256 checksums before and after restoration.
+        Restores original game files from the latest backup.
+
+        The next tree is built in a sibling directory, checked, then swapped in
+        with two renames. Save files are copied from the live tree and are not
+        replaced by backup bytes or resurrected if the user deleted them.
         """
         install_dir = Path(game_install_path)
+        BackupManager.recover_interrupted_swap(install_dir)
         latest_dir, manifest = BackupManager.get_latest_backup(install_dir)
 
         if not latest_dir or not manifest:
@@ -193,7 +383,7 @@ class BackupManager:
         files_backup_dir = latest_dir / "files"
         manifest_files = manifest.get("files", {})
 
-        # 1. Pre-restoration integrity check of the backup repository
+        # Read-only integrity check. Nothing in the live install is renamed yet.
         for rel_path_str, meta in manifest_files.items():
             backup_file = files_backup_dir / rel_path_str
             if not backup_file.exists():
@@ -205,49 +395,39 @@ class BackupManager:
         if log_callback:
             log_callback("Restoring original files and purging patch files...")
 
-        # 2. Remove files currently in game directory that are not part of .backup
-        for root, dirs, files in os.walk(install_dir, topdown=False):
-            dirs[:] = [d for d in dirs if d != BackupManager.BACKUP_DIR_NAME]
-            root_path = Path(root)
-            if BackupManager.BACKUP_DIR_NAME in root_path.parts:
-                continue
+        staging = None
+        swapped = False
+        try:
+            staging = BackupManager.make_staging_dir(install_dir)
+            if log_callback:
+                log_callback("Verifying restored file integrity...")
 
-            for file_name in files:
-                full_file_path = root_path / file_name
-                try:
-                    full_file_path.unlink()
-                except OSError as e:
-                    logger.warning(f"Could not remove file during rollback '{full_file_path}': {e}")
+            for rel_path_str, meta in manifest_files.items():
+                if BackupManager.is_protected_save_path(rel_path_str):
+                    continue
+                staged_file = staging / rel_path_str
+                BackupManager._place_file(files_backup_dir / rel_path_str, staged_file)
+                if not staged_file.exists():
+                    raise BackupError(f"Rollback failed: restored file '{rel_path_str}' missing.")
+                restored_hash = BackupManager.compute_sha256(staged_file)
+                if restored_hash != meta["sha256"]:
+                    raise BackupError(f"Rollback failed: restored checksum mismatch for '{rel_path_str}'.")
 
-            # Remove empty directories (except install_dir and .backup)
-            if root_path != install_dir and not any(root_path.iterdir()):
-                try:
-                    root_path.rmdir()
-                except OSError:
-                    pass  # Directory not empty or other OS error, skip
+            BackupManager._overlay_live_saves(install_dir, staging)
+            backup_root = install_dir / BackupManager.BACKUP_DIR_NAME
+            if backup_root.exists():
+                BackupManager._clone_tree(backup_root, staging / BackupManager.BACKUP_DIR_NAME)
 
-        # 3. Restore all original files from the backup
-        for rel_path_str, meta in manifest_files.items():
-            src_backup_file = files_backup_dir / rel_path_str
-            dst_restored_file = install_dir / rel_path_str
-            dst_restored_file.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src_backup_file, dst_restored_file)
-
-        # 4. Post-restoration verification
-        if log_callback:
-            log_callback("Verifying restored file integrity...")
-
-        for rel_path_str, meta in manifest_files.items():
-            restored_file = install_dir / rel_path_str
-            if not restored_file.exists():
-                raise BackupError(f"Rollback failed: restored file '{rel_path_str}' missing.")
-            restored_hash = BackupManager.compute_sha256(restored_file)
-            if restored_hash != meta["sha256"]:
-                raise BackupError(f"Rollback failed: restored checksum mismatch for '{rel_path_str}'.")
-
-        # 5. Remove .patch_applied.json if present
-        tracking_file = install_dir / ".patch_applied.json"
-        tracking_file.unlink(missing_ok=True)
+            BackupManager.commit_directory_swap(staging, install_dir)
+            swapped = True
+        finally:
+            if staging is not None and staging.exists() and not swapped:
+                shutil.rmtree(staging, ignore_errors=True)
+            # A finished swap, or a second rename that was rolled back, leaves the
+            # install in place. A crash between the renames leaves .vnpm-old for
+            # the next recover_interrupted_swap call and must not be deleted here.
+            if install_dir.exists():
+                BackupManager.recover_interrupted_swap(install_dir)
 
         if log_callback:
             log_callback("Rollback successful! Original game restored.")

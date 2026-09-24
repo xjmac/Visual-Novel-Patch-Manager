@@ -12,6 +12,7 @@ from vnpatchmanager.exceptions import (
     ConfigError,
     NetworkError,
     SteamScanError,
+    ShortcutsVdfError,
 )
 
 
@@ -45,6 +46,7 @@ def test_exception_hierarchy():
         ConfigError,
         NetworkError,
         SteamScanError,
+        ShortcutsVdfError,
     ]:
         err = exc_cls("Test error")
         assert isinstance(err, VNPatchError)

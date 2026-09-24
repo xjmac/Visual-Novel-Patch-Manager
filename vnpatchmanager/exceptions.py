@@ -28,6 +28,9 @@ class NetworkError(VNPatchError):
 
 class SteamScanError(VNPatchError):
     """Raised when discovering or parsing Steam libraries and shortcuts fails."""
+
+class ShortcutsVdfError(VNPatchError):
+    """Existing shortcuts.vdf could not be parsed; the file was not modified."""
     pass
 
 

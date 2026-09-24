@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 from pathlib import Path
 from unittest.mock import patch
 import pytest
@@ -191,6 +192,7 @@ def test_restore_backup_post_restore_missing_file(tmp_path):
         with pytest.raises(BackupError) as exc_info:
             BackupManager.restore_backup(game_dir)
         assert "restored file 'file.txt' missing" in str(exc_info.value)
+    assert (game_dir / "file.txt").read_text() == "original"
 
 
 def test_restore_backup_post_restore_checksum_mismatch(tmp_path):
@@ -208,6 +210,7 @@ def test_restore_backup_post_restore_checksum_mismatch(tmp_path):
         with pytest.raises(BackupError) as exc_info:
             BackupManager.restore_backup(game_dir)
         assert "restored checksum mismatch" in str(exc_info.value)
+    assert (game_dir / "file.txt").read_text() == "original"
 
 
 def test_create_backup_detects_pre_existing_patch_collision(tmp_path):
@@ -237,6 +240,50 @@ def test_create_backup_detects_pre_existing_patch_collision(tmp_path):
     assert "game/assets.rpa" in manifest["detected_collisions"]
     assert any("Pre-existing patch file(s) detected" in log for log in logs)
     assert not BackupManager.has_clean_backup(game_dir)
+
+
+def test_restore_crash_between_renames_keeps_previous_tree(tmp_path):
+    """A failed second rename must leave the previous tree intact at .vnpm-old."""
+    game_dir = tmp_path / "CrashGame"
+    game_dir.mkdir()
+    (game_dir / "marker.txt").write_text("original")
+    (game_dir / "game" / "saves").mkdir(parents=True)
+    (game_dir / "game" / "saves" / "slot.save").write_text("keep-me")
+
+    BackupManager.create_backup(game_dir, "100", "CrashGame")
+    (game_dir / "marker.txt").write_text("patched")
+
+    real_replace = os.replace
+    directory_replaces = {"count": 0}
+
+    def crash_between_renames(src, dst, *args, **kwargs):
+        src_path = Path(src)
+        if not src_path.is_dir():
+            return real_replace(src, dst, *args, **kwargs)
+        directory_replaces["count"] += 1
+        if directory_replaces["count"] == 1:
+            return real_replace(src, dst, *args, **kwargs)
+        raise OSError("crash between renames")
+
+    old_tree = game_dir.parent / f".{game_dir.name}.vnpm-old"
+    with patch("os.replace", side_effect=crash_between_renames):
+        with pytest.raises(OSError, match="crash between renames"):
+            BackupManager.restore_backup(game_dir)
+
+    assert not game_dir.exists()
+    assert (old_tree / "marker.txt").read_text() == "patched"
+    assert (old_tree / "game" / "saves" / "slot.save").read_text() == "keep-me"
+    assert not list(game_dir.parent.glob(f".{game_dir.name}.vnpm-stage-*"))
+
+    BackupManager.recover_interrupted_swap(game_dir)
+    assert not old_tree.exists()
+    assert (game_dir / "marker.txt").read_text() == "patched"
+    assert (game_dir / "game" / "saves" / "slot.save").read_text() == "keep-me"
+
+    assert BackupManager.restore_backup(game_dir) is True
+    assert (game_dir / "marker.txt").read_text() == "original"
+    assert (game_dir / "game" / "saves" / "slot.save").read_text() == "keep-me"
+    assert BackupManager.has_backup(game_dir)
 
 
 def test_has_clean_backup(tmp_path):

@@ -20,21 +20,36 @@ interface GameEntry {
   vndb_rating?: number;
 }
 
+interface PluginPayload {
+  success?: boolean;
+  error?: string;
+  games?: Record<string, GameEntry>;
+  message?: string;
+}
+
 const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
   const [games, setGames] = useState<Record<string, GameEntry>>({});
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState("Ready");
 
+  const resultError = (result: PluginPayload | undefined, fallback: string) => {
+    if (result && typeof result.error === "string" && result.error) {
+      return result.error;
+    }
+    return fallback;
+  };
+
   const refreshLibrary = async () => {
     setLoading(true);
     setStatusMsg("Scanning visual novels...");
     try {
-      const res = await serverAPI.callPluginMethod<{}, Record<string, GameEntry>>("get_library_games", {});
-      if (res.success && res.result) {
-        setGames(res.result);
-        setStatusMsg("Found " + Object.keys(res.result).length + " VNs");
+      const res = await serverAPI.callPluginMethod<{}, PluginPayload>("get_library_games", {});
+      const payload = res.result;
+      if (res.success && payload?.success && payload.games && typeof payload.games === "object") {
+        setGames(payload.games);
+        setStatusMsg("Found " + Object.keys(payload.games).length + " VNs");
       } else {
-        setStatusMsg("Daemon not connected (run 'vnpm --daemon')");
+        setStatusMsg(resultError(payload, "Daemon not connected (run 'vnpm --daemon')"));
       }
     } catch (e) {
       setStatusMsg("Error: " + e);
@@ -43,16 +58,16 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
     }
   };
 
-  const applyPatch = async (appId: string) => {
+  const runMutation = async (method: "apply_patch" | "restore_backup" | "fix_codecs", appId: string, working: string, done: string) => {
     setLoading(true);
-    setStatusMsg("Applying patch for " + appId + "...");
+    setStatusMsg(working);
     try {
-      const res = await serverAPI.callPluginMethod<{ app_id: string }, { success: boolean; error?: string }>("apply_patch", { app_id: appId });
+      const res = await serverAPI.callPluginMethod<{ app_id: string }, PluginPayload>(method, { app_id: appId });
       if (res.success && res.result?.success) {
-        setStatusMsg("Patch applied successfully!");
+        setStatusMsg(done);
         await refreshLibrary();
       } else {
-        setStatusMsg("Patch failed: " + (res.result?.error || "Unknown error"));
+        setStatusMsg(resultError(res.result, "Unknown error"));
       }
     } catch (e) {
       setStatusMsg("Error: " + e);
@@ -87,11 +102,32 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
                 : "● Clean Unpatched"
             }
           >
-            {game.has_local_patch && !game.is_patched && (
-              <ButtonItem onClick={() => applyPatch(game.app_id)} disabled={loading}>
-                Apply Patch
-              </ButtonItem>
-            )}
+            <div>
+              {game.has_local_patch && !game.is_patched && (
+                <ButtonItem
+                  onClick={() => runMutation("apply_patch", game.app_id, "Applying patch for " + game.app_id + "...", "Patch applied successfully!")}
+                  disabled={loading}
+                >
+                  Apply Patch
+                </ButtonItem>
+              )}
+              {(game.is_patched || game.has_clean_backup) && (
+                <ButtonItem
+                  onClick={() => runMutation("restore_backup", game.app_id, "Restoring " + game.name + "...", "Restore finished")}
+                  disabled={loading}
+                >
+                  Restore
+                </ButtonItem>
+              )}
+              {game.is_installed && (
+                <ButtonItem
+                  onClick={() => runMutation("fix_codecs", game.app_id, "Fixing codecs for " + game.name + "...", "Codec fixes applied")}
+                  disabled={loading}
+                >
+                  Fix codecs
+                </ButtonItem>
+              )}
+            </div>
           </Field>
         </PanelSectionRow>
       ))}
