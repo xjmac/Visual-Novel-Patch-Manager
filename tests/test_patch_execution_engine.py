@@ -887,15 +887,23 @@ def test_apply_patch_archive_tools_and_fallbacks(temp_config_dir, tmp_path):
         "patch_source_dir": str(source_dir),
         "actions": [{"type": "extract_archive", "source": "patch.7z", "destination": "{game_dir}/"}]
     }
+    def list_then_extract(list_token, list_stdout):
+        def runner(cmd, *args, **kwargs):
+            if len(cmd) > 1 and cmd[1] == list_token:
+                return MagicMock(returncode=0, stdout=list_stdout, stderr="")
+            return MagicMock(returncode=0, stdout="", stderr="")
+        return runner
+
     with patch("shutil.which", return_value="/usr/bin/7z"), \
-         patch("subprocess.run") as mock_run:
+         patch("subprocess.run", side_effect=list_then_extract("l", "Path = patch.dat\n")) as mock_run:
         PatchExecutionEngine.apply_patch(game_data, patch_7z, cm, lambda m: None)
-        mock_run.assert_called_once()
+        assert [call.args[0][1] for call in mock_run.call_args_list] == ["l", "x"]
 
     # 3. .7z extraction tool missing
-    with patch("shutil.which", return_value=None):
+    with patch("shutil.which", return_value=None), patch("subprocess.run") as mock_run:
         with pytest.raises(PatchExtractionError, match="7z tool not found"):
             PatchExecutionEngine.apply_patch(game_data, patch_7z, cm, lambda m: None)
+        mock_run.assert_not_called()
 
     # 4. .rar extraction with unrar
     (source_dir / "patch.rar").write_bytes(b"dummy rar")
@@ -905,22 +913,35 @@ def test_apply_patch_archive_tools_and_fallbacks(temp_config_dir, tmp_path):
         "actions": [{"type": "extract_archive", "source": "patch.rar", "destination": "{game_dir}/"}]
     }
     with patch("shutil.which", side_effect=lambda x: "/usr/bin/unrar" if x == "unrar" else None), \
-         patch("subprocess.run") as mock_run:
+         patch("subprocess.run", side_effect=list_then_extract("lb", "patch.dat\n")) as mock_run:
         PatchExecutionEngine.apply_patch(game_data, patch_rar, cm, lambda m: None)
-        mock_run.assert_called_once()
+        assert [call.args[0][1] for call in mock_run.call_args_list] == ["lb", "x"]
 
     # 5. .rar extraction with 7z fallback
     with patch("shutil.which", side_effect=lambda x: "/usr/bin/7z" if x == "7z" else None), \
-         patch("subprocess.run") as mock_run:
+         patch("subprocess.run", side_effect=list_then_extract("l", "Path = patch.dat\n")) as mock_run:
         PatchExecutionEngine.apply_patch(game_data, patch_rar, cm, lambda m: None)
-        mock_run.assert_called_once()
+        assert [call.args[0][1] for call in mock_run.call_args_list] == ["l", "x"]
 
     # 6. .rar extraction with no tools
-    with patch("shutil.which", return_value=None):
+    with patch("shutil.which", return_value=None), patch("subprocess.run") as mock_run:
         with pytest.raises(PatchExtractionError, match="unrar or 7z tool not found"):
             PatchExecutionEngine.apply_patch(game_data, patch_rar, cm, lambda m: None)
+        mock_run.assert_not_called()
 
-    # 7. Missing proton executable file check
+    # 7. Unknown suffix does not call shutil.unpack_archive
+    (source_dir / "patch.cab").write_bytes(b"not an archive")
+    patch_cab = {
+        "steam_app_id": 900001,
+        "patch_source_dir": str(source_dir),
+        "actions": [{"type": "extract_archive", "source": "patch.cab", "destination": "{game_dir}/"}]
+    }
+    with patch("shutil.unpack_archive") as mock_unpack:
+        with pytest.raises(PatchExtractionError, match="Unsupported archive type"):
+            PatchExecutionEngine.apply_patch(game_data, patch_cab, cm, lambda m: None)
+        mock_unpack.assert_not_called()
+
+    # 8. Missing proton executable file check
     patch_missing_exe = {
         "steam_app_id": 900001,
         "patch_source_dir": str(source_dir),
@@ -1208,19 +1229,440 @@ def test_extract_archive_traversal_protection(tmp_path):
     cm.config["local_path"] = str(tmp_path)
 
     def mock_7z_run(cmd, *args, **kwargs):
+        if len(cmd) > 1 and cmd[1] == "l":
+            return MagicMock(returncode=0, stdout="Path = escaped_link\n", stderr="")
         for arg in cmd:
-            if arg.startswith("-o"):
+            if isinstance(arg, str) and arg.startswith("-o"):
                 extract_tmp = Path(arg[2:])
                 outside_target = tmp_path / "escaped_outside.txt"
                 outside_target.write_text("outside")
                 evil = extract_tmp / "escaped_link"
                 evil.symlink_to(outside_target)
                 break
-        return MagicMock(returncode=0)
+        return MagicMock(returncode=0, stdout="", stderr="")
 
     with patch("shutil.which", return_value="/usr/bin/7z"), \
          patch("subprocess.run", side_effect=mock_7z_run), \
          patch.object(BackupManager, "has_backup", return_value=True):
         with pytest.raises(PatchSecurityError, match="Symlink traversal detected"):
             PatchExecutionEngine.apply_patch(game_data, patch_data, cm, lambda m: None)
+
+
+def _prepare_local_patch(tmp_path, source_name="payload.bin"):
+    cm = ConfigManager()
+    cm.config["mode"] = "local"
+    game_dir = tmp_path / "Game"
+    game_dir.mkdir()
+    (game_dir / "keep.txt").write_text("untouched")
+    source_dir = tmp_path / "Patch"
+    source_dir.mkdir()
+    (source_dir / source_name).write_bytes(b"payload")
+    game_data = {
+        "name": "Game",
+        "path": game_dir,
+        "library_path": tmp_path / "Steam",
+        "steam_app_id": 900001,
+    }
+    return cm, game_dir, source_dir, game_data
+
+
+def _assert_live_tree_untouched(game_dir):
+    assert (game_dir / "keep.txt").read_text() == "untouched"
+    assert not list(game_dir.parent.glob(f".{game_dir.name}.vnpm-stage-*"))
+
+
+def test_apply_patch_rejects_absolute_destination_before_write(temp_config_dir, tmp_path):
+    from vnpatchmanager.exceptions import PatchSecurityError
+
+    cm, game_dir, source_dir, game_data = _prepare_local_patch(tmp_path)
+    sentinel = tmp_path.parent / f"vnpm-dest-sentinel-{tmp_path.name}"
+    patch_data = {
+        "steam_app_id": 900001,
+        "patch_source_dir": str(source_dir),
+        "actions": [{
+            "type": "copy_file",
+            "source": "payload.bin",
+            "destination": str(sentinel),
+        }],
+    }
+    try:
+        with pytest.raises(PatchSecurityError, match="Destination escapes the install directory"):
+            PatchExecutionEngine.apply_patch(game_data, patch_data, cm, lambda m: None)
+        assert not sentinel.exists()
+        _assert_live_tree_untouched(game_dir)
+    finally:
+        if sentinel.exists():
+            sentinel.unlink()
+
+
+def test_apply_patch_rejects_relative_destination_escape(temp_config_dir, tmp_path):
+    from vnpatchmanager.exceptions import PatchSecurityError
+
+    cm, game_dir, source_dir, game_data = _prepare_local_patch(tmp_path)
+    escaped = tmp_path.parent / "escaped_rel.txt"
+    patch_data = {
+        "steam_app_id": 900001,
+        "patch_source_dir": str(source_dir),
+        "actions": [{
+            "type": "copy_file",
+            "source": "payload.bin",
+            "destination": "{game_dir}/../../escaped_rel.txt",
+        }],
+    }
+    try:
+        with pytest.raises(PatchSecurityError, match="Destination escapes the install directory"):
+            PatchExecutionEngine.apply_patch(game_data, patch_data, cm, lambda m: None)
+        assert not escaped.exists()
+        _assert_live_tree_untouched(game_dir)
+    finally:
+        if escaped.exists():
+            escaped.unlink()
+
+
+def test_apply_patch_rejects_extract_destination_before_extract(temp_config_dir, tmp_path):
+    import zipfile
+    from vnpatchmanager.exceptions import PatchSecurityError
+
+    cm, game_dir, source_dir, game_data = _prepare_local_patch(tmp_path, source_name="patch.zip")
+    with zipfile.ZipFile(source_dir / "patch.zip", "w") as zf:
+        zf.writestr("inner.txt", "content")
+    sentinel_dir = tmp_path.parent / f"vnpm-extract-sentinel-{tmp_path.name}"
+    patch_data = {
+        "steam_app_id": 900001,
+        "patch_source_dir": str(source_dir),
+        "actions": [{
+            "type": "extract_archive",
+            "source": "patch.zip",
+            "destination": str(sentinel_dir / "nested"),
+        }],
+    }
+    try:
+        with patch.object(PatchExecutionEngine, "_safe_extract_zip", side_effect=AssertionError("extracted")), \
+             pytest.raises(PatchSecurityError, match="Destination escapes the install directory"):
+            PatchExecutionEngine.apply_patch(game_data, patch_data, cm, lambda m: None)
+        assert not sentinel_dir.exists()
+        _assert_live_tree_untouched(game_dir)
+    finally:
+        if sentinel_dir.exists():
+            import shutil
+            shutil.rmtree(sentinel_dir)
+
+
+def _assert_archive_slip_rejected(
+    tmp_path,
+    suffix,
+    which_side_effect,
+    list_token,
+    list_stdout,
+    match="escapes the extract directory",
+):
+    from vnpatchmanager.exceptions import PatchSecurityError
+
+    cm, game_dir, source_dir, game_data = _prepare_local_patch(tmp_path, source_name=f"patch{suffix}")
+    (source_dir / f"patch{suffix}").write_bytes(b"dummy")
+    outside = tmp_path.parent / f"vnpm-slip-sentinel-{tmp_path.name}"
+    extract_calls = []
+
+    def runner(cmd, *args, **kwargs):
+        if len(cmd) > 1 and cmd[1] == "x":
+            extract_calls.append(cmd)
+            outside.write_text("pwned")
+            return MagicMock(returncode=0, stdout="", stderr="")
+        if len(cmd) > 1 and cmd[1] == list_token:
+            return MagicMock(returncode=0, stdout=list_stdout, stderr="")
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    patch_data = {
+        "steam_app_id": 900001,
+        "patch_source_dir": str(source_dir),
+        "actions": [{
+            "type": "extract_archive",
+            "source": f"patch{suffix}",
+            "destination": "{game_dir}/",
+        }],
+    }
+    try:
+        with patch("shutil.which", side_effect=which_side_effect), \
+             patch("subprocess.run", side_effect=runner), \
+             pytest.raises(PatchSecurityError, match=match):
+            PatchExecutionEngine.apply_patch(game_data, patch_data, cm, lambda m: None)
+        assert extract_calls == []
+        assert not outside.exists()
+        _assert_live_tree_untouched(game_dir)
+    finally:
+        if outside.exists():
+            outside.unlink()
+
+
+def test_apply_patch_7z_slip_rejected_before_extract(temp_config_dir, tmp_path):
+    _assert_archive_slip_rejected(
+        tmp_path,
+        ".7z",
+        lambda name: "/usr/bin/7z" if name == "7z" else None,
+        "l",
+        "Path = ../escaped_file.txt\n",
+    )
+
+
+def test_apply_patch_unrar_slip_rejected_before_extract(temp_config_dir, tmp_path):
+    _assert_archive_slip_rejected(
+        tmp_path,
+        ".rar",
+        lambda name: "/usr/bin/unrar" if name == "unrar" else None,
+        "lb",
+        "../escaped_file.txt\n",
+    )
+
+
+def test_apply_patch_rar_via_7z_slip_rejected_before_extract(temp_config_dir, tmp_path):
+    _assert_archive_slip_rejected(
+        tmp_path,
+        ".rar",
+        lambda name: "/usr/bin/7z" if name == "7z" else None,
+        "l",
+        "Path = ../escaped_file.txt\n",
+    )
+
+
+@pytest.mark.parametrize(
+    ("suffix", "which_side_effect", "list_token", "list_stdout", "match"),
+    [
+        (".7z", lambda name: "/usr/bin/7z" if name == "7z" else None, "l", "Path = /etc/passwd\n", "escapes the extract directory"),
+        (
+            ".7z",
+            lambda name: "/usr/bin/7z" if name == "7z" else None,
+            "l",
+            "Path = C:/Windows/system.ini\n",
+            "escapes the extract directory",
+        ),
+        (
+            ".rar",
+            lambda name: "/usr/bin/unrar" if name == "unrar" else None,
+            "lb",
+            "/etc/passwd\n",
+            "escapes the extract directory",
+        ),
+        (
+            ".rar",
+            lambda name: "/usr/bin/unrar" if name == "unrar" else None,
+            "lb",
+            "C:/Windows/system.ini\n",
+            "escapes the extract directory",
+        ),
+    ],
+)
+def test_apply_patch_rejects_unsafe_archive_member_names(
+    temp_config_dir, tmp_path, suffix, which_side_effect, list_token, list_stdout, match
+):
+    """Absolute and drive-prefixed members are rejected before extract.
+
+    A blank ``Path =`` line is stripped by the 7z lister and becomes "no members"
+    rather than an empty name. ``_reject_archive_member`` still rejects an empty name.
+    """
+    _assert_archive_slip_rejected(tmp_path, suffix, which_side_effect, list_token, list_stdout, match)
+
+
+def test_reject_archive_member_empty_name(tmp_path):
+    from vnpatchmanager.exceptions import PatchSecurityError
+
+    extract_dir = tmp_path / "extract"
+    extract_dir.mkdir()
+    with pytest.raises(PatchSecurityError, match="Archive member path is empty"):
+        PatchExecutionEngine._reject_archive_member("", extract_dir)
+    with pytest.raises(PatchSecurityError, match="Archive member path is empty"):
+        PatchExecutionEngine._reject_archive_member("   ", extract_dir)
+
+
+def _assert_archive_listing_failure(tmp_path, suffix, which_side_effect, list_token, returncode, stdout, match):
+    from vnpatchmanager.exceptions import PatchExtractionError
+
+    cm, game_dir, source_dir, game_data = _prepare_local_patch(tmp_path, source_name=f"patch{suffix}")
+    (source_dir / f"patch{suffix}").write_bytes(b"dummy")
+    extract_calls = []
+
+    def runner(cmd, *args, **kwargs):
+        if len(cmd) > 1 and cmd[1] == "x":
+            extract_calls.append(cmd)
+            return MagicMock(returncode=0, stdout="", stderr="")
+        if len(cmd) > 1 and cmd[1] == list_token:
+            return MagicMock(returncode=returncode, stdout=stdout, stderr="bad archive")
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    patch_data = {
+        "steam_app_id": 900001,
+        "patch_source_dir": str(source_dir),
+        "actions": [{
+            "type": "extract_archive",
+            "source": f"patch{suffix}",
+            "destination": "{game_dir}/",
+        }],
+    }
+    with patch("shutil.which", side_effect=which_side_effect), \
+         patch("subprocess.run", side_effect=runner), \
+         pytest.raises(PatchExtractionError, match=match):
+        PatchExecutionEngine.apply_patch(game_data, patch_data, cm, lambda m: None)
+    assert extract_calls == []
+    _assert_live_tree_untouched(game_dir)
+
+
+@pytest.mark.parametrize(
+    ("suffix", "which_side_effect", "list_token", "returncode", "stdout", "match"),
+    [
+        (".7z", lambda name: "/usr/bin/7z" if name == "7z" else None, "l", 1, "", "Failed to list archive"),
+        (".rar", lambda name: "/usr/bin/unrar" if name == "unrar" else None, "lb", 1, "", "Failed to list archive"),
+        (".7z", lambda name: "/usr/bin/7z" if name == "7z" else None, "l", 0, "\n", "produced no members"),
+        (".rar", lambda name: "/usr/bin/unrar" if name == "unrar" else None, "lb", 0, "", "produced no members"),
+    ],
+)
+def test_apply_patch_archive_listing_failure_skips_extract(
+    temp_config_dir, tmp_path, suffix, which_side_effect, list_token, returncode, stdout, match
+):
+    _assert_archive_listing_failure(
+        tmp_path, suffix, which_side_effect, list_token, returncode, stdout, match
+    )
+
+
+def test_apply_patch_stages_sources_under_cache_root(temp_config_dir, tmp_path):
+    import vnpatchmanager.patch_execution as patch_execution
+
+    cm, game_dir, source_dir, game_data = _prepare_local_patch(tmp_path)
+    cache_root = tmp_path / "cache-sources"
+    recorded = []
+    real_mkdtemp = tempfile.mkdtemp
+
+    def track(*args, **kwargs):
+        recorded.append(kwargs.get("dir"))
+        return real_mkdtemp(*args, **kwargs)
+
+    patch_data = {
+        "steam_app_id": 900001,
+        "patch_source_dir": str(source_dir),
+        "actions": [{
+            "type": "copy_file",
+            "source": "payload.bin",
+            "destination": "{game_dir}/sub/payload.bin",
+        }],
+    }
+    with patch.object(patch_execution, "PATCH_SOURCE_ROOT", cache_root), \
+         patch("tempfile.mkdtemp", side_effect=track):
+        assert PatchExecutionEngine.apply_patch(game_data, patch_data, cm, lambda m: None) is True
+
+    assert cache_root in [Path(item) for item in recorded if item is not None]
+    assert (game_dir / "sub" / "payload.bin").read_bytes() == b"payload"
+    assert cache_root.exists()
+    assert list(cache_root.iterdir()) == []
+    assert cache_root.stat().st_mode & 0o777 == 0o700
+
+
+def test_get_patch_status_skips_escaped_destination(tmp_path):
+    game_dir = tmp_path / "Game"
+    game_dir.mkdir()
+    outside = tmp_path / "outside.txt"
+    outside.write_text("secret")
+    patch_data = {
+        "patch_source_dir": str(tmp_path),
+        "actions": [{
+            "type": "copy_file",
+            "source": "outside.txt",
+            "destination": str(outside),
+        }],
+    }
+    assert PatchExecutionEngine.get_patch_status(game_dir, patch_data) is False
+    assert outside.read_text() == "secret"
+    (game_dir / "adult.xp3").write_bytes(b"xp3")
+    assert PatchExecutionEngine.get_patch_status(game_dir, patch_data) is True
+
+
+def test_apply_patch_aborts_when_live_install_changes_during_staging(temp_config_dir, tmp_path):
+    """A live-tree write during staging aborts the swap and leaves the clone behind nothing."""
+    from vnpatchmanager.exceptions import PatchExtractionError
+
+    cm, game_dir, source_dir, game_data = _prepare_local_patch(tmp_path)
+    real_place = BackupManager._place_file
+
+    def tamper(src, dest):
+        real_place(src, dest)
+        (game_dir / "keep.txt").write_text("tampered")
+
+    patch_data = {
+        "steam_app_id": 900001,
+        "patch_source_dir": str(source_dir),
+        "actions": [{
+            "type": "copy_file",
+            "source": "payload.bin",
+            "destination": "{game_dir}/sub/payload.bin",
+        }],
+    }
+    with patch.object(BackupManager, "_place_file", side_effect=tamper):
+        with pytest.raises(PatchExtractionError, match="Live install was modified during staging"):
+            PatchExecutionEngine.apply_patch(game_data, patch_data, cm, lambda m: None)
+
+    assert (game_dir / "keep.txt").read_text() == "tampered"
+    assert not (game_dir / "sub" / "payload.bin").exists()
+    assert not (game_dir / ".patch_applied.json").exists()
+    assert not list(game_dir.parent.glob(f".{game_dir.name}.vnpm-stage-*"))
+
+
+def test_apply_patch_innoextract_symlink_rejected_after_write(temp_config_dir, tmp_path):
+    """innoextract may write first; a symlink that leaves the extract dir is not merged."""
+    import vnpatchmanager.patch_execution as patch_execution
+    from vnpatchmanager.exceptions import PatchSecurityError
+
+    cm, game_dir, source_dir, game_data = _prepare_local_patch(tmp_path, source_name="setup.exe")
+    cache_root = tmp_path / "cache-sources"
+    outside = tmp_path / "outside_secret.txt"
+    outside.write_text("secret")
+    merge_calls = []
+
+    def fake_run(cmd, *args, **kwargs):
+        extract_tmp = Path(cmd[3])
+        extract_tmp.mkdir(parents=True, exist_ok=True)
+        (extract_tmp / "evil_link").symlink_to(outside)
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    def track_merge(*args, **kwargs):
+        merge_calls.append(args)
+
+    patch_data = {
+        "steam_app_id": 900001,
+        "patch_source_dir": str(source_dir),
+        "actions": [{
+            "type": "extract_inno_setup",
+            "source": "setup.exe",
+            "destination": "{game_dir}/",
+        }],
+    }
+    with patch.object(patch_execution, "PATCH_SOURCE_ROOT", cache_root), \
+         patch("shutil.which", return_value="/usr/bin/innoextract"), \
+         patch("subprocess.run", side_effect=fake_run), \
+         patch.object(PatchExecutionEngine, "_merge_tree", side_effect=track_merge):
+        with pytest.raises(PatchSecurityError, match="Symlink traversal detected"):
+            PatchExecutionEngine.apply_patch(game_data, patch_data, cm, lambda m: None)
+
+    assert merge_calls == []
+    assert outside.read_text() == "secret"
+    _assert_live_tree_untouched(game_dir)
+    assert cache_root.exists()
+    assert list(cache_root.iterdir()) == []
+
+
+def test_restore_via_steam_skips_destination_outside_install(tmp_path):
+    game_dir = tmp_path / "Game"
+    game_dir.mkdir()
+    inside = game_dir / "patch.rpa"
+    inside.write_bytes(b"patch")
+    outside = tmp_path / "sentinel.txt"
+    outside.write_text("keep")
+    game_data = {"name": "Synthetic VN", "path": game_dir, "steam_app_id": 900001}
+    patch_data = {
+        "steam_app_id": 900001,
+        "actions": [
+            {"type": "copy_file", "source": "x", "destination": str(outside)},
+            {"type": "copy_file", "source": "patch.rpa", "destination": "{game_dir}/patch.rpa"},
+        ],
+    }
+    with patch("subprocess.Popen"):
+        assert PatchExecutionEngine.restore_via_steam(game_data, patch_data, lambda m: None) is True
+    assert outside.read_text() == "keep"
+    assert not inside.exists()
 

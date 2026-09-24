@@ -286,6 +286,62 @@ def test_restore_crash_between_renames_keeps_previous_tree(tmp_path):
     assert BackupManager.has_backup(game_dir)
 
 
+def test_commit_directory_swap_rejects_different_filesystem(tmp_path):
+    """A staging directory on another device is refused before either rename."""
+    install = tmp_path / "Game"
+    install.mkdir()
+    (install / "keep.txt").write_text("original")
+    staging = tmp_path / "stage"
+    staging.mkdir()
+    (staging / "keep.txt").write_text("staged")
+    install_dev = install.stat().st_dev
+    real_stat = Path.stat
+
+    def fake_stat(self, *args, **kwargs):
+        if Path(self) == staging:
+            return os.stat_result((0, 0, install_dev + 1, 1, 0, 0, 0, 0, 0, 0))
+        return real_stat(self, *args, **kwargs)
+
+    with patch.object(Path, "stat", fake_stat):
+        with pytest.raises(BackupError, match="same filesystem"):
+            BackupManager.commit_directory_swap(staging, install)
+
+    assert (install / "keep.txt").read_text() == "original"
+    assert (staging / "keep.txt").read_text() == "staged"
+    assert not (install.parent / f".{install.name}.vnpm-old").exists()
+
+
+def test_commit_directory_swap_restores_install_when_second_rename_fails(tmp_path):
+    """A failed second rename rolls the previous tree back onto the install path."""
+    game_dir = tmp_path / "Game"
+    game_dir.mkdir()
+    (game_dir / "marker.txt").write_text("original")
+    staging = BackupManager.make_staging_dir(game_dir)
+    (staging / "marker.txt").write_text("staged")
+
+    real_replace = os.replace
+    directory_replaces = {"count": 0}
+
+    def fail_second_directory_replace(src, dst, *args, **kwargs):
+        src_path = Path(src)
+        if not src_path.is_dir():
+            return real_replace(src, dst, *args, **kwargs)
+        directory_replaces["count"] += 1
+        if directory_replaces["count"] == 2:
+            raise OSError("second rename failed")
+        return real_replace(src, dst, *args, **kwargs)
+
+    old_tree = game_dir.parent / f".{game_dir.name}.vnpm-old"
+    with patch("os.replace", side_effect=fail_second_directory_replace):
+        with pytest.raises(OSError, match="second rename failed"):
+            BackupManager.commit_directory_swap(staging, game_dir)
+
+    assert directory_replaces["count"] == 3
+    assert (game_dir / "marker.txt").read_text() == "original"
+    assert not old_tree.exists()
+    assert (staging / "marker.txt").read_text() == "staged"
+
+
 def test_has_clean_backup(tmp_path):
     game_dir = tmp_path / "CleanGame"
     game_dir.mkdir()

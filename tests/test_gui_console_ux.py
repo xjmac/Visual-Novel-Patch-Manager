@@ -5,10 +5,12 @@ poster card, game detail modal, and IPC service.
 
 import hashlib
 import os
+import socket
 import threading
 import time
 from pathlib import Path
 from unittest.mock import patch, MagicMock
+import pytest
 from PIL import Image
 import customtkinter as ctk
 
@@ -401,6 +403,128 @@ def test_install_lock_blocks_second_caller(tmp_path):
     digest_path = LOCK_DIR / f"{hashlib.sha256(str(Path(install).resolve()).encode()).hexdigest()}.lock"
     assert digest_path.exists()
     assert os.stat(digest_path).st_mode & 0o777 == 0o600
+
+
+def test_install_lock_released_when_engine_raises(tmp_path):
+    """An engine exception returns failure and does not leave the install lock held."""
+    _steam_root, _install, app_id, games, patch_data = _steam_library_game(tmp_path, app_id="334")
+    first = _service_for_games(tmp_path, app_id, games, patch_data)
+    second = _service_for_games(tmp_path, app_id, games, patch_data)
+
+    first_inside = threading.Event()
+    release_first = threading.Event()
+    second_finished = threading.Event()
+    results = {}
+
+    def _engine(*_args, **_kwargs):
+        if not first_inside.is_set():
+            first_inside.set()
+            release_first.wait(timeout=3)
+            raise RuntimeError("engine blew up")
+        return True
+
+    def _run(name, service):
+        results[name] = service.apply_patch(app_id)
+        if name == "second":
+            second_finished.set()
+
+    with patch.object(PatchExecutionEngine, "apply_patch", side_effect=_engine):
+        holder = threading.Thread(target=_run, args=("first", first))
+        waiter = threading.Thread(target=_run, args=("second", second))
+        holder.start()
+        assert first_inside.wait(timeout=3)
+        waiter.start()
+        time.sleep(0.2)
+        assert not second_finished.is_set()
+        release_first.set()
+        holder.join(timeout=3)
+        assert second_finished.wait(timeout=3)
+        waiter.join(timeout=3)
+
+    assert not holder.is_alive()
+    assert not waiter.is_alive()
+    assert results["first"]["success"] is False
+    assert results["first"]["error"] == "engine blew up"
+    assert results["second"]["success"] is True
+
+
+def test_fix_codecs_reports_failed_fix(tmp_path):
+    """A failed codec fix is success false with the fixer's message."""
+    _steam_root, _install, app_id, games, patch_data = _steam_library_game(tmp_path, app_id="223")
+    service = _service_for_games(tmp_path, app_id, games, patch_data)
+    service.steam_scanner.get_steam_root = MagicMock(return_value=tmp_path / "Steam")
+
+    with patch.object(CodecFixer, "apply_video_fixes", return_value=(False, "prefix missing")) as mock_fix:
+        result = service.fix_codecs(app_id)
+
+    assert result["success"] is False
+    assert result["message"] == "prefix missing"
+    assert result["error"] == "prefix missing"
+    mock_fix.assert_called_once_with(str(app_id))
+
+
+def test_ipc_client_failure_paths(tmp_path):
+    """Missing socket, RPC errors, a closed connection, and a short timeout."""
+    missing = tmp_path / "missing.sock"
+    with pytest.raises(ConnectionError, match="not found"):
+        VNPMClient(socket_path=missing).call("get_status")
+
+    sock_path = tmp_path / "vnpm.sock"
+    service = MagicMock()
+    service.get_status.side_effect = RuntimeError("disk failed")
+    server = IPCServer(service=service, socket_path=sock_path)
+    server.start(background=True)
+    time.sleep(0.1)
+    try:
+        client = VNPMClient(socket_path=sock_path)
+        with pytest.raises(RuntimeError, match="Method 'nope' not found"):
+            client.call("nope")
+        with pytest.raises(RuntimeError, match="disk failed"):
+            client.get_status()
+    finally:
+        server.stop()
+        time.sleep(0.05)
+
+    close_path = tmp_path / "close.sock"
+    closer = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    closer.bind(str(close_path))
+    closer.listen(1)
+
+    def _accept_and_close():
+        conn, _ = closer.accept()
+        conn.recv(4096)
+        conn.close()
+
+    close_thread = threading.Thread(target=_accept_and_close)
+    close_thread.start()
+    try:
+        with pytest.raises(RuntimeError, match="Connection closed without response"):
+            VNPMClient(socket_path=close_path).call("get_status")
+    finally:
+        close_thread.join(timeout=3)
+        closer.close()
+
+    hang_path = tmp_path / "hang.sock"
+    hanger = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    hanger.bind(str(hang_path))
+    hanger.listen(1)
+    held = []
+
+    def _accept_and_hold():
+        conn, _ = hanger.accept()
+        held.append(conn)
+        time.sleep(2)
+
+    hang_thread = threading.Thread(target=_accept_and_hold, daemon=True)
+    hang_thread.start()
+    try:
+        with pytest.raises(socket.timeout):
+            VNPMClient(socket_path=hang_path).call("get_status", timeout=0.2)
+    finally:
+        hanger.close()
+        for conn in held:
+            conn.close()
+        hang_thread.join(timeout=3)
 
 
 def test_ipc_server_client_roundtrip(tmp_path):
