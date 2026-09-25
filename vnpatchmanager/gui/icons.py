@@ -1,5 +1,7 @@
 """Small monochrome icons drawn with Pillow so the Deck and the desktop match."""
 
+import math
+
 from PIL import Image, ImageDraw
 import customtkinter as ctk
 
@@ -38,13 +40,26 @@ def _draw(draw: ImageDraw.ImageDraw, name: str, size: int) -> None:
         draw.line((mid, pad, mid, size - pad), fill=ink, width=stroke)
     elif name == "gear":
         mid = size / 2
-        outer = size * 0.34
-        draw.ellipse((mid - outer, mid - outer, mid + outer, mid + outer), outline=ink, width=stroke)
-        inner = size * 0.12
-        draw.ellipse((mid - inner, mid - inner, mid + inner, mid + inner), outline=ink, width=stroke)
-        for angle_pad in (pad, size - pad):
-            draw.line((mid, angle_pad, mid, angle_pad + size * 0.08), fill=ink, width=stroke)
-            draw.line((angle_pad, mid, angle_pad + size * 0.08, mid), fill=ink, width=stroke)
+        ring = size * 0.26
+        hole = size * 0.10
+        tip = size * 0.46
+        half = max(size * 0.07, 1.4)
+        for step in range(8):
+            angle = math.radians(step * 45)
+            ca, sa = math.cos(angle), math.sin(angle)
+            px, py = -sa, ca
+            base = ring * 0.92
+            draw.polygon(
+                [
+                    (mid + ca * base + px * half, mid + sa * base + py * half),
+                    (mid + ca * tip + px * half * 0.72, mid + sa * tip + py * half * 0.72),
+                    (mid + ca * tip - px * half * 0.72, mid + sa * tip - py * half * 0.72),
+                    (mid + ca * base - px * half, mid + sa * base - py * half),
+                ],
+                fill=ink,
+            )
+        draw.ellipse((mid - ring, mid - ring, mid + ring, mid + ring), outline=ink, width=stroke)
+        draw.ellipse((mid - hole, mid - hole, mid + hole, mid + hole), outline=ink, width=stroke)
     elif name == "back":
         mid = size / 2
         draw.line((size * 0.62, pad, size * 0.32, mid), fill=ink, width=stroke)
