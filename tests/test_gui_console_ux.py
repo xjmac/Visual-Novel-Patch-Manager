@@ -144,11 +144,9 @@ def test_game_detail_modal_lifecycle_and_controller(tmp_path):
     )
 
     assert modal is not None
-    assert len(modal_handlers) == 1
     assert len(modal._action_buttons) >= 4
 
-    # Test controller navigation
-    from vnpatchmanager.controller_manager import ACTION_LEFT, ACTION_RIGHT, ACTION_SELECT
+    from vnpatchmanager.controller_manager import ACTION_BACK, ACTION_LEFT, ACTION_RIGHT, ACTION_SELECT
 
     # Move right then left
     modal._handle_controller_input(ACTION_RIGHT)
@@ -159,6 +157,7 @@ def test_game_detail_modal_lifecycle_and_controller(tmp_path):
     # Test selecting the primary action button ([A] Apply Patch)
     modal._handle_controller_input(ACTION_SELECT)
     assert len(patch_called) == 1
+    modal._handle_controller_input(ACTION_BACK)
     assert len(closed_flag) == 1
 
     root.destroy()
@@ -220,7 +219,7 @@ def test_game_detail_modal_steam_restore_and_codec_fix(tmp_path):
         game_data=game_data,
         status_info=status_info,
     )
-    codec_btn = next((b for b in modal2._action_buttons if "Video Codec Fix" in b.cget("text")), None)
+    codec_btn = next((b for b in modal2._action_buttons if "Fix video" in b.cget("text")), None)
     assert codec_btn is not None
     codec_btn._command()
     root.run_fix_video.assert_called_once_with("900020", game_data)

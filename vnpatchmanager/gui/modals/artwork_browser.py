@@ -588,10 +588,10 @@ def show_artwork_browser_modal(app, app_id: str, game_data: dict):
                         ).pack(pady=(0, 10))
                         ctk.CTkButton(
                             no_key_frame,
-                            text="🔑 Open Settings / Get API Key",
+                            text="Open settings",
                             fg_color=COLOR_PRIMARY_BLUE,
                             hover_color=COLOR_PRIMARY_HOVER,
-                            command=lambda: (_close_modal(), app.tabview.set("Settings")),
+                            command=lambda: (_close_modal(), app._open_settings()),
                         ).pack()
                     else:
                         ctk.CTkLabel(

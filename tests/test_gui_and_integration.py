@@ -22,9 +22,9 @@ def app_instance(temp_config_dir, mock_steam_structure, mock_patch_repo):
 
 
 def test_app_init_and_layout(app_instance):
-    assert app_instance.tabview is not None
-    assert app_instance.tab_games is not None
-    assert app_instance.tab_settings is not None
+    assert app_instance.header is not None
+    assert app_instance.chip_bar is not None
+    assert app_instance.settings_host is not None
     assert app_instance.config_manager is not None
     assert app_instance.steam_scanner is not None
     assert app_instance.repo is not None
@@ -62,7 +62,7 @@ def test_browse_local_path(app_instance):
 def test_save_settings(app_instance, temp_config_dir):
     cfg_dir, cfg_file = temp_config_dir
 
-    app_instance.var_mode.set("🌐 Network Share (NAS)")
+    app_instance.var_mode.set("smb")
     app_instance.entry_local_path.delete(0, "end")
     app_instance.entry_local_path.insert(0, "/custom/local/path")
 
@@ -140,6 +140,7 @@ def test_refresh_data_filtering(app_instance, mock_steam_structure, mock_patch_r
         mock_thread = MagicMock()
         return mock_thread
 
+    app_instance.config_manager.config["local_path"] = mock_steam_structure["game1"]["path"]
     with patch("vnpatchmanager.gui.threading.Thread", side_effect=sync_thread):
         app_instance.refresh_data()
 
@@ -186,6 +187,7 @@ def test_refresh_data_strictly_excludes_natively_adult_and_non_patch_games(app_i
         target()
         return MagicMock()
 
+    app_instance.config_manager.config["local_path"] = str(tmp_path)
     with patch("vnpatchmanager.gui.threading.Thread", side_effect=sync_thread):
         app_instance.refresh_data()
         assert "906440" not in app_instance._all_supported_games
@@ -216,31 +218,19 @@ def test_populate_game_list_with_items_grid(app_instance, mock_steam_structure, 
     (mock_steam_structure["game1"]["path"] / ".patch_applied.json").write_text("{}")
     BackupManager.create_backup(mock_steam_structure["game1"]["path"], "900001", "Synthetic VN Alpha")
 
-    app_instance.view_var.set("Grid")
+    app_instance.view_var.set("Posters")
     app_instance._populate_game_list(filtered_games)
     assert "Showing 2 of 2 Visual Novel(s)" in app_instance.lbl_status.cget("text")
     assert "2 Patchable VNs" in app_instance.lbl_stats.cget("text")
 
-    # 2 Hero cards in scrollable_games
     cards = app_instance.scrollable_games.winfo_children()
     assert len(cards) == 2
 
-    # Find all buttons recursively across cards
-    def find_buttons(widget):
-        btns = []
-        for child in widget.winfo_children():
-            if isinstance(child, ctk.CTkButton):
-                btns.append(child)
-            btns.extend(find_buttons(child))
-        return btns
-
-    all_buttons = []
-    for c in cards:
-        all_buttons.extend(find_buttons(c))
-    all_texts = [b.cget("text") for b in all_buttons]
-    assert any("Verify / Re-apply" in t for t in all_texts)
-    assert any("Restore (Backup)" in t for t in all_texts)
-    assert any("Restore via Steam" in t for t in all_texts)
+    app_instance.open_game_detail("900001", filtered_games["900001"])
+    texts = [button.cget("text") for button in app_instance._game_page._action_buttons]
+    assert "Re-apply" in texts
+    assert "Restore backup" in texts
+    assert "Restore via Steam" in texts
 
 
 def test_search_and_status_filtering(app_instance, mock_steam_structure):
@@ -355,12 +345,10 @@ def test_library_sorting_modes(app_instance, mock_steam_structure):
     def get_rendered_titles():
         cards = app_instance.scrollable_games.winfo_children()
         titles = []
-        for c in cards:
-            for child in c.winfo_children():
-                if isinstance(child, ctk.CTkFrame): # info_frame
-                    for sub in child.winfo_children():
-                        if isinstance(sub, ctk.CTkLabel) and sub.cget("font").cget("weight") == "bold":
-                            titles.append(sub.cget("text"))
+        for card in cards:
+            for child in card.winfo_children():
+                if isinstance(child, ctk.CTkLabel) and str(child.cget("text")).startswith("Synthetic"):
+                    titles.append(child.cget("text"))
         return titles
 
     # 1. Test Sort: Title (A-Z)
@@ -418,12 +406,10 @@ def test_vndb_missing_18plus_patch_card_and_link(app_instance, mock_steam_struct
             btns.extend(find_buttons(child))
         return btns
 
-    card_buttons = find_buttons(cards[0])
-    vndb_btn = next((b for b in card_buttons if "Open VNDB" in b.cget("text")), None)
-    assert vndb_btn is not None
+    app_instance.open_game_detail("900004", games["900004"])
+    vndb_btn = next(b for b in app_instance._game_page._action_buttons if b.cget("text") == "Open on VNDB")
 
-    # Test clicking the button opens the browser
-    with patch("webbrowser.open") as mock_open:
+    with patch("vnpatchmanager.gui.views.game_detail_view.webbrowser.open") as mock_open:
         vndb_btn.invoke()
         mock_open.assert_called_once_with("https://vndb.org/v90004")
 
@@ -459,8 +445,9 @@ def test_uninstalled_game_badges_and_actions(app_instance):
             lbls.extend(find_labels(child))
         return lbls
 
-    labels = [lbl.cget("text") for lbl in find_labels(cards[0])]
-    assert any("Not Installed" in text for text in labels)
+    from vnpatchmanager.gui.theme import COLOR_TEXT_MUTED
+    title = next(lbl for lbl in find_labels(cards[0]) if lbl.cget("text") == "Synthetic VN Epsilon")
+    assert title.cget("text_color") == COLOR_TEXT_MUTED
 
     # Test that run_patch on uninstalled game warns and aborts
     with patch("tkinter.messagebox.showwarning") as mock_warn:
@@ -723,35 +710,32 @@ def test_ui_button_presence_all_vn_states(app_instance, mock_steam_structure, mo
                 result[title] = btns
         return result
 
-    # --- Test Grid View Button Packing ---
-    app_instance.view_var.set("Grid")
+    app_instance.view_var.set("Posters")
     app_instance._populate_game_list(games)
     app_instance.update()
+    assert len(app_instance.scrollable_games.winfo_children()) == 3
 
-    grid_map = get_card_button_map(app_instance.scrollable_games)
-    assert len(grid_map) == 3
+    def page_texts(app_id):
+        app_instance.open_game_detail(app_id, games[app_id])
+        return [button.cget("text") for button in app_instance._game_page._action_buttons]
 
-    # Check Synthetic VN Delta (Uninstalled with VNDB patch): MUST have "🔗 Open VNDB (Get Patch)" button packed
-    assert any("Open VNDB (Get Patch)" in t for t in grid_map["Synthetic VN Delta"])
+    delta = page_texts("900004")
+    assert "Get the patch" in delta
+    assert "Open on VNDB" in delta
 
-    # Check Synthetic VN Alpha (Installed with local patch): MUST have "Apply Patch" button packed
-    assert any("Apply Patch" in t for t in grid_map["Synthetic VN Alpha"])
+    alpha = page_texts("900001")
+    assert "Apply patch" in alpha
 
-    # Check Synthetic VN Beta (Patched with clean backup): MUST have "Verify / Re-apply", "Restore (Backup)", "Restore via Steam"
-    beta_btns = grid_map["Synthetic VN Beta"]
-    assert any("Verify / Re-apply" in t for t in beta_btns)
-    assert any("Restore (Backup)" in t for t in beta_btns)
-    assert any("Restore via Steam" in t for t in beta_btns)
+    beta = page_texts("900002")
+    assert "Re-apply" in beta
+    assert "Restore backup" in beta
+    assert "Restore via Steam" in beta
 
-    # --- Test List View Button Packing ---
     app_instance.view_var.set("List")
+    app_instance._close_game_page()
     app_instance._apply_filters_and_render()
     app_instance.update()
-
-    list_map = get_card_button_map(app_instance.scrollable_games)
-    assert len(list_map) == 3
-    assert any("Open VNDB (Get Patch)" in t for t in list_map["Synthetic VN Delta"])
-    assert any("Apply Patch" in t for t in list_map["Synthetic VN Alpha"])
+    assert len(app_instance.scrollable_games.winfo_children()) == 3
 
 
 def test_oled_pure_black_theming_and_card_styling(app_instance, mock_steam_structure):
@@ -769,21 +753,18 @@ def test_oled_pure_black_theming_and_card_styling(app_instance, mock_steam_struc
     app_instance.update()
 
     # Verify root container & scrollable pure black colors
-    assert app_instance.tabview.cget("fg_color") == "#0b0e14"
     assert app_instance.scrollable_games.cget("fg_color") == "#0b0e14"
 
-    # Verify focused card styling (prominent blue border + elevated surface)
     cards = app_instance.scrollable_games.winfo_children()
     assert len(cards) == 1
     card = cards[0]
-    assert card.cget("fg_color") == "#1e293b"
+    assert card.cget("fg_color") == "#223048"
     assert card.cget("border_color") == "#38bdf8"
-    assert card.cget("border_width") == 3
+    assert card.cget("border_width") == 2
 
-    # Switch focus to Toolbar -> card returns to unfocused #121212 and #283548
-    app_instance._focused_zone = "TOOLBAR"
+    app_instance._focused_zone = "CHIPS"
     app_instance._apply_focus_visuals()
-    assert card.cget("fg_color") == "#121212"
+    assert card.cget("fg_color") == "#1a2232"
     assert card.cget("border_color") == "#283548"
     assert card.cget("border_width") == 1
 
@@ -872,32 +853,28 @@ def test_controller_card_navigation_and_visual_focus(app_instance, mock_steam_st
     card0 = app_instance._card_entries[0]["card"]
     card1 = app_instance._card_entries[1]["card"]
 
-    # Focused Card 0: Must have 3px bright blue border and elevated surface
-    assert card0.cget("border_width") == 3
+    assert card0.cget("border_width") == 2
     assert card0.cget("border_color") == "#38bdf8"
-    assert card0.cget("fg_color") == "#1e293b"
+    assert card0.cget("fg_color") == "#223048"
 
-    # Unfocused Card 1: Must have 1px dark border
     assert card1.cget("border_width") == 1
     assert card1.cget("border_color") == "#283548"
-    assert card1.cget("fg_color") == "#121212"
+    assert card1.cget("fg_color") == "#1a2232"
 
     # Move Right -> Focus moves to card 1
     from vnpatchmanager.controller_manager import ACTION_RIGHT, ACTION_LEFT, ACTION_UP
     app_instance._handle_controller_action(ACTION_RIGHT)
     assert app_instance._focused_card_idx == 1
-    assert card1.cget("border_width") == 3
+    assert card1.cget("border_width") == 2
     assert card1.cget("border_color") == "#38bdf8"
 
-    # Move Left -> Returns to card 0
     app_instance._handle_controller_action(ACTION_LEFT)
     assert app_instance._focused_card_idx == 0
 
-    # Move Up from row 0 -> Jumps focus to Toolbar
     app_instance._handle_controller_action(ACTION_UP)
-    assert app_instance._focused_zone == "TOOLBAR"
-    assert app_instance._search_frame.cget("border_width") == 2
-    assert app_instance._search_frame.cget("border_color") == "#38bdf8"
+    assert app_instance._focused_zone == "CHIPS"
+    assert app_instance._chip_buttons[0].cget("border_width") == 2
+    assert app_instance._chip_buttons[0].cget("border_color") == "#38bdf8"
 
 
 def test_controller_search_bar_osk_trigger(app_instance, mock_steam_structure):
@@ -907,22 +884,22 @@ def test_controller_search_bar_osk_trigger(app_instance, mock_steam_structure):
     with patch.object(SteamOSHelper, "show_onscreen_keyboard") as mock_osk:
         # Trigger quick search via Y button action
         app_instance._handle_controller_action(ACTION_SEARCH)
-        assert app_instance._focused_zone == "TOOLBAR"
-        assert app_instance._focused_toolbar_idx == 0
+        assert app_instance._focused_zone == "HEADER"
+        assert app_instance._focused_header_idx == 0
         mock_osk.assert_called_once()
 
 
 def test_controller_bumper_tab_switching(app_instance):
     from vnpatchmanager.controller_manager import ACTION_NEXT_TAB, ACTION_PREV_TAB
 
-    # L1 / R1 bumper switching
+    assert app_instance.filter_var.get() == "all"
     app_instance._handle_controller_action(ACTION_NEXT_TAB)
-    assert app_instance.tabview.get() == "Settings"
-    assert app_instance._focused_zone == "SETTINGS"
+    assert app_instance.filter_var.get() == "ready"
+    assert app_instance._focused_zone == "CHIPS"
 
     app_instance._handle_controller_action(ACTION_PREV_TAB)
-    assert app_instance.tabview.get() == "Games Library"
-    assert app_instance._focused_zone == "LIBRARY"
+    assert app_instance.filter_var.get() == "all"
+    assert app_instance._focused_zone == "CHIPS"
 
 
 def test_controller_quick_action_x_button(app_instance, mock_steam_structure, mock_patch_repo):
@@ -1081,39 +1058,31 @@ def test_gui_controller_toolbar_and_button_navigation(app_instance, mock_steam_s
     app_instance._populate_game_list(games)
     app_instance.update()
 
-    # Fast Scroll test
     app_instance._handle_controller_action(ACTION_SCROLL_UP)
     app_instance._handle_controller_action(ACTION_SCROLL_DOWN)
 
-    # 1. Start in Toolbar
-    app_instance._focused_zone = "TOOLBAR"
-    app_instance._focused_toolbar_idx = 0
+    app_instance._focused_zone = "CHIPS"
+    app_instance._focused_chip_idx = 0
     app_instance._apply_focus_visuals()
 
-    # Toolbar Right traversal
     app_instance._handle_controller_action(ACTION_RIGHT)
-    assert app_instance._focused_toolbar_idx == 1
+    assert app_instance._focused_chip_idx == 1
     app_instance._handle_controller_action(ACTION_LEFT)
-    assert app_instance._focused_toolbar_idx == 0
+    assert app_instance._focused_chip_idx == 0
 
-    # Down into Library
     app_instance._handle_controller_action(ACTION_DOWN)
     assert app_instance._focused_zone == "LIBRARY"
     assert app_instance._focused_card_idx == 0
-    assert app_instance._focused_btn_idx == -1
 
-    # Press A (SELECT) to enter Action Mode on the card's buttons
-    app_instance._handle_controller_action(ACTION_SELECT)
-    assert app_instance._focused_btn_idx == 0
-
-    # Select active button with A
     with patch.object(app_instance, "run_patch") as mock_p:
-        app_instance._handle_controller_action(ACTION_SELECT)
+        from vnpatchmanager.controller_manager import ACTION_QUICK_ACTION
+        app_instance._handle_controller_action(ACTION_QUICK_ACTION)
         mock_p.assert_called_once()
 
-    # Press B (BACK) to return to card browsing level
+    app_instance._handle_controller_action(ACTION_SELECT)
+    assert app_instance._focused_zone == "DETAIL"
     app_instance._handle_controller_action(ACTION_BACK)
-    assert app_instance._focused_btn_idx == -1
+    assert app_instance._focused_zone == "LIBRARY"
 
 
 def test_gui_controller_grid_multi_card_navigation(app_instance, mock_steam_structure, mock_patch_repo):
@@ -1144,22 +1113,23 @@ def test_gui_controller_grid_multi_card_navigation(app_instance, mock_steam_stru
     app_instance._focused_btn_idx = -1
     app_instance._apply_focus_visuals()
 
-    # Move right to card 1
+    app_instance.view_var.set("List")
+    app_instance._apply_filters_and_render()
+    app_instance.update()
+    app_instance._focused_zone = "LIBRARY"
+    app_instance._focused_card_idx = 0
     app_instance._handle_controller_action(ACTION_RIGHT)
     assert app_instance._focused_card_idx == 1
 
-    # Single-press DOWN moves directly to card 3 (row 1, col 1)
     app_instance._handle_controller_action(ACTION_DOWN)
-    assert app_instance._focused_card_idx == 3
-    assert app_instance._focused_btn_idx == -1
+    assert app_instance._focused_card_idx == 2
 
-    # Single-press UP moves back to card 1
     app_instance._handle_controller_action(ACTION_UP)
     assert app_instance._focused_card_idx == 1
 
-    # Move up from card 1 to Toolbar
+    app_instance._focused_card_idx = 0
     app_instance._handle_controller_action(ACTION_UP)
-    assert app_instance._focused_zone == "TOOLBAR"
+    assert app_instance._focused_zone == "CHIPS"
 
 
 def test_gui_refresh_banner_and_search_handlers(app_instance, mock_steam_structure):
@@ -1175,8 +1145,8 @@ def test_gui_refresh_banner_and_search_handlers(app_instance, mock_steam_structu
     # 2. Test search focus and submit handlers
     with patch("vnpatchmanager.steamos_helper.SteamOSHelper.show_onscreen_keyboard") as mock_show:
         app_instance._on_search_focused()
-        assert app_instance._focused_zone == "TOOLBAR"
-        assert app_instance._focused_toolbar_idx == 0
+        assert app_instance._focused_zone == "HEADER"
+        assert app_instance._focused_header_idx == 0
         mock_show.assert_called_once()
 
     with patch("vnpatchmanager.steamos_helper.SteamOSHelper.hide_onscreen_keyboard") as mock_hide:
@@ -1203,45 +1173,31 @@ def test_gui_controller_filter_and_sort_selection(app_instance, mock_steam_struc
     app_instance._populate_game_list(games)
     app_instance.update()
 
-    # 1. Focus on Filter (Toolbar idx 1)
-    app_instance._focused_zone = "TOOLBAR"
-    app_instance._focused_toolbar_idx = 1
+    app_instance._focused_zone = "CHIPS"
+    app_instance._focused_chip_idx = 1
     app_instance._apply_focus_visuals()
+    assert app_instance._chip_buttons[1].cget("border_width") == 2
+    assert app_instance._chip_buttons[1].cget("border_color") == "#38bdf8"
 
-    # Verify visual focus outline on filter
-    assert app_instance._filter_frame.cget("border_width") == 2
-    assert app_instance._filter_frame.cget("border_color") == "#38bdf8"
-
-    # Press A (SELECT) to cycle filter: "All" -> "Patch Available"
-    assert app_instance.filter_var.get() == "All"
     app_instance._handle_controller_action(ACTION_SELECT)
-    assert app_instance.filter_var.get() == "Patch Available"
+    assert app_instance.filter_var.get() == "ready"
 
-    # Press A (SELECT) again -> "Patched"
+    app_instance._focused_chip_idx = 2
     app_instance._handle_controller_action(ACTION_SELECT)
-    assert app_instance.filter_var.get() == "Patched"
+    assert app_instance.filter_var.get() == "patched"
 
-    # 2. Move Right to Sort (Toolbar idx 2)
+    app_instance._focused_zone = "CHIPS"
+    app_instance._focused_chip_idx = 5
+    assert app_instance.sort_var.get() == "A-Z"
+    app_instance._handle_controller_action(ACTION_SELECT)
+    assert app_instance.sort_var.get() == "Z-A"
+
     app_instance._handle_controller_action(ACTION_RIGHT)
-    assert app_instance._focused_toolbar_idx == 2
-    assert app_instance._sort_frame.cget("border_width") == 2
-    assert app_instance._sort_frame.cget("border_color") == "#38bdf8"
-
-    # Press A (SELECT) to cycle sort
-    assert app_instance.sort_var.get() == "Title (A-Z)"
-    app_instance._handle_controller_action(ACTION_SELECT)
-    assert app_instance.sort_var.get() == "Title (Z-A)"
-
-    # 3. Move Right to View Mode (Toolbar idx 3)
-    app_instance._handle_controller_action(ACTION_RIGHT)
-    assert app_instance._focused_toolbar_idx == 3
+    assert app_instance._focused_chip_idx == 6
     assert app_instance._view_frame.cget("border_width") == 2
-    assert app_instance._view_frame.cget("border_color") == "#38bdf8"
-
-    # Press A (SELECT) to toggle view mode (Posters -> Grid)
     assert app_instance.view_var.get() == "Posters"
     app_instance._handle_controller_action(ACTION_SELECT)
-    assert app_instance.view_var.get() == "Grid"
+    assert app_instance.view_var.get() == "List"
 
 
 def test_gui_controller_tab_bar_spatial_navigation(app_instance, mock_steam_structure):
@@ -1249,8 +1205,8 @@ def test_gui_controller_tab_bar_spatial_navigation(app_instance, mock_steam_stru
         ACTION_LEFT,
         ACTION_RIGHT,
         ACTION_UP,
-        ACTION_DOWN,
-        ACTION_BACK
+        ACTION_BACK,
+        ACTION_SELECT,
     )
 
     games = {
@@ -1259,58 +1215,30 @@ def test_gui_controller_tab_bar_spatial_navigation(app_instance, mock_steam_stru
     app_instance._populate_game_list(games)
     app_instance.update()
 
-    # 1. Start on Search in Toolbar
-    app_instance._focused_zone = "TOOLBAR"
-    app_instance._focused_toolbar_idx = 0
-    app_instance._apply_focus_visuals()
-
-    # Move UP into TABS zone
+    app_instance._focused_zone = "CHIPS"
+    app_instance._focused_chip_idx = 0
     app_instance._handle_controller_action(ACTION_UP)
-    assert app_instance._focused_zone == "TABS"
-    assert app_instance._focused_tab_idx == 0
-    assert app_instance.tabview.get() == "Games Library"
-    assert app_instance.tabview.cget("border_width") == 2
-    assert app_instance.tabview.cget("border_color") == "#38bdf8"
+    assert app_instance._focused_zone == "HEADER"
+    assert app_instance._focused_header_idx == 1
+    assert app_instance.btn_refresh.cget("border_color") == "#38bdf8"
 
-    # Press RIGHT in TABS -> switches to Settings tab
     app_instance._handle_controller_action(ACTION_RIGHT)
-    assert app_instance._focused_tab_idx == 1
-    assert app_instance.tabview.get() == "Settings"
-
-    # Press LEFT in TABS -> switches back to Games Library
-    app_instance._handle_controller_action(ACTION_LEFT)
-    assert app_instance._focused_tab_idx == 0
-    assert app_instance.tabview.get() == "Games Library"
-
-    # Press DOWN from TABS -> enters Toolbar Search
-    app_instance._handle_controller_action(ACTION_DOWN)
-    assert app_instance._focused_zone == "TOOLBAR"
-    assert app_instance._focused_toolbar_idx == 0
-    assert app_instance.tabview.cget("border_width") == 1
-
-    # Move UP again into TABS, switch to Settings, and press DOWN into Settings
-    app_instance._handle_controller_action(ACTION_UP)
     app_instance._handle_controller_action(ACTION_RIGHT)
-    assert app_instance.tabview.get() == "Settings"
-    app_instance._handle_controller_action(ACTION_DOWN)
+    assert app_instance._focused_header_idx == 3
+    app_instance._handle_controller_action(ACTION_SELECT)
+    assert app_instance._settings_open is True
     assert app_instance._focused_zone == "SETTINGS"
 
-    # In Settings, press UP -> returns to TABS on Settings tab
-    app_instance._handle_controller_action(ACTION_UP)
-    assert app_instance._focused_zone == "TABS"
-    assert app_instance._focused_tab_idx == 1
-
-    # In Settings, toggle mode left/right
-    from vnpatchmanager.gui import MODE_LOCAL_DISPLAY, MODE_SMB_DISPLAY
-    app_instance._handle_controller_action(ACTION_DOWN)
+    from vnpatchmanager.gui import MODE_SMB_DISPLAY, MODE_LOCAL_DISPLAY
     app_instance._handle_controller_action(ACTION_RIGHT)
-    assert app_instance.var_mode.get() == MODE_SMB_DISPLAY
+    assert app_instance.var_mode.get() == "smb"
+    assert app_instance._chip_network.cget("text") == MODE_SMB_DISPLAY
     app_instance._handle_controller_action(ACTION_LEFT)
-    assert app_instance.var_mode.get() == MODE_LOCAL_DISPLAY
+    assert app_instance.var_mode.get() == "local"
+    assert app_instance._chip_local.cget("text") == MODE_LOCAL_DISPLAY
 
-    # In Settings, press BACK -> returns to Games Library
     app_instance._handle_controller_action(ACTION_BACK)
-    assert app_instance.tabview.get() == "Games Library"
+    assert app_instance._settings_open is False
     assert app_instance._focused_zone == "LIBRARY"
 
 
@@ -1318,48 +1246,29 @@ def test_gui_controller_header_scan_button_navigation(app_instance):
     from unittest.mock import patch
     from vnpatchmanager.controller_manager import (
         ACTION_LEFT,
-        ACTION_RIGHT,
         ACTION_UP,
         ACTION_DOWN,
         ACTION_SELECT
     )
 
-    # 1. Start in TABS zone on Games Library
-    app_instance._focused_zone = "TABS"
-    app_instance._focused_tab_idx = 0
-    app_instance._apply_focus_visuals()
-
-    # Move UP into HEADER (Scan Games & Patches button)
+    app_instance._focused_zone = "CHIPS"
+    app_instance._focused_chip_idx = 0
     app_instance._handle_controller_action(ACTION_UP)
     assert app_instance._focused_zone == "HEADER"
+    assert app_instance._focused_header_idx == 1
     assert app_instance.btn_refresh.cget("border_width") == 2
-    assert app_instance.btn_refresh.cget("border_color") == "#60a5fa"
+    assert app_instance.btn_refresh.cget("border_color") == "#38bdf8"
 
-    # Press A (SELECT) in HEADER -> triggers refresh_data
     with patch.object(app_instance, "refresh_data") as mock_refresh:
         app_instance._handle_controller_action(ACTION_SELECT)
         mock_refresh.assert_called_once()
 
-    # Press LEFT in HEADER -> moves from Scan button (idx 1) to Add Non-Steam button (idx 0)
     app_instance._handle_controller_action(ACTION_LEFT)
-    assert app_instance._focused_zone == "HEADER"
     assert app_instance._focused_header_idx == 0
-    assert app_instance.btn_add_non_steam.cget("border_width") == 2
+    assert app_instance._search_frame.cget("border_width") == 2
 
-    # Press LEFT again in HEADER -> returns to TABS
-    app_instance._handle_controller_action(ACTION_LEFT)
-    assert app_instance._focused_zone == "TABS"
-    assert app_instance.btn_refresh.cget("border_width") == 0
-
-    # In TABS, move RIGHT to Settings, then RIGHT again into HEADER
-    app_instance._handle_controller_action(ACTION_RIGHT)
-    assert app_instance._focused_tab_idx == 1
-    app_instance._handle_controller_action(ACTION_RIGHT)
-    assert app_instance._focused_zone == "HEADER"
-
-    # In HEADER, press DOWN -> drops into SETTINGS
     app_instance._handle_controller_action(ACTION_DOWN)
-    assert app_instance._focused_zone == "SETTINGS"
+    assert app_instance._focused_zone == "CHIPS"
 
 
 def test_placeholder_steam_app_name_resolution(app_instance):

@@ -34,10 +34,7 @@ from .constants import (
     COLOR_BG_BLACK,
     COLOR_PRIMARY_BLUE,
     COLOR_PRIMARY_HOVER,
-    COLOR_ACCENT_GREEN,
-    COLOR_ACCENT_GREEN_HOVER,
     COLOR_TEXT_WHITE,
-    COLOR_STATUS_GREEN,
     COLOR_STATUS_RED,
     MIN_WIDTH_DEFAULT,
     MIN_HEIGHT_DEFAULT,
@@ -47,6 +44,9 @@ from .constants import (
     COMPACT_GEOMETRY,
     DEFAULT_GEOMETRY,
 )
+from .icons import icon
+from .theme import COLOR_BORDER_2, COLOR_ELEVATION_1, COLOR_ELEVATION_2, COLOR_STATUS_PATCHED, MIN_TOUCH_TARGET
+from .views.game_detail_view import GamePage
 from .game_card import GameCardMixin
 from .games_tab import GamesTabMixin
 from .modals.artwork_browser import show_artwork_browser_modal
@@ -121,8 +121,8 @@ class VNPatchManagerApp(
         self._all_supported_games = {}
         self._banner_widgets = {}
         self.search_var = ctk.StringVar(value="")
-        self.filter_var = ctk.StringVar(value="All")
-        self.sort_var = ctk.StringVar(value="Title (A-Z)")
+        self.filter_var = ctk.StringVar(value="all")
+        self.sort_var = ctk.StringVar(value="A-Z")
         self.view_var = ctk.StringVar(value="Posters")
         self._search_debounce_job = None
         self._active_render_job = None
@@ -131,11 +131,20 @@ class VNPatchManagerApp(
         self._card_entries = []
         self._modal_controller_stack = []
         self._focused_zone = "LIBRARY"
+        self._focus_band = "cards"
         self._focused_tab_idx = 0
         self._focused_card_idx = 0
         self._focused_btn_idx = -1
         self._focused_toolbar_idx = 0
+        self._focused_chip_idx = 0
         self._focused_header_idx = 1
+        self._settings_index = 0
+        self._settings_open = False
+        self._game_page = None
+        self._selected_app_id = None
+        self._library_scroll = (0.0, 1.0)
+        self._empty_folder = False
+        self._last_full = None
         self._search_frame = None
         self._filter_frame = None
         self._sort_frame = None
@@ -148,37 +157,13 @@ class VNPatchManagerApp(
         self._gui_queue = queue.Queue()
         self.after(50, self._process_gui_queue)
 
-        # Configure Root Grid Layout
-        self.grid_rowconfigure(1, weight=1)
+        self.grid_rowconfigure(2, weight=1)
         self.grid_columnconfigure(0, weight=1)
-
-        # Top Header Bar
-        self._setup_top_header()
-
-        # Create Tabview (Games Library & Settings) - OLED Optimized
-        self.tabview = ctk.CTkTabview(
-            self,
-            corner_radius=10,
-            fg_color=COLOR_BG_BLACK,
-            segmented_button_fg_color="#121212",
-            segmented_button_selected_color=COLOR_PRIMARY_BLUE,
-            segmented_button_selected_hover_color=COLOR_PRIMARY_HOVER,
-            segmented_button_unselected_hover_color="#1e1e1e",
-            text_color=COLOR_TEXT_WHITE,
-            border_width=1,
-            border_color="#27272a",
-        )
-        self.tabview.grid(row=1, column=0, padx=16, pady=(4, 8), sticky="nsew")
-
-        self.tab_games = self.tabview.add("Games Library")
-        self.tab_settings = self.tabview.add("Settings")
-
-        # Setup Tab Contents
+        self._build_shell()
         self._setup_settings_tab()
         self._setup_games_tab()
-
-        # Bottom Status & Progress Footer
-        self._setup_bottom_footer()
+        self._sync_layout()
+        self.bind("<Configure>", self._on_root_configure, add="+")
 
         # Bind controller navigation & keyboard shortcuts
         self._bind_controller_and_keyboard_events()
@@ -215,107 +200,291 @@ class VNPatchManagerApp(
         except Exception as e:
             logger.debug(f"Failed to set window icon: {e}")
 
-    def _setup_top_header(self):
-        """Constructs the application top header."""
-        header_frame = ctk.CTkFrame(self, fg_color="transparent")
-        header_frame.grid(row=0, column=0, padx=20, pady=(12, 4), sticky="ew")
-        header_frame.grid_columnconfigure(0, weight=1)
+    def _build_shell(self):
+        """Header, library body, detail slot, settings slot, status line, and hint row."""
+        self.header = ctk.CTkFrame(self, fg_color="transparent", height=56)
+        self.header.grid(row=0, column=0, sticky="ew", padx=16, pady=(8, 0))
+        self.header.grid_columnconfigure(1, weight=1)
 
-        # Title and Subtitle Block
-        title_block = ctk.CTkFrame(header_frame, fg_color="transparent")
-        title_block.grid(row=0, column=0, sticky="w")
-
-        lbl_app_title = ctk.CTkLabel(
-            title_block,
-            text=f"🎮 {APP_NAME.upper()}",
-            font=ctk.CTkFont(size=19, weight="bold"),
+        brand = ctk.CTkFrame(self.header, fg_color="transparent")
+        brand.grid(row=0, column=0, sticky="w", padx=(0, 12))
+        ctk.CTkLabel(brand, text="", image=icon("grid", 28)).pack(side="left", padx=(0, 8))
+        ctk.CTkLabel(
+            brand,
+            text="Patch Manager",
+            font=ctk.CTkFont(size=15, weight="bold"),
             text_color=COLOR_TEXT_WHITE,
+        ).pack(side="left")
+
+        self._search_frame = ctk.CTkFrame(
+            self.header,
+            fg_color=COLOR_ELEVATION_2,
+            border_color=COLOR_BORDER_2,
+            border_width=1,
+            corner_radius=8,
+            height=MIN_TOUCH_TARGET,
         )
-        lbl_app_title.pack(anchor="w")
-
-        self.lbl_stats = ctk.CTkLabel(
-            title_block,
-            text="Scanning library...",
-            font=ctk.CTkFont(size=12),
-            text_color="gray",
+        self._search_frame.grid(row=0, column=1, sticky="ew")
+        self._search_frame.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(self._search_frame, text="", image=icon("search")).grid(row=0, column=0, padx=(10, 4), pady=6)
+        self.entry_search = ctk.CTkEntry(
+            self._search_frame,
+            placeholder_text="Search titles",
+            textvariable=self.search_var,
+            fg_color="transparent",
+            border_width=0,
+            text_color=COLOR_TEXT_WHITE,
+            font=ctk.CTkFont(size=15),
+            height=36,
         )
-        self.lbl_stats.pack(anchor="w")
+        self.entry_search.grid(row=0, column=1, sticky="ew", padx=(0, 8), pady=4)
+        self.entry_search.bind("<FocusIn>", self._on_search_focused)
 
-        # Header Action Buttons
-        btn_block = ctk.CTkFrame(header_frame, fg_color="transparent")
-        btn_block.grid(row=0, column=1, sticky="e")
-
+        actions = ctk.CTkFrame(self.header, fg_color="transparent")
+        actions.grid(row=0, column=2, sticky="e", padx=(12, 0))
         self.btn_refresh = ctk.CTkButton(
-            btn_block,
-            text="🔄 Scan Games & Patches",
-            font=ctk.CTkFont(size=13, weight="bold"),
-            height=32,
+            actions,
+            text="Scan",
+            height=MIN_TOUCH_TARGET,
+            width=88,
+            font=ctk.CTkFont(size=15, weight="bold"),
             fg_color=COLOR_PRIMARY_BLUE,
             hover_color=COLOR_PRIMARY_HOVER,
+            border_width=1,
+            border_color=COLOR_PRIMARY_BLUE,
             command=self.refresh_data,
         )
-        self.btn_refresh.pack(side="right", padx=(8, 0))
-
+        self.btn_refresh.pack(side="left", padx=(0, 8))
         self.btn_add_non_steam = ctk.CTkButton(
-            btn_block,
-            text="➕ Add Non-Steam VN",
-            font=ctk.CTkFont(size=13, weight="bold"),
-            height=32,
-            fg_color=COLOR_ACCENT_GREEN,
-            hover_color=COLOR_ACCENT_GREEN_HOVER,
+            actions,
+            text="Add",
+            height=MIN_TOUCH_TARGET,
+            width=72,
+            font=ctk.CTkFont(size=15, weight="bold"),
+            fg_color=COLOR_ELEVATION_2,
+            hover_color=COLOR_ELEVATION_1,
+            border_width=1,
+            border_color=COLOR_BORDER_2,
+            text_color=COLOR_TEXT_WHITE,
             command=self.open_add_non_steam_modal,
         )
-        self.btn_add_non_steam.pack(side="right", padx=(0, 0))
+        self.btn_add_non_steam.pack(side="left", padx=(0, 8))
+        self.btn_settings = ctk.CTkButton(
+            actions,
+            text="",
+            image=icon("gear"),
+            width=MIN_TOUCH_TARGET,
+            height=MIN_TOUCH_TARGET,
+            fg_color=COLOR_ELEVATION_2,
+            hover_color=COLOR_ELEVATION_1,
+            border_width=1,
+            border_color=COLOR_BORDER_2,
+            command=self._open_settings,
+        )
+        self.btn_settings.pack(side="left")
 
-    def _setup_bottom_footer(self):
-        """Constructs the status label, controller prompt bar, and progress bar footer."""
-        footer_frame = ctk.CTkFrame(self, fg_color="transparent")
-        footer_frame.grid(row=2, column=0, padx=20, pady=(2, 8), sticky="ew")
-        footer_frame.grid_columnconfigure(0, weight=1)
+        self.chip_bar = ctk.CTkFrame(self, fg_color="transparent", height=52)
+        self.chip_bar.grid(row=1, column=0, sticky="ew", padx=16, pady=(8, 4))
 
-        # Top row of footer: status & progress
-        status_row = ctk.CTkFrame(footer_frame, fg_color="transparent")
-        status_row.pack(fill="x", expand=True)
-        status_row.grid_columnconfigure(0, weight=1)
+        self.body = ctk.CTkFrame(self, fg_color=COLOR_BG_BLACK, corner_radius=0)
+        self.body.grid(row=2, column=0, sticky="nsew")
+        self.body.grid_rowconfigure(0, weight=1)
+        self.body.grid_columnconfigure(0, weight=1)
+        self.body.grid_columnconfigure(1, weight=0)
 
-        self.lbl_status = ctk.CTkLabel(status_row, text="Ready", font=ctk.CTkFont(size=12), text_color="gray")
+        self.library_host = ctk.CTkFrame(self.body, fg_color=COLOR_BG_BLACK, corner_radius=0)
+        self.library_host.grid(row=0, column=0, sticky="nsew")
+        self.detail_host = ctk.CTkFrame(self.body, fg_color=COLOR_ELEVATION_1, corner_radius=0, width=420)
+        self.settings_host = ctk.CTkFrame(self, fg_color=COLOR_ELEVATION_1, corner_radius=0)
+
+        self.status_row = ctk.CTkFrame(self, fg_color="transparent")
+        self.status_row.grid(row=3, column=0, sticky="ew", padx=16, pady=(4, 0))
+        self.status_row.grid_columnconfigure(0, weight=1)
+        self.lbl_status = ctk.CTkLabel(self.status_row, text="Ready", font=ctk.CTkFont(size=13), text_color="gray")
         self.lbl_status.grid(row=0, column=0, sticky="w")
-
         self.progress_bar = ctk.CTkProgressBar(
-            status_row, width=200, height=8, mode="indeterminate", progress_color=COLOR_PRIMARY_BLUE
+            self.status_row, width=160, height=8, mode="indeterminate", progress_color=COLOR_PRIMARY_BLUE
         )
         self.progress_bar.grid(row=0, column=1, sticky="e")
         self.progress_bar.set(0)
 
-        # Bottom row of footer: Console-style Gamepad Prompt Bar
-        self.prompt_bar_frame = ctk.CTkFrame(
-            footer_frame,
-            fg_color="#141a24",
-            border_color="#1f2937",
-            border_width=1,
-            corner_radius=8,
-            height=28,
-        )
-        self.prompt_bar_frame.pack(fill="x", expand=True, pady=(6, 0))
-
+        self.hint_bar = ctk.CTkFrame(self, fg_color=COLOR_ELEVATION_1, height=48, corner_radius=0)
+        self.hint_bar.grid(row=4, column=0, sticky="ew")
         self.lbl_prompt_hints = ctk.CTkLabel(
-            self.prompt_bar_frame,
-            text="[A] View Details  •  [X] Apply Patch  •  [Y] Search  •  [L1/R1] Tabs  •  [Start] Scan",
-            font=ctk.CTkFont(family="DejaVu Sans Mono", size=11, weight="bold"),
+            self.hint_bar,
+            text="A  View     X  Apply     Y  Search     Start  Scan",
+            font=ctk.CTkFont(size=12, weight="bold"),
             text_color="#38bdf8",
         )
-        self.lbl_prompt_hints.pack(pady=4)
+        self.lbl_prompt_hints.pack(pady=12)
+        self._apply_header_compact()
+
+    def _apply_header_compact(self):
+        """Game Mode uses icon buttons for Scan and Add."""
+        compact = SteamOSHelper.is_game_mode()
+        if compact:
+            self.btn_refresh.configure(text="", image=icon("scan"), width=MIN_TOUCH_TARGET)
+            self.btn_add_non_steam.configure(text="", image=icon("plus"), width=MIN_TOUCH_TARGET)
+        else:
+            self.btn_refresh.configure(text="Scan", image=None, width=88)
+            self.btn_add_non_steam.configure(text="Add", image=None, width=72)
+
+    def _use_full_page(self) -> bool:
+        if SteamOSHelper.is_game_mode():
+            return True
+        width = self.winfo_width()
+        if width <= 1:
+            try:
+                width = self.winfo_screenwidth()
+            except Exception:
+                width = 1280
+        return width < 1100
+
+    def _should_show_hints(self) -> bool:
+        if SteamOSHelper.is_game_mode():
+            return True
+        manager = getattr(self, "controller_manager", None)
+        return bool(manager and manager.has_device())
+
+    def _on_root_configure(self, event):
+        if event.widget is not self:
+            return
+        full = self._use_full_page()
+        if full == self._last_full:
+            return
+        self._last_full = full
+        if self._game_page is not None and self._selected_app_id:
+            self._remount_game_page()
+        self._sync_layout()
+
+    def _sync_layout(self):
+        """Places the library, game page, settings, and hint row for the current width."""
+        full = self._use_full_page()
+        self._last_full = full
+        show_detail = self._game_page is not None
+        show_settings = self._settings_open
+        cover_chrome = full and (show_detail or show_settings)
+        if cover_chrome:
+            self.header.grid_remove()
+            self.chip_bar.grid_remove()
+        else:
+            self.header.grid()
+            if self._empty_folder:
+                self.chip_bar.grid_remove()
+            else:
+                self.chip_bar.grid()
+        if show_detail and not (show_settings and full):
+            if full:
+                self.library_host.grid_remove()
+                self.detail_host.grid(row=0, column=0, columnspan=2, sticky="nsew")
+            else:
+                self.library_host.grid(row=0, column=0, sticky="nsew")
+                self.detail_host.grid(row=0, column=1, sticky="nsew")
+                self.detail_host.configure(width=420)
+        else:
+            self.detail_host.grid_remove()
+            self.library_host.grid(row=0, column=0, sticky="nsew")
+        if show_settings:
+            if full:
+                self.settings_host.place(in_=self, relx=0, rely=0, relwidth=1, relheight=1)
+            else:
+                self.settings_host.place(in_=self.body, relx=1, rely=0, anchor="ne", relheight=1, width=480)
+            self.settings_host.lift()
+        else:
+            self.settings_host.place_forget()
+        if self._should_show_hints():
+            self.hint_bar.grid()
+        else:
+            self.hint_bar.grid_remove()
+        self._apply_header_compact()
+
+    def _folder_missing(self) -> bool:
+        config = self.config_manager.config
+        if config.get("mode", "local") == "smb":
+            return False
+        return not str(config.get("local_path", "")).strip()
+
+    def _open_game_page(self, app_id: str, game_data: dict, status_info: dict):
+        if self._use_full_page():
+            canvas = getattr(self.scrollable_games, "_parent_canvas", None)
+            if canvas:
+                self._library_scroll = canvas.yview()
+        self._selected_app_id = str(app_id)
+        self._selected_game = game_data
+        self._selected_status = status_info
+        self._mount_game_page()
+        self._focused_zone = "DETAIL"
+        self._settings_open = False
+        self._sync_layout()
+        self._apply_focus_visuals()
+        return self._game_page
+
+    def _mount_game_page(self):
+        if self._game_page is not None:
+            self._game_page.destroy()
+            self._game_page = None
+        page = GamePage(
+            self.detail_host,
+            self._selected_app_id,
+            self._selected_game,
+            self._selected_status,
+            on_back=self._close_game_page,
+            pinned=self._use_full_page(),
+            host=self,
+        )
+        page.pack(fill="both", expand=True)
+        self._game_page = page
+
+    def _remount_game_page(self):
+        if self._selected_app_id and self._selected_game is not None:
+            self._mount_game_page()
+
+    def _close_game_page(self):
+        if self._game_page is not None:
+            page = self._game_page
+            self._game_page = None
+            page.destroy()
+        self._selected_app_id = None
+        self._focused_zone = "LIBRARY"
+        self._focus_band = "cards"
+        self._sync_layout()
+        canvas = getattr(self.scrollable_games, "_parent_canvas", None)
+        if canvas and self._library_scroll:
+            try:
+                canvas.yview_moveto(self._library_scroll[0])
+            except Exception:
+                pass
+        self._apply_focus_visuals()
+
+    def _open_settings(self):
+        self._settings_open = True
+        self._settings_index = 0
+        self._focused_zone = "SETTINGS"
+        self._sync_layout()
+        self._apply_focus_visuals()
+
+    def _close_settings(self):
+        self._settings_open = False
+        if self._game_page is not None:
+            self._focused_zone = "DETAIL"
+        else:
+            self._focused_zone = "LIBRARY"
+            self._focus_band = "cards"
+        self._sync_layout()
+        self._apply_focus_visuals()
 
     def update_controller_prompts(self, active_zone: str = "LIBRARY"):
-        """Updates controller hints based on active navigation zone."""
+        """Updates the hint row for the focused zone."""
         if not hasattr(self, "lbl_prompt_hints") or not self.lbl_prompt_hints.winfo_exists():
             return
-        if active_zone == "SETTINGS":
-            hints = "[A] Save Settings  •  [B] Back to Library  •  [L1/R1] Switch Tabs"
-        elif active_zone == "TOOLBAR":
-            hints = "[A] Select / Type  •  [Down] Return to Library  •  [B] Clear"
+        if active_zone == "CHIPS":
+            hints = "A  Select     Y  Search     L1/R1  Filter"
+        elif active_zone in ("DETAIL", "SETTINGS", "CONFIRM"):
+            hints = "A  Select     B  Back"
+        elif active_zone == "HEADER":
+            hints = "A  Select     B  Back"
         else:
-            hints = "[A] View Details  •  [X] Apply Patch  •  [Y] Search  •  [L1/R1] Tabs  •  [Start] Scan"
+            hints = "A  View     X  Apply     Y  Search     Start  Scan"
         self.lbl_prompt_hints.configure(text=hints)
 
     def destroy(self):
@@ -326,6 +495,12 @@ class VNPatchManagerApp(
         except Exception:
             pass
         super().destroy()
+        try:
+            import tkinter as tk
+            if getattr(tk, "_default_root", None) is self:
+                tk._default_root = None
+        except Exception:
+            pass
 
     def run_on_main_thread(self, func, *args, **kwargs):
         """Thread-safe dispatch to execute a function on the main Tkinter thread."""
@@ -354,6 +529,13 @@ class VNPatchManagerApp(
 
     def refresh_data(self):
         """Scans Steam installations, updates patches from local/SMB, and populates the library."""
+        if self._folder_missing():
+            self._show_empty_folder()
+            self._stop_progress()
+            self._sync_layout()
+            return
+        self._hide_empty_folder()
+        self._sync_layout()
         self.lbl_status.configure(text="Scanning Steam library & patch repository...", text_color="gray")
         self.progress_bar.configure(mode="indeterminate")
         self.progress_bar.start()
@@ -596,7 +778,7 @@ class VNPatchManagerApp(
                 msg = result.get("message") or ""
                 self.run_on_main_thread(self._stop_progress)
                 self.run_on_main_thread(
-                    lambda m=msg: self.lbl_status.configure(text=f"✅ {m}", text_color=COLOR_STATUS_GREEN)
+                    lambda m=msg: self.lbl_status.configure(text=f"✅ {m}", text_color=COLOR_STATUS_PATCHED)
                 )
             except Exception as e:
                 err_msg = str(e)
@@ -634,7 +816,7 @@ class VNPatchManagerApp(
                 def _done():
                     self._stop_progress()
                     if success:
-                        self.lbl_status.configure(text=f"✅ {msg}", text_color=COLOR_STATUS_GREEN)
+                        self.lbl_status.configure(text=f"✅ {msg}", text_color=COLOR_STATUS_PATCHED)
                         self.refresh_data()
                     else:
                         self.lbl_status.configure(text=f"❌ {msg}", text_color=COLOR_STATUS_RED)

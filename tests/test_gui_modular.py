@@ -33,8 +33,8 @@ from vnpatchmanager.patch_execution import PatchExecutionEngine
 def test_gui_package_exports():
     """Verifies that vnpatchmanager.gui re-exports all required classes, constants, and actions."""
     assert VNPatchManagerApp is not None
-    assert MODE_LOCAL_DISPLAY == "📁 Local Storage"
-    assert MODE_SMB_DISPLAY == "🌐 Network Share (NAS)"
+    assert MODE_LOCAL_DISPLAY == "Local"
+    assert MODE_SMB_DISPLAY == "Network"
     assert APP_NAME == "VN Patch Manager"
     assert APP_VERSION is not None
     assert ACTION_UP == "UP"
