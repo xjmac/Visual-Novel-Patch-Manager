@@ -271,14 +271,16 @@ class VNPatchManagerApp(
         self.btn_add_non_steam.pack(side="left", padx=(0, 8))
         self.btn_settings = ctk.CTkButton(
             actions,
-            text="",
+            text="Settings",
             image=icon("gear"),
-            width=MIN_TOUCH_TARGET,
+            compound="left",
             height=MIN_TOUCH_TARGET,
+            font=ctk.CTkFont(size=15, weight="bold"),
             fg_color=COLOR_ELEVATION_2,
             hover_color=COLOR_ELEVATION_1,
             border_width=1,
             border_color=COLOR_BORDER_2,
+            text_color=COLOR_TEXT_WHITE,
             command=self._open_settings,
         )
         self.btn_settings.pack(side="left")
@@ -482,7 +484,10 @@ class VNPatchManagerApp(
         elif active_zone in ("DETAIL", "SETTINGS", "CONFIRM"):
             hints = "A  Select     B  Back"
         elif active_zone == "HEADER":
-            hints = "A  Select     B  Back"
+            if getattr(self, "_focused_header_idx", 0) == 3:
+                hints = "A  Settings     B  Back"
+            else:
+                hints = "A  Select     B  Back"
         else:
             hints = "A  View     X  Apply     Y  Search     Start  Scan"
         self.lbl_prompt_hints.configure(text=hints)

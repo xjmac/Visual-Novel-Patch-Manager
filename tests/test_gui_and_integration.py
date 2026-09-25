@@ -59,6 +59,36 @@ def test_browse_local_path(app_instance):
         assert app_instance.entry_local_path.get() == "/selected/custom/path"
 
 
+def test_settings_button_opens_sheet_and_stays_in_header(app_instance):
+    assert app_instance.btn_settings.cget("text") == "Settings"
+    with patch("vnpatchmanager.gui.app_window.SteamOSHelper.is_game_mode", return_value=True):
+        app_instance._apply_header_compact()
+    assert app_instance.btn_settings.cget("text") == "Settings"
+    app_instance.deiconify()
+    for geom in ("760x480", "1060x680"):
+        app_instance.geometry(geom)
+        app_instance.update()
+        button = app_instance.btn_settings
+        header = app_instance.header
+        assert button.winfo_ismapped()
+        assert button.winfo_rootx() + button.winfo_width() <= header.winfo_rootx() + header.winfo_width() + 1
+
+    app_instance._focused_zone = "HEADER"
+    app_instance._focused_header_idx = 3
+    app_instance.update_controller_prompts("HEADER")
+    assert "Settings" in app_instance.lbl_prompt_hints.cget("text")
+    app_instance._focused_header_idx = 1
+    app_instance.update_controller_prompts("HEADER")
+    assert app_instance.lbl_prompt_hints.cget("text") == "A  Select     B  Back"
+
+    app_instance.btn_settings.invoke()
+    app_instance.update()
+    assert app_instance._settings_open is True
+    assert app_instance.entry_local_path.winfo_ismapped()
+    assert app_instance.entry_sgdb_key.winfo_ismapped()
+    assert app_instance.btn_save.winfo_ismapped()
+
+
 def test_save_settings(app_instance, temp_config_dir):
     cfg_dir, cfg_file = temp_config_dir
 
