@@ -35,8 +35,18 @@ from .theme import (
 )
 
 # Display Modes
-MODE_LOCAL_DISPLAY = "📁 Local Storage"
-MODE_SMB_DISPLAY = "🌐 Network Share (NAS)"
+MODE_LOCAL_DISPLAY = "Local"
+MODE_SMB_DISPLAY = "Network"
+
+FILTER_ORDER = ["all", "ready", "patched", "missing", "backup"]
+FILTER_LABELS = {
+    "all": "All",
+    "ready": "Ready",
+    "patched": "Patched",
+    "missing": "Missing",
+    "backup": "Backup",
+}
+SORT_ORDER = ["A-Z", "Z-A", "Rating"]
 
 # Window Dimensions & Geometry
 DEFAULT_GEOMETRY = "1060x680"

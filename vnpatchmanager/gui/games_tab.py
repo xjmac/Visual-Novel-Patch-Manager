@@ -1,180 +1,232 @@
 """
-Games Library tab UI, toolbar controls, filtering, sorting, and batch rendering.
+Library toolbar, filtering, sorting, and poster/list rendering.
 """
 
 import logging
+import webbrowser
 import customtkinter as ctk
 
 from .constants import (
-    COLOR_BG_BLACK,
+    FILTER_LABELS,
+    FILTER_ORDER,
+    SORT_ORDER,
+)
+from .status import status_word
+from .theme import (
+    COLOR_BORDER_2,
+    COLOR_BORDER_FOCUSED,
+    COLOR_CANVAS,
+    COLOR_ELEVATION_2,
+    COLOR_ELEVATION_3,
     COLOR_PRIMARY_BLUE,
     COLOR_PRIMARY_HOVER,
-    COLOR_TEXT_WHITE,
     COLOR_TEXT_MUTED,
+    COLOR_TEXT_PRIMARY,
+    MIN_TOUCH_TARGET,
     POSTER_CARD_SIZE,
     POSTER_COLUMNS_MIN,
     POSTER_COL_WIDTH,
 )
-from .views import create_poster_card, show_game_detail_modal
+from .views import create_poster_card
 
 logger = logging.getLogger(__name__)
 
+_LEGACY_FILTERS = {
+    "All": "all",
+    "Patch Available": "ready",
+    "Patched": "patched",
+    "Missing 18+ (VNDB)": "missing",
+    "Backed Up": "backup",
+}
+_LEGACY_SORTS = {
+    "Title (A-Z)": "A-Z",
+    "Title (Z-A)": "Z-A",
+    "VNDB Rating": "Rating",
+}
+
 
 class GamesTabMixin:
-    """Provides games tab layout, search, filter/sort controls, and batch rendering orchestration."""
+    """Library chips, search filtering, and poster or list rendering."""
+
+    def _canonical_filter(self) -> str:
+        raw = self.filter_var.get()
+        mapped = _LEGACY_FILTERS.get(raw, raw)
+        return mapped if mapped in FILTER_ORDER else "all"
+
+    def _canonical_sort(self) -> str:
+        raw = self.sort_var.get()
+        mapped = _LEGACY_SORTS.get(raw, raw)
+        return mapped if mapped in SORT_ORDER else "A-Z"
 
     def _setup_games_tab(self):
-        """Constructs the games library tab toolbar and scrollable container."""
-        self.tab_games.grid_rowconfigure(1, weight=1)
-        self.tab_games.grid_columnconfigure(0, weight=1)
+        """Builds the filter chips and the scrollable library."""
+        self.chip_bar.grid_columnconfigure(1, weight=1)
 
-        # Toolbar Frame (Search + Filter + View Toggle)
-        toolbar_frame = ctk.CTkFrame(self.tab_games, fg_color="transparent")
-        toolbar_frame.grid(row=0, column=0, sticky="ew", padx=4, pady=(0, 10))
-        toolbar_frame.grid_columnconfigure(0, weight=1)
+        chip_row = ctk.CTkFrame(self.chip_bar, fg_color="transparent")
+        chip_row.grid(row=0, column=0, sticky="w")
+        self._chip_buttons = []
+        for fid in FILTER_ORDER:
+            button = ctk.CTkButton(
+                chip_row,
+                text=FILTER_LABELS[fid],
+                height=MIN_TOUCH_TARGET,
+                width=88,
+                corner_radius=8,
+                border_width=1,
+                border_color=COLOR_BORDER_2,
+                fg_color=COLOR_ELEVATION_2,
+                hover_color=COLOR_ELEVATION_3,
+                text_color=COLOR_TEXT_PRIMARY,
+                font=ctk.CTkFont(size=15),
+                command=lambda value=fid: self._select_filter(value),
+            )
+            button.pack(side="left", padx=(0, 8))
+            self._chip_buttons.append(button)
+        self._filter_frame = chip_row
 
-        # Prominent Search Bar Container
-        search_frame = ctk.CTkFrame(
-            toolbar_frame,
-            fg_color="#18181b",
-            border_color="#3f3f46",
-            border_width=1,
-            corner_radius=8,
-            height=34,
-        )
-        search_frame.grid(row=0, column=0, sticky="ew", padx=(0, 10))
-        search_frame.grid_columnconfigure(1, weight=1)
-        self._search_frame = search_frame
-
-        lbl_search_icon = ctk.CTkLabel(
-            search_frame,
-            text="🔍",
-            font=ctk.CTkFont(size=13),
-            text_color=COLOR_TEXT_MUTED,
-        )
-        lbl_search_icon.grid(row=0, column=0, padx=(8, 4), pady=2)
-
-        self.entry_search = ctk.CTkEntry(
-            search_frame,
-            placeholder_text="Search visual novels by title...",
-            placeholder_text_color="#71717a",
-            textvariable=self.search_var,
-            fg_color="transparent",
-            border_width=0,
-            text_color=COLOR_TEXT_WHITE,
+        self.lbl_stats = ctk.CTkLabel(
+            self.chip_bar,
+            text="",
             font=ctk.CTkFont(size=12),
-            height=30,
+            text_color=COLOR_TEXT_MUTED,
+            anchor="w",
         )
-        self.entry_search.grid(row=0, column=1, sticky="ew", padx=(0, 4), pady=2)
-        self.entry_search.bind("<FocusIn>", self._on_search_focused)
+        self.lbl_stats.grid(row=0, column=1, sticky="w", padx=8)
 
-        self.btn_clear_search = ctk.CTkButton(
-            search_frame,
-            text="✕",
-            width=26,
-            height=26,
-            corner_radius=13,
-            fg_color="transparent",
-            hover_color="#27272a",
-            text_color="#52525b",
-            font=ctk.CTkFont(size=12, weight="bold"),
-            command=lambda: self.search_var.set(""),
-        )
-        self.btn_clear_search.grid(row=0, column=2, padx=(2, 6), pady=2)
-
-        # Status Filter Container
-        filter_frame = ctk.CTkFrame(
-            toolbar_frame,
-            fg_color="#18181b",
-            border_color="#3f3f46",
-            border_width=1,
-            corner_radius=8,
-        )
-        filter_frame.grid(row=0, column=1, padx=(0, 10))
-        self._filter_frame = filter_frame
-
-        self.opt_filter = ctk.CTkSegmentedButton(
-            filter_frame,
-            values=["All", "Patch Available", "Patched", "Missing 18+ (VNDB)", "Backed Up"],
-            variable=self.filter_var,
-            command=lambda v: self._apply_filters_and_render(),
-            fg_color="#121212",
-            selected_color=COLOR_PRIMARY_BLUE,
-            selected_hover_color=COLOR_PRIMARY_HOVER,
-            unselected_hover_color="#1e1e1e",
-            text_color=COLOR_TEXT_WHITE,
-        )
-        self.opt_filter.pack(padx=2, pady=2)
-
-        # Sort Dropdown Container
-        sort_frame = ctk.CTkFrame(
-            toolbar_frame,
-            fg_color="#18181b",
-            border_color="#3f3f46",
-            border_width=1,
-            corner_radius=8,
-        )
-        sort_frame.grid(row=0, column=2, padx=(0, 10))
-        self._sort_frame = sort_frame
-
+        self._sort_frame = ctk.CTkFrame(self.chip_bar, fg_color="transparent")
+        self._sort_frame.grid(row=0, column=2, padx=(0, 8))
         self.opt_sort = ctk.CTkOptionMenu(
-            sort_frame,
-            values=["Title (A-Z)", "Title (Z-A)", "VNDB Rating", "Status Priority", "Installed First"],
+            self._sort_frame,
+            values=SORT_ORDER,
             variable=self.sort_var,
-            command=lambda v: self._apply_filters_and_render(),
-            width=135,
-            fg_color="#121212",
-            button_color="#1e1e1e",
-            button_hover_color="#27272a",
-            text_color=COLOR_TEXT_WHITE,
+            command=lambda _value: self._apply_filters_and_render(),
+            width=100,
+            height=MIN_TOUCH_TARGET,
+            fg_color=COLOR_ELEVATION_2,
+            button_color=COLOR_ELEVATION_3,
+            button_hover_color=COLOR_BORDER_2,
+            text_color=COLOR_TEXT_PRIMARY,
         )
-        self.opt_sort.pack(padx=2, pady=2)
+        self.opt_sort.pack()
 
-        # View Mode Toggle Container
-        view_frame = ctk.CTkFrame(
-            toolbar_frame,
-            fg_color="#18181b",
-            border_color="#3f3f46",
+        self._view_frame = ctk.CTkFrame(
+            self.chip_bar,
+            fg_color=COLOR_ELEVATION_2,
             border_width=1,
+            border_color=COLOR_BORDER_2,
             corner_radius=8,
         )
-        view_frame.grid(row=0, column=3)
-        self._view_frame = view_frame
-
-        self.opt_view = ctk.CTkSegmentedButton(
-            view_frame,
-            values=["Posters", "Grid", "List"],
-            variable=self.view_var,
-            command=lambda v: self._apply_filters_and_render(),
-            fg_color="#121212",
-            selected_color=COLOR_PRIMARY_BLUE,
-            selected_hover_color=COLOR_PRIMARY_HOVER,
-            unselected_hover_color="#1e1e1e",
-            text_color=COLOR_TEXT_WHITE,
+        self._view_frame.grid(row=0, column=3)
+        self._btn_view_posters = ctk.CTkButton(
+            self._view_frame,
+            text="Posters",
+            width=80,
+            height=MIN_TOUCH_TARGET,
+            fg_color=COLOR_PRIMARY_BLUE,
+            hover_color=COLOR_PRIMARY_HOVER,
+            command=lambda: self._select_view("Posters"),
         )
-        self.opt_view.pack(padx=2, pady=2)
+        self._btn_view_posters.pack(side="left", padx=2, pady=2)
+        self._btn_view_list = ctk.CTkButton(
+            self._view_frame,
+            text="List",
+            width=64,
+            height=MIN_TOUCH_TARGET,
+            fg_color="transparent",
+            hover_color=COLOR_ELEVATION_3,
+            text_color=COLOR_TEXT_PRIMARY,
+            command=lambda: self._select_view("List"),
+        )
+        self._btn_view_list.pack(side="left", padx=2, pady=2)
 
-        # Scrollable Game Area - SteamOS Slate Canvas
+        self.library_host.grid_rowconfigure(0, weight=1)
+        self.library_host.grid_columnconfigure(0, weight=1)
         self.scrollable_games = ctk.CTkScrollableFrame(
-            self.tab_games,
-            fg_color=COLOR_BG_BLACK,
-            corner_radius=10,
-            border_width=1,
-            border_color="#18181b",
+            self.library_host,
+            fg_color=COLOR_CANVAS,
+            corner_radius=0,
         )
-        self.scrollable_games.grid(row=1, column=0, sticky="nsew")
+        self.scrollable_games.grid(row=0, column=0, sticky="nsew")
         self.scrollable_games.grid_columnconfigure(0, weight=1)
 
-        # Attach viewport canvas configure listener WITH add="+" so CTkScrollableFrame's
-        # internal scrollregion configure binding is never overwritten
+        self._empty_frame = ctk.CTkFrame(self.library_host, fg_color=COLOR_CANVAS)
+        self._empty_frame.grid(row=0, column=0, sticky="nsew")
+        self._empty_frame.grid_remove()
+        ctk.CTkLabel(
+            self._empty_frame,
+            text="The patch folder has not been chosen.",
+            font=ctk.CTkFont(size=15),
+            text_color=COLOR_TEXT_MUTED,
+        ).pack(pady=(80, 12))
+        ctk.CTkButton(
+            self._empty_frame,
+            text="Choose folder",
+            height=48,
+            font=ctk.CTkFont(size=15, weight="bold"),
+            fg_color=COLOR_PRIMARY_BLUE,
+            hover_color=COLOR_PRIMARY_HOVER,
+            command=self._choose_patch_folder,
+        ).pack()
+
         canvas = getattr(self.scrollable_games, "_parent_canvas", None)
         if canvas:
             canvas.bind("<Configure>", self._on_games_area_resized, add="+")
         else:
             self.scrollable_games.bind("<Configure>", self._on_games_area_resized, add="+")
-
-        # Bind universal mouse wheel scrolling handlers
         self._bind_mouse_wheel_scrolling()
+        self._paint_filter_chips()
+        self._paint_view_toggle()
+
+    def _select_filter(self, value: str):
+        self.filter_var.set(value)
+        self._paint_filter_chips()
+        self._apply_filters_and_render()
+
+    def _select_view(self, value: str):
+        self.view_var.set("List" if value == "List" else "Posters")
+        self._paint_view_toggle()
+        self._apply_filters_and_render()
+
+    def _paint_filter_chips(self):
+        current = self._canonical_filter()
+        focused = getattr(self, "_focused_zone", "") == "CHIPS"
+        chip_idx = getattr(self, "_focused_chip_idx", -1)
+        for idx, fid in enumerate(FILTER_ORDER):
+            button = self._chip_buttons[idx]
+            selected = fid == current
+            is_focus = focused and chip_idx == idx
+            button.configure(
+                fg_color=COLOR_PRIMARY_BLUE if selected else COLOR_ELEVATION_2,
+                border_width=2 if is_focus else 1,
+                border_color=COLOR_BORDER_FOCUSED if is_focus else COLOR_BORDER_2,
+            )
+
+    def _paint_view_toggle(self):
+        posters = "List" not in self.view_var.get()
+        self._btn_view_posters.configure(
+            fg_color=COLOR_PRIMARY_BLUE if posters else "transparent",
+            text_color=COLOR_TEXT_PRIMARY,
+        )
+        self._btn_view_list.configure(
+            fg_color=COLOR_PRIMARY_BLUE if not posters else "transparent",
+            text_color=COLOR_TEXT_PRIMARY,
+        )
+
+    def _show_empty_folder(self):
+        self._empty_folder = True
+        self.scrollable_games.grid_remove()
+        self._empty_frame.grid()
+        if hasattr(self, "chip_bar"):
+            self.chip_bar.grid_remove()
+        self.lbl_status.configure(text="The patch folder has not been chosen.", text_color="gray")
+        self.lbl_stats.configure(text="")
+
+    def _hide_empty_folder(self):
+        self._empty_folder = False
+        self._empty_frame.grid_remove()
+        self.scrollable_games.grid()
+        if hasattr(self, "chip_bar") and not (getattr(self, "_game_page", None) and self._use_full_page()):
+            self.chip_bar.grid()
 
     def _update_scroll_region(self):
         """Explicitly recalculates and updates the canvas scrollregion."""
@@ -186,7 +238,7 @@ class GamesTabMixin:
                 canvas.configure(scrollregion=bbox)
 
     def _bind_mouse_wheel_scrolling(self):
-        """Binds universal mouse wheel handlers across Linux (X11 & Wayland) and Windows."""
+        """Binds mouse wheel handlers across Linux and Windows."""
         canvas = getattr(self.scrollable_games, "_parent_canvas", None)
         if not canvas:
             return
@@ -198,14 +250,12 @@ class GamesTabMixin:
             canvas_h = canvas.winfo_height()
             if (bbox[3] - bbox[1]) <= canvas_h:
                 return
-
             if getattr(event, "num", None) == 4:
                 canvas.yview_scroll(-3, "units")
                 return "break"
-            elif getattr(event, "num", None) == 5:
+            if getattr(event, "num", None) == 5:
                 canvas.yview_scroll(3, "units")
                 return "break"
-
             delta = getattr(event, "delta", 0)
             if delta != 0:
                 step = -1 if delta > 0 else 1
@@ -218,7 +268,7 @@ class GamesTabMixin:
             widget.bind("<MouseWheel>", _on_mouse_wheel, add="+")
 
     def _attach_mouse_wheel(self, widget):
-        """Recursively binds mouse wheel events on a widget and its children to scroll the library canvas."""
+        """Recursively binds mouse wheel events so cards scroll the library."""
         canvas = getattr(self.scrollable_games, "_parent_canvas", None)
         if not canvas:
             return
@@ -230,14 +280,12 @@ class GamesTabMixin:
             canvas_h = canvas.winfo_height()
             if (bbox[3] - bbox[1]) <= canvas_h:
                 return
-
             if getattr(event, "num", None) == 4:
                 canvas.yview_scroll(-3, "units")
                 return "break"
-            elif getattr(event, "num", None) == 5:
+            if getattr(event, "num", None) == 5:
                 canvas.yview_scroll(3, "units")
                 return "break"
-
             delta = getattr(event, "delta", 0)
             if delta != 0:
                 step = -1 if delta > 0 else 1
@@ -256,9 +304,9 @@ class GamesTabMixin:
             self._attach_mouse_wheel(child)
 
     def _on_games_area_resized(self, event):
-        """Dynamically recomputes column layout when window is resized."""
+        """Recomputes poster columns when the library width changes."""
         self._update_scroll_region()
-        if "Posters" not in self.view_var.get():
+        if "List" in self.view_var.get():
             return
         new_w = event.width
         last_w = getattr(self, "_last_rendered_width", 0)
@@ -271,19 +319,12 @@ class GamesTabMixin:
             self._resize_job = self.after(150, self._apply_filters_and_render)
 
     def open_game_detail(self, app_id: str, game_data: dict):
-        """Displays the full console-grade Game Detail Drawer/Modal for the selected visual novel."""
+        """Opens the in-window game page for a library card."""
         status_info = self._get_game_status_info(app_id, game_data)
-        return show_game_detail_modal(self, app_id, game_data, status_info)
+        return self._open_game_page(app_id, game_data, status_info)
 
     def _on_search_changed(self, *args):
-        """Debounces search input to prevent UI lag during typing."""
-        if hasattr(self, 'btn_clear_search'):
-            query = self.search_var.get().strip()
-            if query:
-                self.btn_clear_search.configure(text_color=COLOR_TEXT_WHITE, state="normal")
-            else:
-                self.btn_clear_search.configure(text_color="#52525b", state="disabled")
-
+        """Debounces search input."""
         if self._search_debounce_job:
             try:
                 self.after_cancel(self._search_debounce_job)
@@ -292,12 +333,29 @@ class GamesTabMixin:
         self._search_debounce_job = self.after(60, self._apply_filters_and_render)
 
     def _populate_game_list(self, supported_games: dict):
-        """Populates the game list with scanned or filtered visual novels."""
+        """Stores a scan result and renders it."""
         self._all_supported_games = supported_games
+        self._hide_empty_folder()
         self._apply_filters_and_render()
 
+    def _filter_matches(self, status_info: dict, active: str) -> bool:
+        if active in ("all", "All", ""):
+            return True
+        if active == "Patch Available":
+            return bool(status_info.get("has_local_patch"))
+        if active == "Patched":
+            return bool(status_info.get("is_patched"))
+        if active == "Missing 18+ (VNDB)":
+            return bool(status_info.get("has_vndb_18_patch")) and not status_info.get("has_local_patch")
+        if active == "Backed Up":
+            return bool(status_info.get("has_clean_backup") or status_info.get("has_backup"))
+        word = status_info.get("status_word") or status_word(status_info)
+        return word.lower() == active.lower()
+
     def _apply_filters_and_render(self):
-        """Filters, sorts, and triggers batch rendering of games."""
+        """Filters, sorts, and batch-renders the library."""
+        if getattr(self, "_empty_folder", False):
+            return
         if self._active_render_job:
             try:
                 self.after_cancel(self._active_render_job)
@@ -307,14 +365,16 @@ class GamesTabMixin:
 
         for widget in self.scrollable_games.winfo_children():
             widget.destroy()
-
         self._card_entries.clear()
+        self._paint_filter_chips()
+        self._paint_view_toggle()
 
         if not self._all_supported_games:
             ctk.CTkLabel(
                 self.scrollable_games,
                 text="No patchable visual novels found.",
-                font=ctk.CTkFont(size=14),
+                font=ctk.CTkFont(size=15),
+                text_color=COLOR_TEXT_MUTED,
             ).pack(pady=40)
             self.lbl_status.configure(text="Scan complete. No patchable visual novels found.", text_color="gray")
             self.lbl_stats.configure(text="0 Patchable VNs Found")
@@ -323,114 +383,87 @@ class GamesTabMixin:
         search_query = self.search_var.get().strip().lower()
         active_filter = self.filter_var.get()
         view_mode = self.view_var.get()
-
         matched_games = {}
         total_patched = 0
-        total_backed_up = 0
         total_local_available = 0
         total_missing_18 = 0
 
         for app_id, game_data in self._all_supported_games.items():
             status_info = game_data.get("status_info") or self._compute_status_info(app_id, game_data)
-            is_patched = status_info["is_patched"]
-            has_clean_backup = status_info["has_clean_backup"]
-            has_backup = status_info["has_backup"]
-            has_local_patch = status_info["has_local_patch"]
-            vn_info = status_info["vn_info"]
-            has_vndb_18_patch = vn_info.get("has_18plus_en_patch", False)
-
-            if is_patched:
+            game_data["status_info"] = status_info
+            if status_info["is_patched"]:
                 total_patched += 1
-            if has_clean_backup or has_backup:
-                total_backed_up += 1
-            if has_local_patch:
+            if status_info["has_local_patch"]:
                 total_local_available += 1
-            elif has_vndb_18_patch:
+            elif status_info["has_vndb_18_patch"]:
                 total_missing_18 += 1
-
-            # 1. Filter match
-            if active_filter == "Patch Available" and not has_local_patch:
+            if not self._filter_matches(status_info, active_filter):
                 continue
-            elif active_filter == "Patched" and not is_patched:
-                continue
-            elif active_filter == "Missing 18+ (VNDB)" and (has_local_patch or not has_vndb_18_patch):
-                continue
-            elif active_filter == "Backed Up" and not (has_clean_backup or has_backup):
-                continue
-
-            # 2. Search match
-            if search_query:
-                game_name = game_data.get("name", "").lower()
-                vn_title = vn_info.get("vn_title", "").lower()
-                if search_query not in game_name and search_query not in vn_title and search_query not in str(app_id):
+            if search_query and search_query not in status_info.get("search_haystack", ""):
+                name = game_data.get("name", "").lower()
+                vn_title = (status_info.get("vn_info") or {}).get("vn_title", "").lower()
+                if search_query not in name and search_query not in vn_title and search_query not in str(app_id):
                     continue
-
             matched_games[app_id] = game_data
 
         total_vns = len(self._all_supported_games)
         self.lbl_stats.configure(
-            text=f"{total_vns} Patchable VNs • {total_local_available} Local Patches • {total_missing_18} Missing 18+ (VNDB) • {total_patched} Patched"
+            text=f"{total_vns} Patchable VNs · {total_local_available} ready · {total_missing_18} missing · {total_patched} patched"
         )
-
         if not matched_games:
             ctk.CTkLabel(
                 self.scrollable_games,
-                text="No Visual Novels match the current search/filter.",
-                font=ctk.CTkFont(size=13),
+                text="Nothing matches this filter.",
+                font=ctk.CTkFont(size=15),
+                text_color=COLOR_TEXT_MUTED,
             ).pack(pady=40)
             self.lbl_status.configure(text="Filter active: 0 matches.", text_color="gray")
             return
 
-        # Apply Library Sorting
-        sort_mode = self.sort_var.get()
-
-        if sort_mode == "Title (Z-A)":
-            sorted_games = dict(sorted(matched_games.items(), key=lambda x: x[1]["name"].lower(), reverse=True))
-        elif sort_mode == "VNDB Rating":
+        sort_mode = self._canonical_sort()
+        if sort_mode == "Z-A":
+            sorted_games = dict(sorted(matched_games.items(), key=lambda item: item[1]["name"].lower(), reverse=True))
+        elif sort_mode == "Rating":
             sorted_games = dict(
                 sorted(
                     matched_games.items(),
-                    key=lambda x: (
-                        x[1].get("vndb", {}).get("rating") is not None,
-                        x[1].get("vndb", {}).get("rating") or 0.0,
-                        x[1].get("vndb", {}).get("votecount") or 0,
-                        x[1]["name"].lower(),
+                    key=lambda item: (
+                        (item[1].get("status_info") or {}).get("rating") is not None,
+                        (item[1].get("status_info") or {}).get("rating") or 0.0,
+                        item[1]["name"].lower(),
                     ),
                     reverse=True,
                 )
             )
-        elif sort_mode == "Status Priority":
+        elif self.sort_var.get() == "Status Priority":
             sorted_games = dict(
                 sorted(
                     matched_games.items(),
-                    key=lambda x: (
-                        (x[1].get("status_info") or self._compute_status_info(x[0], x[1])).get("status_priority", 3),
-                        x[1]["name"].lower(),
+                    key=lambda item: (
+                        (item[1].get("status_info") or {}).get("status_priority", 3),
+                        item[1]["name"].lower(),
                     ),
                 )
             )
-        elif sort_mode == "Installed First":
+        elif self.sort_var.get() == "Installed First":
             sorted_games = dict(
                 sorted(
                     matched_games.items(),
-                    key=lambda x: (not x[1].get("is_installed", False), x[1]["name"].lower()),
+                    key=lambda item: (not item[1].get("is_installed", False), item[1]["name"].lower()),
                 )
             )
-        else:  # Default: Title (A-Z)
-            sorted_games = dict(sorted(matched_games.items(), key=lambda x: x[1]["name"].lower()))
+        else:
+            sorted_games = dict(sorted(matched_games.items(), key=lambda item: item[1]["name"].lower()))
 
         self._banner_widgets.clear()
-        if "Posters" in view_mode:
-            self._render_poster_view(sorted_games)
-        elif "Grid" in view_mode:
-            self._render_grid_view(sorted_games)
-        else:
+        if "List" in view_mode:
             self._render_list_view(sorted_games)
-
+        else:
+            self._render_poster_view(sorted_games)
         self.lbl_status.configure(text=f"Showing {len(matched_games)} of {total_vns} Visual Novel(s).", text_color="gray")
 
     def _render_poster_view(self, games_dict):
-        """Batch-renders games in a responsive multi-column poster gallery (2:3 portrait capsules)."""
+        """Batch-renders a responsive poster grid."""
         try:
             curr_w = self.scrollable_games.winfo_width()
             if curr_w <= 100:
@@ -438,12 +471,10 @@ class GamesTabMixin:
         except Exception:
             curr_w = 1060
         self._last_rendered_width = curr_w
-
         col_count = max(POSTER_COLUMNS_MIN, curr_w // POSTER_COL_WIDTH)
         self._poster_col_count = col_count
-
-        for c in range(col_count):
-            self.scrollable_games.grid_columnconfigure(c, weight=1)
+        for column in range(col_count):
+            self.scrollable_games.grid_columnconfigure(column, weight=1)
 
         items = list(games_dict.items())
 
@@ -455,8 +486,6 @@ class GamesTabMixin:
             for idx in range(start_idx, end_idx):
                 app_id, game_data = items[idx]
                 status_info = self._get_game_status_info(app_id, game_data)
-                row_idx = idx // col_count
-                col_idx = idx % col_count
                 entry = create_poster_card(
                     self.scrollable_games,
                     app_id,
@@ -464,8 +493,8 @@ class GamesTabMixin:
                     status_info,
                     self.cover_manager,
                     on_select=self.open_game_detail,
-                    row_idx=row_idx,
-                    col_idx=col_idx,
+                    row_idx=idx // col_count,
+                    col_idx=idx % col_count,
                 )
                 self._card_entries.append(entry)
                 self._attach_mouse_wheel(entry["card"])
@@ -473,37 +502,6 @@ class GamesTabMixin:
                     self._banner_widgets.setdefault(str(app_id), []).append(
                         (entry["banner_label"], game_data.get("name", ""), POSTER_CARD_SIZE)
                     )
-
-            if end_idx < len(items):
-                self._active_render_job = self.after(16, lambda: render_batch(end_idx, batch_size))
-            else:
-                self._active_render_job = None
-                self._update_scroll_region()
-                self._apply_focus_visuals()
-
-        render_batch(0)
-
-    def _render_grid_view(self, games_dict):
-        """Batch-renders games in a 2-column grid."""
-        self.scrollable_games.grid_columnconfigure(0, weight=1)
-        self.scrollable_games.grid_columnconfigure(1, weight=1)
-
-        items = list(games_dict.items())
-
-        def render_batch(start_idx, batch_size=10):
-            if start_idx >= len(items):
-                self._update_scroll_region()
-                self._apply_focus_visuals()
-                return
-            end_idx = min(start_idx + batch_size, len(items))
-            for idx in range(start_idx, end_idx):
-                app_id, game_data = items[idx]
-                row_idx = idx // 2
-                col_idx = idx % 2
-                entry = self._create_grid_card(self.scrollable_games, app_id, game_data, row_idx, col_idx)
-                self._card_entries.append(entry)
-                self._attach_mouse_wheel(entry["card"])
-
             if end_idx < len(items):
                 self._active_render_job = self.after(16, lambda: render_batch(end_idx, batch_size))
             else:
@@ -514,10 +512,9 @@ class GamesTabMixin:
         render_batch(0)
 
     def _render_list_view(self, games_dict):
-        """Batch-renders games in a compact single-column list."""
+        """Batch-renders a single-column list."""
         self.scrollable_games.grid_columnconfigure(0, weight=1)
-        self.scrollable_games.grid_columnconfigure(1, weight=0)
-
+        self._poster_col_count = 1
         items = list(games_dict.items())
 
         def render_batch(start_idx, batch_size=15):
@@ -531,7 +528,6 @@ class GamesTabMixin:
                 entry = self._create_list_row(self.scrollable_games, app_id, game_data, row_idx)
                 self._card_entries.append(entry)
                 self._attach_mouse_wheel(entry["card"])
-
             if end_idx < len(items):
                 self._active_render_job = self.after(16, lambda: render_batch(end_idx, batch_size))
             else:
@@ -540,3 +536,15 @@ class GamesTabMixin:
                 self._apply_focus_visuals()
 
         render_batch(0)
+
+    def _run_card_primary(self, app_id: str, game_data: dict):
+        """X on a card: apply, re-apply, or open VNDB. Clean cards do nothing noisy."""
+        status_info = self._get_game_status_info(app_id, game_data)
+        word = status_info.get("status_word") or status_word(status_info)
+        if word in ("Ready", "Patched"):
+            self.run_patch(game_data, self.repo.available_patches.get(app_id))
+        elif word == "Missing":
+            vn_info = status_info.get("vn_info") or {}
+            url = vn_info.get("vndb_url") or (f"https://vndb.org/{vn_info['vn_id']}" if vn_info.get("vn_id") else None)
+            if url:
+                webbrowser.open(url)

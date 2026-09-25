@@ -14,6 +14,7 @@ from vnpatchmanager.controller_manager import (
     ACTION_NEXT_TAB,
     ACTION_SCROLL_UP,
     ACTION_SCROLL_DOWN,
+    ACTION_SCAN,
     JS_EVENT_BUTTON,
     JS_EVENT_AXIS,
     JS_EVENT_INIT
@@ -56,6 +57,9 @@ def test_handle_raw_event_buttons():
     # Test Button 5 (R1) -> NEXT_TAB
     mgr._handle_raw_event(1, JS_EVENT_BUTTON, 5)
     assert emitted[-1] == ACTION_NEXT_TAB
+
+    mgr._handle_raw_event(1, JS_EVENT_BUTTON, 7)
+    assert emitted[-1] == ACTION_SCAN
 
     # Test Button Release (val == 0) -> Should NOT emit
     before_len = len(emitted)

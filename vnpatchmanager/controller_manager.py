@@ -22,6 +22,7 @@ ACTION_PREV_TAB = "PREV_TAB"      # L1 bumper
 ACTION_NEXT_TAB = "NEXT_TAB"      # R1 bumper
 ACTION_SCROLL_UP = "SCROLL_UP"    # L2 / Right Stick Up
 ACTION_SCROLL_DOWN = "SCROLL_DOWN"# R2 / Right Stick Down
+ACTION_SCAN = "SCAN"              # Start / menu button (joystick button 7)
 
 # Linux JS Event Spec: 32-bit time, 16-bit value, 8-bit type, 8-bit number
 JS_EVENT_FORMAT = "IhBB"
@@ -82,6 +83,10 @@ class GamepadControllerManager:
         self._running = True
         self._thread = threading.Thread(target=self._run_loop, daemon=True, name="GamepadListener")
         self._thread.start()
+
+    def has_device(self) -> bool:
+        """True when at least one joystick is open."""
+        return bool(self._open_devices)
 
     def stop(self):
         """Stops background thread and releases all device descriptors."""
@@ -281,6 +286,8 @@ class GamepadControllerManager:
                     self._emit(ACTION_PREV_TAB)
                 elif number == 5:  # R1
                     self._emit(ACTION_NEXT_TAB)
+                elif number == 7:  # Start / menu
+                    self._emit(ACTION_SCAN)
                 # Support digital D-pad buttons (common on some pads/drivers)
                 elif number in (11, 13):  # D-Pad Up
                     self._set_held_direction(ACTION_UP)
