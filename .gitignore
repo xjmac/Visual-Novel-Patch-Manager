@@ -27,6 +27,11 @@ dist/
 build/
 *.egg-info/
 node_modules/
+decky-plugin/src/vnLibrary.generated.ts
+
+# Personal Steam library dumps. The converters accept a path the user supplies.
+scripts/raw_licenses.txt
+scripts/my_steam_games.txt
 
 # Local notes
 ROADMAP.md

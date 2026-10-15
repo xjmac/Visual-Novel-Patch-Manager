@@ -31,6 +31,7 @@ class PatchRepository:
         self.bundled_db_path = bundled_db_path or self.find_database_file()
         self.available_patches: Dict[str, PatchData] = {}
         self._title_map = None
+        self._blank_local_logged = False
 
     ROMAN_NUMERAL_MAP = {
         "x": "10", "ix": "9", "viii": "8", "vii": "7", "vi": "6",
@@ -235,7 +236,13 @@ class PatchRepository:
         return candidates
 
     def _scan_local(self):
-        base_path = Path(self.cm.config.get("local_path"))
+        raw = self.cm.config.get("local_path")
+        if raw is None or not str(raw).strip():
+            if not self._blank_local_logged:
+                logger.info("Local patch directory is not configured")
+                self._blank_local_logged = True
+            return
+        base_path = Path(str(raw).strip())
         if not base_path.exists():
             logger.warning(f"Local patch directory not found: {base_path}")
             return

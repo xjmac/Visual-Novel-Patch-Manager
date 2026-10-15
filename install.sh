@@ -16,6 +16,55 @@ BIN_DIR="${HOME}/.local/bin"
 APPS_DIR="${HOME}/.local/share/applications"
 DESKTOP_DIR="${HOME}/Desktop"
 
+# 7-Zip 26.04 standalone console build. `l -ba -slt` lists members and
+# `x -y -oDIR` extracts. The archive's 7zz is installed under the name 7z.
+SEVEN_ZIP_VERSION="26.04"
+SEVEN_ZIP_URL="https://github.com/ip7z/7zip/releases/download/${SEVEN_ZIP_VERSION}/7z2604-linux-x64.tar.xz"
+SEVEN_ZIP_SHA256="fc0327ba27e89bd086cf426dff17d77de582953cdbbc10a6576540a06853ffcd"
+
+copy_innoextract() {
+    local src="$1"
+    if [ ! -f "${src}/innoextract" ] || [ ! -f "${src}/LICENSE" ] || [ ! -f "${src}/version" ]; then
+        echo "❌ Error: innoextract is not included in this VNPM source (${src})."
+        return 1
+    fi
+    cp "${src}/innoextract" "${INSTALL_DIR}/bin/innoextract"
+    cp "${src}/LICENSE" "${INSTALL_DIR}/bin/innoextract.LICENSE"
+    cp "${src}/version" "${INSTALL_DIR}/bin/innoextract.version"
+    if [ -d "${src}/license" ]; then
+        mkdir -p "${INSTALL_DIR}/bin/innoextract-licenses"
+        cp -a "${src}/license/." "${INSTALL_DIR}/bin/innoextract-licenses/"
+    fi
+    chmod 755 "${INSTALL_DIR}/bin/innoextract"
+}
+
+install_7zip() {
+    local tmp sha_file
+    tmp=$(mktemp -d)
+    sha_file="${tmp}/7z.tar.xz"
+    if ! curl -fL -o "${sha_file}" "${SEVEN_ZIP_URL}"; then
+        echo "❌ Error: Failed to download 7-Zip ${SEVEN_ZIP_VERSION}."
+        rm -rf "${tmp}"
+        return 1
+    fi
+    if ! echo "${SEVEN_ZIP_SHA256}  ${sha_file}" | sha256sum -c -; then
+        echo "❌ Error: 7-Zip download failed the checksum check."
+        rm -rf "${tmp}"
+        return 1
+    fi
+    tar -xJf "${sha_file}" -C "${tmp}"
+    if [ ! -f "${tmp}/7zz" ] || [ ! -f "${tmp}/License.txt" ]; then
+        echo "❌ Error: 7-Zip archive did not contain 7zz and License.txt."
+        rm -rf "${tmp}"
+        return 1
+    fi
+    cp "${tmp}/7zz" "${INSTALL_DIR}/bin/7z"
+    cp "${tmp}/License.txt" "${INSTALL_DIR}/bin/7z.LICENSE"
+    printf '%s\n' "${SEVEN_ZIP_VERSION}" > "${INSTALL_DIR}/bin/7z.version"
+    chmod 755 "${INSTALL_DIR}/bin/7z"
+    rm -rf "${tmp}"
+}
+
 echo ""
 echo "========================================================"
 echo "  🎮 Visual Novel Patch Manager (VNPM) Installer"
@@ -69,6 +118,9 @@ if [ -d "${SCRIPT_DIR}/vnpatchmanager" ] && [ -d "${SCRIPT_DIR}/assets" ]; then
     if [ -d "${SCRIPT_DIR}/scripts" ]; then
         cp -r "${SCRIPT_DIR}/scripts/"* "${INSTALL_DIR}/scripts/"
     fi
+    if ! copy_innoextract "${SCRIPT_DIR}/tools/innoextract"; then
+        exit 1
+    fi
 else
     echo "🌐 Downloading latest VNPM release from GitHub..."
     TMP_DIR=$(mktemp -d)
@@ -86,6 +138,10 @@ else
     mkdir -p "${INSTALL_DIR}/scripts"
     if [ -d "${SRC_EXTRACT}/scripts" ]; then
         cp -r "${SRC_EXTRACT}/scripts/"* "${INSTALL_DIR}/scripts/"
+    fi
+    if ! copy_innoextract "${SRC_EXTRACT}/tools/innoextract"; then
+        rm -rf "${TMP_DIR}"
+        exit 1
     fi
     rm -rf "${TMP_DIR}"
 fi
@@ -164,10 +220,18 @@ fi
 # 7. Add to Steam Game Mode with Custom Artwork
 echo "🎮 Registering VN Patch Manager into Steam Game Mode..."
 if [ -f "${INSTALL_DIR}/scripts/add_to_steam.py" ]; then
-    "${INSTALL_DIR}/venv/bin/python3" "${INSTALL_DIR}/scripts/add_to_steam.py" "${LAUNCHER}" "${INSTALL_DIR}/assets" || true
+    PYTHONPATH="${INSTALL_DIR}${PYTHONPATH:+:$PYTHONPATH}" \
+        "${INSTALL_DIR}/venv/bin/python3" "${INSTALL_DIR}/scripts/add_to_steam.py" "${LAUNCHER}" "${INSTALL_DIR}/assets" || true
 fi
 
-# 8. Success Banner
+# 8. Archive tools. 7z is downloaded; innoextract was copied from the source tree.
+echo "📦 Installing 7-Zip ${SEVEN_ZIP_VERSION}..."
+if ! install_7zip; then
+    exit 1
+fi
+echo "✓ Archive tools installed in ${INSTALL_DIR}/bin"
+
+# 9. Success Banner
 echo ""
 echo "========================================================"
 echo "  ✨ Installation Complete!"

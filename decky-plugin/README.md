@@ -1,37 +1,11 @@
-# VN Patch Manager - Decky Loader Plugin
+# VN Patch Manager for Steam Deck
 
-Seamlessly check visual novel patch statuses and apply 18+ English patches directly from the **SteamOS Game Mode Quick Access Menu (QAM)** on your Steam Deck!
+Apply visual novel patches from the SteamOS Game Mode Quick Access menu.
 
-## Architecture
+## Install
 
-This plugin interacts with the local VNPM JSON-RPC daemon over UNIX domain socket (`~/.cache/vnpatchmanager/vnpm.sock`).
+1. Install [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader).
+2. Install this plugin from its zip in Decky's settings.
+3. Open the Quick Access menu, install VN Patch Manager if it asks, and choose the folder that holds your patches.
 
-```
-[ Steam Deck QAM ] <-> [ Decky Plugin (React) ]
-                             |
-                      [ Decky main.py ]
-                             | (UNIX Domain Socket JSON-RPC)
-                      [ vnpm --daemon ]
-                             |
-              [ SteamScanner & PatchExecutionEngine ]
-```
-
-## Installation & Development
-
-1. Ensure VNPM is installed:
-   ```bash
-   pip install -e .
-   ```
-2. Symlink or copy `decky-plugin/` into your Decky plugins directory:
-   ```bash
-   ln -s "$(pwd)/decky-plugin" ~/homebrew/plugins/decky-vnpm
-   ```
-3. Run the background daemon (or enable systemd user service):
-   ```bash
-   vnpm --daemon
-   ```
-4. Build the plugin frontend:
-   ```bash
-   cd decky-plugin && pnpm install && pnpm run build
-   ```
-5. Press the `(...)` button on your Steam Deck to access VNPM right inside Game Mode!
+The plugin starts the patch manager. You do not need Konsole, pip, or a frontend build on the Deck.

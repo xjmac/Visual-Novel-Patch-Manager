@@ -145,6 +145,7 @@ def test_get_owned_games_includes_installed_and_uninstalled(mock_steam_structure
     appcache_dir = steam_root / "appcache" / "librarycache"
     appcache_dir.mkdir(parents=True, exist_ok=True)
     (appcache_dir / "900005_header.jpg").touch()
+    (appcache_dir / "0_header.jpg").touch()
 
     with patch.object(SteamScanner, "get_steam_root", return_value=steam_root):
         owned = SteamScanner.get_owned_games()
@@ -162,6 +163,7 @@ def test_get_owned_games_includes_installed_and_uninstalled(mock_steam_structure
 
     assert "900005" in owned
     assert owned["900005"]["is_installed"] is False
+    assert "0" not in owned
 
 
 def test_get_owned_games_no_steam_root():

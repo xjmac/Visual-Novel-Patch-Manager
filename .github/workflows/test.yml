@@ -29,7 +29,7 @@ jobs:
 
     - name: Lint with ruff
       run: |
-        ruff check vnpatchmanager/ tests/
+        ruff check vnpatchmanager/ tests/ decky-plugin/
 
     - name: Run tests with coverage
       run: |
@@ -37,3 +37,83 @@ jobs:
         sudo apt-get install -y xvfb
         python -m pytest --version
         xvfb-run -a python -m pytest --cov=vnpatchmanager --cov-report=term-missing --cov-fail-under=80 tests/
+
+  decky:
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: Enable pnpm
+      run: corepack enable && corepack prepare pnpm@9.15.9 --activate
+      env:
+        COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+
+    - name: Build the plugin
+      working-directory: decky-plugin
+      run: pnpm install --frozen-lockfile && pnpm run build
+
+    - name: Pack the plugin zip
+      run: |
+        python3 - << 'PY'
+        import stat
+        import zipfile
+        from pathlib import Path
+
+        plugin = Path("decky-plugin")
+        install_link = plugin / "install.sh"
+        if not install_link.is_symlink():
+            raise SystemExit("decky-plugin/install.sh must stay a symlink to ../install.sh")
+        names = [
+            "dist/index.js",
+            "package.json",
+            "plugin.json",
+            "main.py",
+            "ipc_client.py",
+            "install.sh",
+            "LICENSE",
+            "README.md",
+        ]
+        payload = {}
+        for name in names:
+            if name == "install.sh":
+                payload[name] = Path("install.sh").read_bytes()
+            else:
+                payload[name] = (plugin / name).read_bytes()
+        if payload["install.sh"] != install_link.read_bytes():
+            raise SystemExit("zip install.sh does not match the repo root script")
+        out = Path("decky-vnpm.zip")
+        with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for name, data in payload.items():
+                info = zipfile.ZipInfo(f"decky-vnpm/{name}")
+                info.create_system = 3
+                mode = 0o755 if name == "install.sh" else 0o644
+                info.external_attr = (stat.S_IFREG | mode) << 16
+                archive.writestr(info, data)
+        with zipfile.ZipFile(out) as archive:
+            found = archive.namelist()
+            expected = [f"decky-vnpm/{name}" for name in names]
+            if found != expected:
+                raise SystemExit(f"zip entries {found} != {expected}")
+            if any("bin/" in name for name in found):
+                raise SystemExit("plugin zip must not contain bin/")
+            info = archive.getinfo("decky-vnpm/install.sh")
+            mode = (info.external_attr >> 16) & 0o777
+            if mode != 0o755:
+                raise SystemExit(f"install.sh mode is {oct(mode)}")
+            stored = archive.read("decky-vnpm/install.sh")
+            if stored.startswith(b"../"):
+                raise SystemExit("install.sh was stored as a symlink target")
+        print(f"packed {out} ({out.stat().st_size} bytes)")
+        PY
+
+    - name: Upload the plugin zip
+      uses: actions/upload-artifact@v4
+      with:
+        name: decky-vnpm
+        path: decky-vnpm.zip
+        if-no-files-found: error

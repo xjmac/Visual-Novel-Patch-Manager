@@ -4,7 +4,9 @@ poster card, game detail modal, and IPC service.
 """
 
 import ast
+import asyncio
 import hashlib
+import json
 import os
 import socket
 import subprocess
@@ -284,6 +286,57 @@ def test_ipc_service_methods(tmp_path):
         mock_fix.assert_not_called()
 
 
+def test_scan_games_lists_visual_novels_not_the_steam_cache(tmp_path):
+    """Ordinary Steam games and non-Steam shortcuts are not the visual novel library."""
+    cm = MagicMock()
+    cm.config = {"mode": "local", "local_path": str(tmp_path)}
+    service = VNPMService(config_manager=cm)
+    service.repo.refresh_patches = MagicMock()
+    service.repo.available_patches = {
+        "42": {"steam_app_id": "42", "game_name": "Local Patch VN", "actions": []},
+    }
+    service.steam_scanner.get_installed_games = MagicMock(return_value={})
+    service.steam_scanner.get_owned_games = MagicMock(return_value={
+        "0": {"name": "Steam App #0", "path": "", "is_installed": False},
+        "10": {"name": "Hades", "path": "", "is_installed": False},
+        "8930": {"name": "Sid Meier's Civilization V", "path": "/games/civ5", "is_installed": True},
+        "22000": {"name": "World of Goo", "path": "/games/goo", "is_installed": True},
+        "42": {"name": "Steam App #42", "path": "", "is_installed": False},
+        "77": {"name": "Steam App #77", "path": "", "is_installed": False},
+        "88": {
+            "name": "VN Patch Manager",
+            "path": "/tmp/vnpm",
+            "is_installed": True,
+            "is_non_steam": True,
+        },
+        "99": {
+            "name": "My Shortcut",
+            "path": "/tmp/game",
+            "is_installed": True,
+            "is_non_steam": True,
+        },
+        "100": {
+            "name": "Catalog VN",
+            "path": "/tmp/catalog",
+            "is_installed": True,
+            "is_non_steam": True,
+        },
+    })
+    service.vndb_scanner.bundled_db = {
+        "77": {"is_vn": True, "has_18plus_en_patch": True, "vn_title": "Catalog VN"},
+        "10": {"is_vn": False},
+    }
+    service.vndb_scanner.cache = {}
+
+    games = service.scan_games()
+
+    assert set(games) == {"77", "100"}
+    assert "42" not in games
+    assert games["77"]["name"] == "Catalog VN"
+    assert games["77"]["has_vndb_18_patch"] is True
+    assert games["100"]["name"] == "Catalog VN"
+
+
 def _steam_library_game(tmp_path, app_id="100"):
     """One installed game whose library root is the Steam directory, not steamapps."""
     steam_root = tmp_path / "Steam"
@@ -314,6 +367,15 @@ def _service_for_games(tmp_path, app_id, games, patch_data):
     service.repo.available_patches = {str(app_id): patch_data}
     service.steam_scanner.get_installed_games = MagicMock(return_value=games)
     service.steam_scanner.get_owned_games = MagicMock(return_value={})
+    # Apply and codec fixes resolve the install through the short catalog.
+    service.vndb_scanner.bundled_db = {
+        str(app_id): {
+            "is_vn": True,
+            "has_18plus_en_patch": True,
+            "vn_title": "Synthetic VN",
+        }
+    }
+    service.vndb_scanner.cache = {}
     return service
 
 
@@ -713,6 +775,7 @@ def test_decky_plugin_methods_return_job_tickets():
     client = MagicMock()
     client.scan_games.return_value = {"job_id": "scan-1", "method": "scan_games", "status": "queued"}
     client.apply_patch.return_value = {"job_id": "apply-1", "method": "apply_patch", "status": "queued"}
+    client.restore_via_steam.return_value = {"job_id": "steam-1", "method": "restore_via_steam", "status": "queued"}
     client.wait_job.side_effect = AssertionError("plugin waited on the job")
     plugin.client = client
 
@@ -724,6 +787,10 @@ def test_decky_plugin_methods_return_job_tickets():
     scanned = asyncio.run(plugin.get_library_games())
     assert scanned["success"] is True
     assert scanned["job_id"] == "scan-1"
+
+    steamed = asyncio.run(plugin.restore_via_steam("42"))
+    assert steamed["success"] is True
+    assert steamed["job_id"] == "steam-1"
     client.wait_job.assert_not_called()
 
 
@@ -813,6 +880,275 @@ def test_decky_plugin_client_matches_daemon_wire(tmp_path):
         server.stop()
 
 
+def _load_decky_plugin():
+    import importlib.util
+
+    path = Path(__file__).resolve().parents[1] / "decky-plugin" / "main.py"
+    spec = importlib.util.spec_from_file_location("decky_vnpm_main_ext", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec is not None and spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def _kill_later(pid: int) -> None:
+    if pid <= 0:
+        return
+    try:
+        os.killpg(pid, 15)
+    except OSError:
+        try:
+            os.kill(pid, 15)
+        except OSError:
+            return
+
+
+def test_decky_daemon_adopts_a_running_server(tmp_path, monkeypatch):
+    """An answering socket is used as-is, and uninstall does not stop it."""
+    monkeypatch.setenv("DECKY_USER_HOME", str(tmp_path))
+    module = _load_decky_plugin()
+    plugin = module.Plugin()
+    plugin.client = MagicMock()
+    plugin.client.get_status.return_value = {"status": "running", "local_path": ""}
+    adopted = subprocess.Popen(["sleep", "30"], start_new_session=True)
+    try:
+        assert plugin.ensure_daemon() is True
+        assert not (tmp_path / ".cache" / "vnpatchmanager" / "daemon.pid").exists()
+        asyncio.run(plugin._unload())
+        assert adopted.poll() is None
+        asyncio.run(plugin._uninstall())
+        assert adopted.poll() is None
+    finally:
+        _kill_later(adopted.pid)
+
+
+def test_decky_daemon_spawns_once_and_uninstall_stops_it(tmp_path, monkeypatch):
+    """A missing socket starts the launcher in a new session. Unload leaves it running."""
+    monkeypatch.setenv("DECKY_USER_HOME", str(tmp_path))
+    launcher = tmp_path / ".local" / "share" / "vnpm" / "bin" / "vnpm"
+    launcher.parent.mkdir(parents=True)
+    launcher.write_text("#!/bin/sh\nsleep 30\n")
+    launcher.chmod(0o755)
+    log = tmp_path / ".local" / "share" / "vnpm" / "vnpm.log"
+    log.write_text("hello\nboom\n")
+
+    module = _load_decky_plugin()
+    plugin = module.Plugin()
+    plugin.client = MagicMock()
+
+    def status():
+        pid_path = tmp_path / ".cache" / "vnpatchmanager" / "daemon.pid"
+        if pid_path.is_file():
+            return {"status": "running", "local_path": ""}
+        raise ConnectionError("VNPM IPC socket not found")
+
+    plugin.client.get_status.side_effect = status
+    seen = []
+    real_popen = subprocess.Popen
+
+    def tracking(*args, **kwargs):
+        seen.append(kwargs)
+        return real_popen(*args, **kwargs)
+
+    monkeypatch.setattr(module.subprocess, "Popen", tracking)
+    child_pid = 0
+    try:
+        assert plugin.ensure_daemon() is True
+        assert len(seen) == 1
+        assert seen[0]["start_new_session"] is True
+        assert plugin.ensure_daemon() is True
+        assert len(seen) == 1
+        child_pid = int((tmp_path / ".cache" / "vnpatchmanager" / "daemon.pid").read_text())
+        asyncio.run(plugin._unload())
+        assert Path(f"/proc/{child_pid}").exists()
+        asyncio.run(plugin._uninstall())
+        deadline = time.monotonic() + 2
+        while Path(f"/proc/{child_pid}").exists() and time.monotonic() < deadline:
+            try:
+                stat = Path(f"/proc/{child_pid}/stat").read_text().split()
+            except OSError:
+                break
+            if len(stat) > 2 and stat[2] == "Z":
+                try:
+                    os.waitpid(child_pid, os.WNOHANG)
+                except ChildProcessError:
+                    pass
+                break
+            time.sleep(0.05)
+        assert not (tmp_path / ".cache" / "vnpatchmanager" / "daemon.pid").exists()
+        assert not Path(f"/proc/{child_pid}").exists()
+    finally:
+        _kill_later(child_pid)
+
+    launcher.unlink()
+    missing = module.Plugin()
+    missing.client = MagicMock()
+    missing.client.get_status.side_effect = ConnectionError("socket not found")
+    assert missing.ensure_daemon() is False
+    assert missing.log_line == "boom"
+
+
+def test_decky_daemon_lock_starts_one_process(tmp_path, monkeypatch):
+    """Two overlapping opens share the lock and start one daemon."""
+    monkeypatch.setenv("DECKY_USER_HOME", str(tmp_path))
+    launcher = tmp_path / ".local" / "share" / "vnpm" / "bin" / "vnpm"
+    launcher.parent.mkdir(parents=True)
+    launcher.write_text("#!/bin/sh\nsleep 30\n")
+    launcher.chmod(0o755)
+    module = _load_decky_plugin()
+    plugin = module.Plugin()
+    plugin.client = MagicMock()
+
+    def status():
+        if (tmp_path / ".cache" / "vnpatchmanager" / "daemon.pid").is_file():
+            return {"status": "running"}
+        raise ConnectionError("socket not found")
+
+    plugin.client.get_status.side_effect = status
+    calls = []
+    real_popen = subprocess.Popen
+
+    def tracking(*args, **kwargs):
+        calls.append(1)
+        return real_popen(*args, **kwargs)
+
+    monkeypatch.setattr(module.subprocess, "Popen", tracking)
+    results = []
+
+    def worker():
+        results.append(plugin.ensure_daemon())
+
+    first = threading.Thread(target=worker)
+    second = threading.Thread(target=worker)
+    child_pid = 0
+    try:
+        first.start()
+        second.start()
+        first.join(timeout=5)
+        second.join(timeout=5)
+        assert results == [True, True]
+        assert calls == [1]
+        child_pid = int((tmp_path / ".cache" / "vnpatchmanager" / "daemon.pid").read_text())
+    finally:
+        _kill_later(child_pid)
+
+
+def test_decky_install_returns_before_the_script_exits(tmp_path, monkeypatch):
+    """The install call returns a running status. Success starts the daemon. Failure does not."""
+    monkeypatch.setenv("DECKY_USER_HOME", str(tmp_path))
+    ok_script = tmp_path / "install-ok.py"
+    ok_script.write_text(
+        "#!/usr/bin/env python3\n"
+        "import time\n"
+        "print('working', flush=True)\n"
+        "time.sleep(0.4)\n"
+        "print('done', flush=True)\n"
+    )
+    ok_script.chmod(0o755)
+    module = _load_decky_plugin()
+    plugin = module.Plugin()
+    plugin.install_script = ok_script
+    plugin.client = MagicMock()
+    ensured = []
+    plugin.ensure_daemon = lambda: ensured.append("ok") or True
+
+    started = asyncio.run(plugin.install_vnpm())
+    assert started["status"] == "running"
+    assert plugin._install_proc is not None
+    assert plugin._install_proc.poll() is None
+    assert ensured == []
+    deadline = time.monotonic() + 3
+    status = {"status": "running", "log_line": "", "error": ""}
+    while status["status"] == "running" and time.monotonic() < deadline:
+        time.sleep(0.05)
+        status = asyncio.run(plugin.get_install_status())
+    assert status["status"] == "succeeded"
+    assert status["log_line"] == "done"
+    assert ensured == ["ok"]
+
+    fail_script = tmp_path / "install-fail.py"
+    fail_script.write_text(
+        "#!/usr/bin/env python3\n"
+        "import time\n"
+        "print('disk full', flush=True)\n"
+        "time.sleep(0.3)\n"
+        "raise SystemExit(1)\n"
+    )
+    fail_script.chmod(0o755)
+    failed = module.Plugin()
+    failed.install_script = fail_script
+    failed.client = MagicMock()
+    failed_ensure = []
+    failed.ensure_daemon = lambda: failed_ensure.append("no") or True
+    asyncio.run(failed.install_vnpm())
+    deadline = time.monotonic() + 3
+    status = {"status": "running", "error": ""}
+    while status["status"] == "running" and time.monotonic() < deadline:
+        time.sleep(0.05)
+        status = asyncio.run(failed.get_install_status())
+    assert status["status"] == "failed"
+    assert status["error"] == "disk full"
+    assert failed_ensure == []
+
+    plain = tmp_path / "install-plain.sh"
+    plain.write_text("#!/bin/sh\nprintf 'done\\n'\n")
+    plain.chmod(0o644)
+    plugin.install_script = plain
+    plugin._install_status = "idle"
+    plugin._install_proc = None
+    started = asyncio.run(plugin.install_vnpm())
+    assert started["status"] == "running"
+    assert os.access(plain, os.X_OK)
+    deadline = time.monotonic() + 3
+    status = {"status": "running", "log_line": ""}
+    while status["status"] == "running" and time.monotonic() < deadline:
+        time.sleep(0.05)
+        status = asyncio.run(plugin.get_install_status())
+    assert status["status"] == "succeeded"
+    assert status["log_line"] == "done"
+
+
+def test_set_patch_folder_merges_config(tmp_path, monkeypatch):
+    """Choosing a folder keeps the other config keys and writes mode 0600."""
+    monkeypatch.setenv("DECKY_USER_HOME", str(tmp_path))
+    cfg = tmp_path / ".config" / "vnpatchmanager" / "config.json"
+    cfg.parent.mkdir(parents=True)
+    cfg.write_text(json.dumps({"smb_server": "nas", "local_path": ""}))
+    plugin = _load_decky_plugin().Plugin()
+    folder = tmp_path / "patches"
+    result = asyncio.run(plugin.set_patch_folder(str(folder)))
+    assert result["success"] is True
+    saved = json.loads(cfg.read_text())
+    assert saved["smb_server"] == "nas"
+    assert saved["local_path"] == str(folder)
+    assert cfg.stat().st_mode & 0o777 == 0o600
+
+
+def test_scan_games_reloads_local_path(temp_config_dir, tmp_path):
+    """A daemon that started before the folder was chosen sees the new config."""
+    from vnpatchmanager import CONFIG_FILE
+    from vnpatchmanager.config_manager import ConfigManager
+
+    folder = tmp_path / "patches"
+    folder.mkdir()
+    (folder / "patch.json").write_text(json.dumps({"steam_app_id": 42, "title": "Reloaded"}))
+    cm = ConfigManager()
+    cm.config["mode"] = "local"
+    cm.config["local_path"] = ""
+    cm.save_config()
+    service = VNPMService(config_manager=cm)
+    CONFIG_FILE.write_text(json.dumps({
+        "mode": "local",
+        "local_path": str(folder),
+        "smb_server": "keep",
+    }))
+    with patch.object(service.steam_scanner, "get_installed_games", return_value={}), \
+         patch.object(service.steam_scanner, "get_owned_games", return_value={}):
+        service.scan_games()
+    assert "42" in service.repo.available_patches
+    assert service.get_status()["local_path"] == str(folder)
+
+
 def test_game_detail_modal_uses_get_hero_image(tmp_path):
     """Verifies that GameDetailModal calls get_hero_image for its landscape banner."""
     root = ctk.CTk()
@@ -826,7 +1162,7 @@ def test_game_detail_modal_uses_get_hero_image(tmp_path):
     root.repo = MagicMock()
     root.repo.available_patches = {}
 
-    game_data = {"name": "Muv-Luv photonflowers*", "path": str(tmp_path)}
+    game_data = {"name": "Synthetic Photon Novel", "path": str(tmp_path)}
     status_info = {"is_patched": False, "vn_info": {}}
 
     modal = show_game_detail_modal(
@@ -840,7 +1176,7 @@ def test_game_detail_modal_uses_get_hero_image(tmp_path):
     cover_mgr.get_hero_image.assert_called_once()
     call_args, call_kwargs = cover_mgr.get_hero_image.call_args
     assert call_args[0] == "889700"
-    assert call_kwargs.get("title") == "Muv-Luv photonflowers*"
+    assert call_kwargs.get("title") == "Synthetic Photon Novel"
     assert call_kwargs.get("size") == (640, 220)
 
     root.destroy()

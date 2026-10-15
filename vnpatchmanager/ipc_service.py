@@ -49,18 +49,99 @@ class VNPMService:
         self.repo = PatchRepository(self.config_manager)
         self.vndb_scanner = VNDBScanner()
 
+    def _reload_config(self) -> None:
+        """Read config.json again. The daemon keeps one ConfigManager for its lifetime."""
+        self.config_manager.load_config()
+
     def get_status(self) -> Dict[str, Any]:
         """Returns daemon status and system environment info."""
+        self._reload_config()
         return {
             "status": "running",
             "app_name": APP_NAME,
             "version": APP_VERSION,
             "mode": self.config_manager.config.get("mode", "local"),
+            "local_path": str(self.config_manager.config.get("local_path") or ""),
             "steam_root": str(self.steam_scanner.get_steam_root() or ""),
         }
 
+    def _vn_info_for(self, app_id: str) -> Dict[str, Any]:
+        """Bundled or cached VNDB record for one app. Cache wins when it is a VN."""
+        info: Dict[str, Any] = {}
+        bundled = self.vndb_scanner.bundled_db.get(app_id)
+        if isinstance(bundled, dict) and bundled.get("is_vn"):
+            info = bundled
+        cached = self.vndb_scanner.cache.get(app_id)
+        if isinstance(cached, dict) and cached.get("is_vn"):
+            info = cached
+        return info
+
+    @staticmethod
+    def _library_name(gdata: Dict[str, Any], vn_info: Dict[str, Any], patch_data: Optional[PatchData]) -> str:
+        """Prefer a real title over the ``Steam App #`` placeholder."""
+        name = str(gdata.get("name") or "")
+        if name and not name.startswith("Steam App #"):
+            return name
+        for candidate in (
+            vn_info.get("steam_title"),
+            vn_info.get("vn_title"),
+            (patch_data or {}).get("game_name"),
+        ):
+            if candidate:
+                return str(candidate)
+        return name or "Unknown"
+
+    @staticmethod
+    def _normalize_library_title(value: object) -> str:
+        return "".join(ch for ch in str(value or "").casefold() if ch.isalnum())
+
+    def _catalog_title_keys(self) -> set[str]:
+        """Normalized titles of visual novels that have an English 18+ patch."""
+        keys: set[str] = set()
+        for source in (self.vndb_scanner.bundled_db, self.vndb_scanner.cache):
+            if not isinstance(source, dict):
+                continue
+            for entry in source.values():
+                if not isinstance(entry, dict):
+                    continue
+                if not (entry.get("is_vn") and entry.get("has_18plus_en_patch")):
+                    continue
+                for field in ("vn_title", "steam_title"):
+                    normalized = self._normalize_library_title(entry.get(field))
+                    if len(normalized) >= 4:
+                        keys.add(normalized)
+        return keys
+
+    def _include_in_library(
+        self,
+        gdata: Dict[str, Any],
+        vn_info: Dict[str, Any],
+        patch_data: Optional[PatchData],
+    ) -> bool:
+        """List a visual novel with an English 18+ patch.
+
+        A file in the patch folder does not make a regular Steam game a visual
+        novel. A non-Steam shortcut is listed when its name is a catalog title.
+        """
+        if gdata.get("is_non_steam"):
+            gname = str(gdata.get("name") or "").strip()
+            lowered = gname.casefold()
+            if not lowered:
+                return False
+            if lowered == APP_NAME.casefold() or "vn patch manager" in lowered or "visual novel patch manager" in lowered:
+                return False
+            return self._normalize_library_title(gname) in self._catalog_title_keys()
+        if patch_data is not None and not (vn_info.get("is_vn") and vn_info.get("has_18plus_en_patch")):
+            return False
+        return bool(vn_info.get("is_vn") and vn_info.get("has_18plus_en_patch"))
+
     def scan_games(self) -> Dict[str, ScanGameSummary]:
-        """Scans visual novels and available patches, returning full library state."""
+        """Return visual novels that have an English 18+ patch.
+
+        Steam's artwork cache lists every app the client has seen, often as
+        ``Steam App #``. Those records are not the library.
+        """
+        self._reload_config()
         self.repo.refresh_patches()
         installed_steam = self.steam_scanner.get_installed_games()
         owned_steam = self.steam_scanner.get_owned_games()
@@ -70,22 +151,28 @@ class VNPMService:
         all_games.update(installed_steam)
 
         summary = {}
-        for app_id, gdata in all_games.items():
+        for raw_id, gdata in all_games.items():
+            app_id = str(raw_id)
+            if not app_id or app_id == "0":
+                continue
             install_path = gdata.get("path")
             patch_data = self.repo.available_patches.get(app_id)
-            vn_info = gdata.get("vndb", {})
+            vn_info = self._vn_info_for(app_id)
+            if not self._include_in_library(gdata, vn_info, patch_data):
+                continue
             is_patched = bool(install_path and PatchExecutionEngine.get_patch_status(install_path, patch_data, vn_info))
             has_backup = bool(install_path and BackupManager.has_backup(install_path))
             has_clean = bool(install_path and BackupManager.has_clean_backup(install_path))
 
-            summary[str(app_id)] = {
-                "app_id": str(app_id),
-                "name": gdata.get("name", "Unknown"),
+            summary[app_id] = {
+                "app_id": app_id,
+                "name": self._library_name(gdata, vn_info, patch_data),
                 "is_non_steam": gdata.get("is_non_steam", False),
                 "is_installed": gdata.get("is_installed", True),
                 "path": str(install_path or ""),
                 "library_path": self._library_path_value(gdata),
-                "has_local_patch": app_id in self.repo.available_patches,
+                "has_local_patch": patch_data is not None,
+                "has_vndb_18_patch": bool(vn_info.get("has_18plus_en_patch")),
                 "is_patched": is_patched,
                 "has_backup": has_backup,
                 "has_clean_backup": has_clean,
@@ -173,6 +260,7 @@ class VNPMService:
         record and patch manifest it has already resolved.
         """
         if game_data is None:
+            self._reload_config()
             self.repo.refresh_patches()
             if patch_data is None:
                 patch_data = self.repo.available_patches.get(str(app_id))

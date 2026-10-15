@@ -176,7 +176,7 @@ class SteamScanner:
                             for k in ["apps", "Apps"]:
                                 for aid, app_info in steam_sec.get(k, {}).items():
                                     aid_str = str(aid)
-                                    if aid_str.isdigit() and aid_str not in owned_games:
+                                    if aid_str.isdigit() and aid_str != "0" and aid_str not in owned_games:
                                         app_name = app_info.get("name") if isinstance(app_info, dict) else None
                                         if app_name and SteamScanner._is_dlc_or_addon(app_name):
                                             continue
@@ -191,7 +191,7 @@ class SteamScanner:
                             for k in ["apps", "UserAppConfig", "apptickets"]:
                                 for aid in store.get(k, {}).keys():
                                     aid_str = str(aid)
-                                    if aid_str.isdigit() and aid_str not in owned_games:
+                                    if aid_str.isdigit() and aid_str != "0" and aid_str not in owned_games:
                                         owned_games[aid_str] = {
                                             "name": f"Steam App #{aid_str}",
                                             "path": "",
@@ -214,7 +214,7 @@ class SteamScanner:
                     parts = item.name.split("_")
                     if parts and parts[0].isdigit():
                         aid_str = parts[0]
-                        if aid_str not in owned_games:
+                        if aid_str != "0" and aid_str not in owned_games:
                             owned_games[aid_str] = {
                                 "name": f"Steam App #{aid_str}",
                                 "path": "",

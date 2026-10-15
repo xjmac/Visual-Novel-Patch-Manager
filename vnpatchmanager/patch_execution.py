@@ -23,6 +23,34 @@ PATCH_SOURCE_ROOT = Path.home() / ".cache" / "vnpatchmanager" / "patch-sources"
 _SUPPORTED_ARCHIVE_SUFFIXES = ".zip, .tar, .tar.gz, .tgz, .tar.bz2, .tbz2, .tar.xz, .txz, .7z, .rar"
 
 
+def tool_bin_dir() -> Path:
+    """Directory that holds ``7z`` and ``innoextract`` beside the vnpm launcher.
+
+    ``VNPM_TOOL_BIN`` overrides the install path for tests. The launcher does
+    not change ``PATH``, so a daemon started from Decky only sees these tools
+    when lookup checks this directory first.
+    """
+    override = os.environ.get("VNPM_TOOL_BIN")
+    if override:
+        return Path(override)
+    return Path.home() / ".local" / "share" / "vnpm" / "bin"
+
+
+def resolve_tool(name: str) -> Optional[str]:
+    """Return the VNPM copy of ``name``, or the first executable on ``PATH``."""
+    candidate = tool_bin_dir() / name
+    if candidate.is_file() and os.access(candidate, os.X_OK):
+        return str(candidate)
+    return shutil.which(name)
+
+
+def missing_tool_message(name: str) -> str:
+    return (
+        f"{name} was not found in {tool_bin_dir()}. "
+        f"Run the VNPM installer again to fetch {name}."
+    )
+
+
 class PatchExecutionEngine:
     """Handles the actual copying of files and execution of Proton patches."""
 
@@ -125,9 +153,9 @@ class PatchExecutionEngine:
         return result.stdout or ""
 
     @staticmethod
-    def _list_7z_members(archive: Path) -> list:
+    def _list_7z_members(archive: Path, tool: str) -> list:
         stdout = PatchExecutionEngine._run_archive_listing(
-            ["7z", "l", "-ba", "-slt", str(archive)],
+            [tool, "l", "-ba", "-slt", str(archive)],
             archive.name,
         )
         ignored = {archive.name, str(archive), str(archive.resolve())}
@@ -142,17 +170,6 @@ class PatchExecutionEngine:
             names.append(value)
         if not names:
             raise PatchExtractionError(f"7z listing produced no members: {archive.name}")
-        return names
-
-    @staticmethod
-    def _list_unrar_members(archive: Path) -> list:
-        stdout = PatchExecutionEngine._run_archive_listing(
-            ["unrar", "lb", "-p-", str(archive)],
-            archive.name,
-        )
-        names = [line.strip() for line in stdout.splitlines() if line.strip()]
-        if not names:
-            raise PatchExtractionError(f"unrar listing produced no members: {archive.name}")
         return names
 
     @staticmethod
@@ -723,8 +740,9 @@ class PatchExecutionEngine:
                     raw_dest = action.get('destination', '{game_dir}')
                     dest_path = PatchExecutionEngine._resolve_action_destination(raw_dest, stage_root)
 
-                    if not shutil.which("innoextract"):
-                        raise PatchExtractionError("innoextract is not installed. Please install it (sudo pacman -S innoextract).")
+                    innoextract = resolve_tool("innoextract")
+                    if not innoextract:
+                        raise PatchExtractionError(missing_tool_message("innoextract"))
 
                     logger.debug(f"Checking for executable at: {exe_file}")
 
@@ -745,7 +763,7 @@ class PatchExecutionEngine:
                     extract_tmp = working_source / "inno_extracted"
                     extract_tmp.mkdir(exist_ok=True)
 
-                    cmd = ["innoextract", "-s", "-d", str(extract_tmp), str(exe_file)]
+                    cmd = [innoextract, "-s", "-d", str(extract_tmp), str(exe_file)]
                     logger.debug(f"Running innoextract command: {cmd}")
 
                     try:
@@ -789,35 +807,20 @@ class PatchExecutionEngine:
                         extract_tmp.mkdir(exist_ok=True)
                         with tarfile.open(arc_file, 'r') as tar:
                             PatchExecutionEngine._safe_extract_tar(tar, extract_tmp)
-                    elif arc_file.suffix.lower() == '.7z':
-                        if not shutil.which("7z"):
-                            raise PatchExtractionError("7z tool not found. Please install p7zip (sudo pacman -S p7zip).")
+                    elif arc_file.suffix.lower() in {".7z", ".rar"}:
+                        seven_zip = resolve_tool("7z")
+                        if not seven_zip:
+                            raise PatchExtractionError(missing_tool_message("7z"))
                         PatchExecutionEngine._reject_listed_members(
-                            PatchExecutionEngine._list_7z_members(arc_file),
+                            PatchExecutionEngine._list_7z_members(arc_file, seven_zip),
                             extract_tmp,
                         )
                         dest_path.mkdir(parents=True, exist_ok=True)
                         extract_tmp.mkdir(exist_ok=True)
-                        subprocess.run(["7z", "x", "-y", f"-o{extract_tmp}", str(arc_file)], check=True)
-                    elif arc_file.suffix.lower() == '.rar':
-                        if shutil.which("unrar"):
-                            PatchExecutionEngine._reject_listed_members(
-                                PatchExecutionEngine._list_unrar_members(arc_file),
-                                extract_tmp,
-                            )
-                            dest_path.mkdir(parents=True, exist_ok=True)
-                            extract_tmp.mkdir(exist_ok=True)
-                            subprocess.run(["unrar", "x", "-o+", str(arc_file), str(extract_tmp)], check=True)
-                        elif shutil.which("7z"):
-                            PatchExecutionEngine._reject_listed_members(
-                                PatchExecutionEngine._list_7z_members(arc_file),
-                                extract_tmp,
-                            )
-                            dest_path.mkdir(parents=True, exist_ok=True)
-                            extract_tmp.mkdir(exist_ok=True)
-                            subprocess.run(["7z", "x", "-y", f"-o{extract_tmp}", str(arc_file)], check=True)
-                        else:
-                            raise PatchExtractionError("unrar or 7z tool not found. Please install unrar or 7z.")
+                        subprocess.run(
+                            [seven_zip, "x", "-y", f"-o{extract_tmp}", str(arc_file)],
+                            check=True,
+                        )
                     else:
                         raise PatchExtractionError(
                             f"Unsupported archive type '{arc_file.name}'. "

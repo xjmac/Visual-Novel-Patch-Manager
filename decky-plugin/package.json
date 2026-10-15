@@ -6,8 +6,8 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "build": "rollup -c",
-    "watch": "rollup -c -w"
+    "build": "python3 scripts/write-vn-library.py && rollup -c",
+    "watch": "python3 scripts/write-vn-library.py && rollup -c -w"
   },
   "dependencies": {
     "@decky/api": "^1.1.3",

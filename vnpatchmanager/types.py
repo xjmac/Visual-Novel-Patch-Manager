@@ -65,6 +65,7 @@ class ScanGameSummary(TypedDict, total=False):
     path: str
     library_path: str
     has_local_patch: bool
+    has_vndb_18_patch: bool
     is_patched: bool
     has_backup: bool
     has_clean_backup: bool

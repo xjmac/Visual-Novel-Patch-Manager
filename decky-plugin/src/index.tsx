@@ -3,11 +3,44 @@ import {
   PanelSection,
   PanelSectionRow,
   ButtonItem,
-  Field,
+  DialogButton,
+  ConfirmModal,
+  showModal,
 } from "@decky/ui";
-import { callable, definePlugin } from "@decky/api";
-import { useState, useEffect, useRef } from "react";
+import { callable, definePlugin, FileSelectionType, openFilePicker } from "@decky/api";
+import { Fragment, useState, useEffect, useRef } from "react";
 import { FaBook } from "react-icons/fa";
+import { vnTitles } from "./vnLibrary.generated";
+
+const normalizeTitle = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+
+const catalogTitleKeys = new Set(
+  Object.keys(vnTitles)
+    .map((appId) => normalizeTitle(vnTitles[appId]))
+    .filter((key) => key.length >= 4)
+);
+
+const isCatalogApp = (appId: string) => Object.prototype.hasOwnProperty.call(vnTitles, appId);
+
+const libraryEntries = (found: Record<string, GameEntry>): GameEntry[] =>
+  Object.keys(found)
+    .map((appId) => found[appId])
+    .filter((game): game is GameEntry => Boolean(game))
+    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+
+const isCatalogShortcut = (name: string) => {
+  const lowered = name.toLowerCase();
+  if (
+    !lowered ||
+    lowered === "vn patch manager" ||
+    lowered.indexOf("vn patch manager") >= 0 ||
+    lowered.indexOf("visual novel patch manager") >= 0
+  ) {
+    return false;
+  }
+  const key = normalizeTitle(name);
+  return key.length >= 4 && catalogTitleKeys.has(key);
+};
 
 interface GameEntry {
   app_id: string;
@@ -16,13 +49,14 @@ interface GameEntry {
   is_patched: boolean;
   has_local_patch: boolean;
   has_clean_backup: boolean;
+  is_non_steam?: boolean;
+  has_vndb_18_patch?: boolean;
   vndb_rating?: number;
 }
 
 interface PluginPayload {
   success?: boolean;
   error?: string;
-  games?: Record<string, GameEntry>;
   message?: string;
   job_id?: string;
   method?: string;
@@ -30,7 +64,19 @@ interface PluginPayload {
   result?: unknown;
   logs?: string[];
   jobs?: PluginPayload[];
+  log_line?: string;
+  install_status?: string;
+  install_error?: string;
+  installed?: boolean;
+  daemon?: boolean;
+  local_path?: string;
+  home?: string;
+  path?: string;
+  realpath?: string;
 }
+
+type Phase = "loading" | "install" | "daemon" | "folder" | "ready";
+type MutationMethod = "apply_patch" | "restore_backup" | "fix_codecs" | "restore_via_steam";
 
 const POLL_MS = 1000;
 const MUTATION_METHODS = ["apply_patch", "restore_backup", "fix_codecs", "restore_via_steam"];
@@ -41,13 +87,21 @@ const listJobs = callable<[], PluginPayload>("list_jobs");
 const applyPatch = callable<[app_id: string], PluginPayload>("apply_patch");
 const restoreBackup = callable<[app_id: string], PluginPayload>("restore_backup");
 const fixCodecs = callable<[app_id: string], PluginPayload>("fix_codecs");
+const restoreViaSteam = callable<[app_id: string], PluginPayload>("restore_via_steam");
+const getSetup = callable<[], PluginPayload>("get_setup");
+const installVnpm = callable<[], PluginPayload>("install_vnpm");
+const getInstallStatus = callable<[], PluginPayload>("get_install_status");
+const setPatchFolder = callable<[path: string], PluginPayload>("set_patch_folder");
 
 function Content() {
   const [games, setGames] = useState<Record<string, GameEntry>>({});
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState("Ready");
+  const [phase, setPhase] = useState<Phase>("loading");
+  const [homePath, setHomePath] = useState("/home/deck");
   const alive = useRef(true);
   const timer = useRef<number | undefined>(undefined);
+  const needsFolder = useRef(false);
 
   const resultError = (result: PluginPayload | undefined, fallback: string) => {
     if (result && typeof result.error === "string" && result.error) {
@@ -94,6 +148,28 @@ function Content() {
     return undefined;
   };
 
+  const listedGame = (appId: string, game: GameEntry) => {
+    if (game.is_non_steam) {
+      return isCatalogShortcut(String(game.name || ""));
+    }
+    if (game.has_vndb_18_patch === true) {
+      return true;
+    }
+    if (typeof game.has_vndb_18_patch === "boolean") {
+      return false;
+    }
+    return isCatalogApp(appId);
+  };
+
+  const titledGame = (appId: string, game: GameEntry): GameEntry => {
+    const name = String(game.name || "");
+    const catalog = vnTitles[appId];
+    if (catalog && (!name || name.startsWith("Steam App #"))) {
+      return { ...game, name: catalog };
+    }
+    return game;
+  };
+
   const applyScanResult = (job: PluginPayload) => {
     const gamesResult = job.result;
     if (
@@ -102,9 +178,21 @@ function Content() {
       typeof gamesResult === "object" &&
       !Array.isArray(gamesResult)
     ) {
-      const found = gamesResult as Record<string, GameEntry>;
+      const raw = gamesResult as Record<string, GameEntry>;
+      const found: Record<string, GameEntry> = {};
+      Object.keys(raw).forEach((appId) => {
+        const game = raw[appId];
+        if (game && listedGame(appId, game)) {
+          found[appId] = titledGame(appId, game);
+        }
+      });
       setGames(found);
-      setStatusMsg("Found " + Object.keys(found).length + " VNs");
+      if (needsFolder.current) {
+        setStatusMsg("Choose a patch folder");
+        return;
+      }
+      const count = Object.keys(found).length;
+      setStatusMsg(count === 0 ? "No visual novels found" : "Found " + count + " VNs");
       return;
     }
     if (job.status === "failed") {
@@ -138,14 +226,14 @@ function Content() {
 
   const runScan = async () => {
     setLoading(true);
-    setStatusMsg("Scanning visual novels...");
+    setStatusMsg(needsFolder.current ? "Choose a patch folder" : "Scanning visual novels...");
     try {
       const ticket = await getLibraryGames();
       if (!alive.current) {
         return;
       }
       if (!ticket?.success || !ticket.job_id) {
-        setStatusMsg(resultError(ticket, "Daemon not connected (run 'vnpm --daemon')"));
+        setStatusMsg(resultError(ticket, "The daemon did not start"));
         return;
       }
       const job = await pollJob(ticket.job_id, "Scanning visual novels...");
@@ -163,17 +251,20 @@ function Content() {
     }
   };
 
-  const submitMutation = (method: "apply_patch" | "restore_backup" | "fix_codecs", appId: string) => {
+  const submitMutation = (method: MutationMethod, appId: string) => {
     if (method === "apply_patch") {
       return applyPatch(appId);
     }
     if (method === "restore_backup") {
       return restoreBackup(appId);
     }
+    if (method === "restore_via_steam") {
+      return restoreViaSteam(appId);
+    }
     return fixCodecs(appId);
   };
 
-  const runMutation = async (method: "apply_patch" | "restore_backup" | "fix_codecs", appId: string, working: string, done: string) => {
+  const runMutation = async (method: MutationMethod, appId: string, working: string, done: string) => {
     setLoading(true);
     setStatusMsg(working);
     try {
@@ -200,115 +291,305 @@ function Content() {
     }
   };
 
+  const continueWhenReady = async () => {
+    try {
+      const listed = await listJobs();
+      const jobs = listed?.jobs ?? [];
+      const mutation = jobs.find((job) =>
+        !!job.job_id &&
+        (job.status === "queued" || job.status === "running") &&
+        !!job.method &&
+        MUTATION_METHODS.indexOf(job.method) >= 0
+      );
+      if (mutation?.job_id) {
+        setLoading(true);
+        const job = await pollJob(mutation.job_id, "Working...");
+        if (job && finishMutation(job, "Finished")) {
+          await runScan();
+        } else if (alive.current) {
+          setLoading(false);
+        }
+        return;
+      }
+      const scan = jobs.find((job) =>
+        job.method === "scan_games" &&
+        !!job.job_id &&
+        (job.status === "queued" || job.status === "running")
+      );
+      if (scan?.job_id) {
+        setLoading(true);
+        setStatusMsg("Scanning visual novels...");
+        const job = await pollJob(scan.job_id, "Scanning visual novels...");
+        if (job) {
+          applyScanResult(job);
+        }
+        if (alive.current) {
+          setLoading(false);
+        }
+        return;
+      }
+    } catch (e) {
+      if (alive.current) {
+        setStatusMsg("Error: " + e);
+      }
+    }
+    if (alive.current) {
+      await runScan();
+    }
+  };
+
+  const watchInstall = async () => {
+    setLoading(true);
+    setPhase("install");
+    try {
+      while (alive.current) {
+        const status = await getInstallStatus();
+        if (!alive.current) {
+          return;
+        }
+        if (status?.log_line) {
+          setStatusMsg(status.log_line);
+        }
+        if (status?.status === "succeeded") {
+          return;
+        }
+        if (status?.status === "failed" || status?.status === "idle") {
+          setStatusMsg(status.error || status.log_line || "Install failed");
+          return;
+        }
+        await delay();
+      }
+    } catch (e) {
+      if (alive.current) {
+        setStatusMsg("Error: " + e);
+      }
+    } finally {
+      if (alive.current) {
+        setLoading(false);
+      }
+    }
+  };
+
+  const boot = async () => {
+    try {
+      const setup = await getSetup();
+      if (!alive.current) {
+        return;
+      }
+      setHomePath(setup.home || "/home/deck");
+      if (setup.install_status === "running") {
+        await watchInstall();
+        if (alive.current) {
+          await boot();
+        }
+        return;
+      }
+      if (!setup.installed) {
+        setPhase("install");
+        setGames({});
+        setStatusMsg("VNPM is not installed");
+        return;
+      }
+      if (!setup.daemon) {
+        setPhase("daemon");
+        setGames({});
+        setStatusMsg(setup.log_line || "The daemon did not start");
+        return;
+      }
+      needsFolder.current = !String(setup.local_path || "").trim();
+      setPhase(needsFolder.current ? "folder" : "ready");
+      if (needsFolder.current) {
+        setStatusMsg("Choose a patch folder");
+      }
+      await continueWhenReady();
+    } catch (e) {
+      if (alive.current) {
+        setStatusMsg("Error: " + e);
+      }
+    }
+  };
+
+  const runInstall = async () => {
+    setLoading(true);
+    setStatusMsg("Installing VNPM...");
+    try {
+      const started = await installVnpm();
+      if (!alive.current) {
+        return;
+      }
+      if (!started?.success) {
+        setStatusMsg(resultError(started, "Install failed"));
+        return;
+      }
+      await watchInstall();
+      if (alive.current) {
+        await boot();
+      }
+    } catch (e) {
+      if (alive.current) {
+        setStatusMsg("Error: " + e);
+      }
+    } finally {
+      if (alive.current) {
+        setLoading(false);
+      }
+    }
+  };
+
+  const chooseFolder = async () => {
+    setLoading(true);
+    try {
+      const picked = await openFilePicker(FileSelectionType.FOLDER, homePath);
+      if (!alive.current) {
+        return;
+      }
+      const folder = picked?.realpath || picked?.path || "";
+      if (!folder) {
+        return;
+      }
+      const saved = await setPatchFolder(folder);
+      if (!saved?.success) {
+        setStatusMsg(resultError(saved, "Could not save the patch folder"));
+        return;
+      }
+      needsFolder.current = false;
+      setPhase("ready");
+      await runScan();
+    } catch (e) {
+      if (alive.current) {
+        setStatusMsg("Error: " + e);
+      }
+    } finally {
+      if (alive.current) {
+        setLoading(false);
+      }
+    }
+  };
+
+  const confirmRestore = (game: GameEntry, method: "restore_backup" | "restore_via_steam") => {
+    const viaSteam = method === "restore_via_steam";
+    showModal(
+      <ConfirmModal
+        strTitle={viaSteam ? "Restore via Steam" : "Restore"}
+        strDescription={
+          viaSteam
+            ? "Steam will verify the files for " + game.name + "."
+            : "Restore " + game.name + " from its clean backup."
+        }
+        strOKButtonText="Restore"
+        strCancelButtonText="Cancel"
+        bDestructiveWarning
+        onOK={() => {
+          void runMutation(
+            method,
+            game.app_id,
+            viaSteam ? "Restoring " + game.name + " via Steam..." : "Restoring " + game.name + "...",
+            "Restore finished",
+          );
+        }}
+      />
+    );
+  };
+
   useEffect(() => {
     alive.current = true;
-
-    const boot = async () => {
-      try {
-        const listed = await listJobs();
-        const jobs = listed?.jobs ?? [];
-        const mutation = jobs.find((job) =>
-          !!job.job_id &&
-          (job.status === "queued" || job.status === "running") &&
-          !!job.method &&
-          MUTATION_METHODS.indexOf(job.method) >= 0
-        );
-        if (mutation?.job_id) {
-          setLoading(true);
-          const job = await pollJob(mutation.job_id, "Working...");
-          if (job && finishMutation(job, "Finished")) {
-            await runScan();
-          } else if (alive.current) {
-            setLoading(false);
-          }
-          return;
-        }
-        const scan = jobs.find((job) =>
-          job.method === "scan_games" &&
-          !!job.job_id &&
-          (job.status === "queued" || job.status === "running")
-        );
-        if (scan?.job_id) {
-          setLoading(true);
-          setStatusMsg("Scanning visual novels...");
-          const job = await pollJob(scan.job_id, "Scanning visual novels...");
-          if (job) {
-            applyScanResult(job);
-          }
-          if (alive.current) {
-            setLoading(false);
-          }
-          return;
-        }
-      } catch (e) {
-        if (alive.current) {
-          setStatusMsg("Error: " + e);
-        }
-      }
-      if (alive.current) {
-        await runScan();
-      }
-    };
-
-    boot();
+    void boot();
     return () => {
       alive.current = false;
       clearTimer();
     };
   }, []);
 
+  const gameState = (game: GameEntry) => {
+    if (game.is_patched) {
+      return "Patched";
+    }
+    if (game.has_local_patch) {
+      return "Patch ready";
+    }
+    return "Not patched";
+  };
+
+  const entries = libraryEntries(games);
+
   return (
-    <PanelSection title="VN Patch Manager">
-      <PanelSectionRow>
-        <Field label="Status" description={statusMsg}>
-          <ButtonItem onClick={runScan} disabled={loading}>
+    <Fragment>
+      <PanelSection title="VN Patch Manager">
+        <PanelSectionRow>
+          <div>{statusMsg}</div>
+        </PanelSectionRow>
+        <PanelSectionRow>
+          <ButtonItem layout="below" onClick={() => void boot()} disabled={loading}>
             Refresh
           </ButtonItem>
-        </Field>
-      </PanelSectionRow>
-
-      {Object.values(games).map((game) => (
-        <PanelSectionRow key={game.app_id}>
-          <Field
-            label={game.name}
-            description={
-              game.is_patched
-                ? "● Patched & Verified"
-                : game.has_local_patch
-                ? "● 18+ Patch Ready"
-                : "● Clean Unpatched"
-            }
-          >
-            <div>
-              {game.has_local_patch && !game.is_patched && (
-                <ButtonItem
-                  onClick={() => runMutation("apply_patch", game.app_id, "Applying patch for " + game.app_id + "...", "Patch applied successfully!")}
-                  disabled={loading}
-                >
-                  Apply Patch
-                </ButtonItem>
-              )}
-              {(game.is_patched || game.has_clean_backup) && (
-                <ButtonItem
-                  onClick={() => runMutation("restore_backup", game.app_id, "Restoring " + game.name + "...", "Restore finished")}
-                  disabled={loading}
-                >
-                  Restore
-                </ButtonItem>
-              )}
-              {game.is_installed && (
-                <ButtonItem
-                  onClick={() => runMutation("fix_codecs", game.app_id, "Fixing codecs for " + game.name + "...", "Codec fixes applied")}
-                  disabled={loading}
-                >
-                  Fix codecs
-                </ButtonItem>
-              )}
-            </div>
-          </Field>
         </PanelSectionRow>
-      ))}
-    </PanelSection>
+        {phase === "install" && (
+          <PanelSectionRow>
+            <ButtonItem layout="below" onClick={() => void runInstall()} disabled={loading}>
+              Install VNPM
+            </ButtonItem>
+          </PanelSectionRow>
+        )}
+        {phase === "folder" && (
+          <PanelSectionRow>
+            <ButtonItem layout="below" onClick={() => void chooseFolder()} disabled={loading}>
+              Choose folder
+            </ButtonItem>
+          </PanelSectionRow>
+        )}
+      </PanelSection>
+      <style>{`
+        .vnpm-library { display: flex; flex-direction: column; width: 100%; }
+        .vnpm-game { display: flex; flex-direction: column; width: 100%; box-sizing: border-box; padding: 10px 0; }
+        .vnpm-game + .vnpm-game { border-top: 1px solid rgba(255, 255, 255, 0.18); }
+        .vnpm-game-name { font-size: 16px; line-height: 1.3; }
+        .vnpm-game-state { opacity: 0.75; margin: 2px 0 6px; }
+      `}</style>
+      <div className="vnpm-library">
+        {entries.map((game) => (
+          <div className="vnpm-game" key={game.app_id}>
+            <div className="vnpm-game-name">{game.name}</div>
+            <div className="vnpm-game-state">{gameState(game)}</div>
+            {game.has_local_patch && !game.is_patched && (
+              <DialogButton
+                style={{ width: "100%", marginTop: "6px" }}
+                disabled={loading}
+                onClick={() => void runMutation("apply_patch", game.app_id, "Applying patch for " + game.name + "...", "Patch applied successfully!")}
+              >
+                {"Apply patch for " + game.name}
+              </DialogButton>
+            )}
+            {(game.is_patched || game.has_clean_backup) && (
+              <DialogButton
+                style={{ width: "100%", marginTop: "6px" }}
+                disabled={loading}
+                onClick={() => confirmRestore(game, "restore_backup")}
+              >
+                {"Restore " + game.name}
+              </DialogButton>
+            )}
+            {game.is_installed && !game.has_clean_backup && (
+              <DialogButton
+                style={{ width: "100%", marginTop: "6px" }}
+                disabled={loading}
+                onClick={() => confirmRestore(game, "restore_via_steam")}
+              >
+                {"Restore " + game.name + " via Steam"}
+              </DialogButton>
+            )}
+            {game.is_installed && (
+              <DialogButton
+                style={{ width: "100%", marginTop: "6px" }}
+                disabled={loading}
+                onClick={() => void runMutation("fix_codecs", game.app_id, "Fixing codecs for " + game.name + "...", "Codec fixes applied")}
+              >
+                {"Fix codecs for " + game.name}
+              </DialogButton>
+            )}
+          </div>
+        ))}
+      </div>
+    </Fragment>
   );
 }
 

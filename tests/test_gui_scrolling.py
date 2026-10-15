@@ -165,31 +165,33 @@ def test_arrow_key_navigation_scrolling(tmp_path):
 
 def test_window_resize_preserves_scrolling(tmp_path):
     app = _create_app(tmp_path)
+    try:
+        # Enough posters that the list still overflows after a width change.
+        # Twenty cards fit inside the canvas on the standalone Tk build.
+        mock_games = {
+            str(900000 + i): {
+                'name': f'Visual Novel Game {i}',
+                'path': str(tmp_path / f'game_{i}'),
+                'is_installed': True,
+                'vndb': {'vn_title': f'VN {i}'}
+            } for i in range(40)
+        }
 
-    mock_games = {
-        str(900000 + i): {
-            'name': f'Visual Novel Game {i}',
-            'path': str(tmp_path / f'game_{i}'),
-            'is_installed': True,
-            'vndb': {'vn_title': f'VN {i}'}
-        } for i in range(20)
-    }
+        app._populate_game_list(mock_games)
+        for _ in range(8):
+            app.update()
+            time.sleep(0.02)
 
-    app._populate_game_list(mock_games)
-    for _ in range(8):
+        canvas = app.scrollable_games._parent_canvas
+
+        # Simulate resize event
+        event = MagicMock()
+        event.width = 1280
+        app._on_games_area_resized(event)
         app.update()
-        time.sleep(0.02)
 
-    canvas = app.scrollable_games._parent_canvas
-
-    # Simulate resize event
-    event = MagicMock()
-    event.width = 1280
-    app._on_games_area_resized(event)
-    app.update()
-
-    scrollregion = canvas.cget('scrollregion')
-    assert scrollregion != '', 'scrollregion must remain configured after resize'
-    assert canvas.yview() != (0.0, 1.0)
-
-    app.destroy()
+        scrollregion = canvas.cget('scrollregion')
+        assert scrollregion != '', 'scrollregion must remain configured after resize'
+        assert canvas.yview() != (0.0, 1.0)
+    finally:
+        app.destroy()

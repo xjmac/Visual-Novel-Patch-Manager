@@ -1,5 +1,6 @@
 import io
 import json
+import logging
 from unittest.mock import patch, MagicMock
 from vnpatchmanager import PatchRepository, ConfigManager
 
@@ -37,6 +38,23 @@ def test_scan_local_success(temp_config_dir, mock_patch_repo):
     patch1 = repo.available_patches["900001"]
     assert patch1["title"] == "Synthetic VN Alpha English Patch"
     assert patch1["patch_source_dir"] == str(mock_patch_repo["patch1_dir"])
+
+
+def test_blank_local_path_does_not_walk_cwd(temp_config_dir, tmp_path, monkeypatch, caplog):
+    """A blank folder is not configured. It must not scan the daemon's working directory."""
+    work = tmp_path / "cwd"
+    work.mkdir()
+    (work / "patch.json").write_text(json.dumps({"steam_app_id": 7, "title": "Cwd"}))
+    monkeypatch.chdir(work)
+    cm = ConfigManager()
+    cm.config["mode"] = "local"
+    cm.config["local_path"] = "  "
+    repo = PatchRepository(cm)
+    with caplog.at_level(logging.INFO, logger="vnpatchmanager.patch_repository"):
+        repo.refresh_patches()
+        repo.refresh_patches()
+    assert repo.available_patches == {}
+    assert caplog.text.count("Local patch directory is not configured") == 1
 
 
 def test_scan_local_nonexistent_directory(temp_config_dir, tmp_path, caplog):
