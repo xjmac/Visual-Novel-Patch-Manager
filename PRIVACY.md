@@ -10,6 +10,7 @@ Also kept out: local notes (`ROADMAP.md`, `AGENTS.md`, `CODEBASE_REPORT.md`,
 `/Users/<name>`; `/home/deck` is fine), and Steam `userdata/<account id>` paths.
 Commits use the GitHub noreply author address.
 
-`scripts/check_privacy.py` enforces this in CI. Enable the local hook with:
+Grok Build sessions load `.grok/rules/privacy.md`, which forbids real game
+titles, IDs and paths. `scripts/check_privacy.py` enforces this in CI. Enable the local hook with:
 
     git config core.hooksPath .githooks
