@@ -14,3 +14,7 @@ Grok Build sessions load `.grok/rules/privacy.md`, which forbids real game
 titles, IDs and paths. `scripts/check_privacy.py` enforces this in CI. Enable the local hook with:
 
     git config core.hooksPath .githooks
+
+The owner's real name and personal email must not appear in files or commit
+messages. The checker matches them by SHA-256 (so the repo never spells them
+out); `.githooks/commit-msg` checks messages. Copyright lines use `xjmac`.

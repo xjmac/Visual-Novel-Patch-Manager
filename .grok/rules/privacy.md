@@ -8,7 +8,8 @@ This repo is public. History was rewritten to strip personal data; do not re-add
 - Never commit or mention: real game titles from the developer's Steam library
   or local install, real install paths under the developer's home directory,
   real Steam IDs / account ids / `userdata/<id>` paths, license or library dumps,
-  personal emails or names, or any other personal identifier.
+  personal emails or names (including the owner's real name; use `xjmac`),
+  or any other personal identifier.
 - If a real local file or scan result inspires a test, rewrite it with invented
   values before it reaches the repo. Do not copy real data from the machine.
 - Git author is always `xjmac <317002279+xjmac@users.noreply.github.com>`.
