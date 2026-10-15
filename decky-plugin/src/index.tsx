@@ -1,13 +1,12 @@
 import {
-  definePlugin,
-  ServerAPI,
   staticClasses,
   PanelSection,
   PanelSectionRow,
   ButtonItem,
   Field,
 } from "@decky/ui";
-import { useState, useEffect, useRef, VFC } from "react";
+import { callable, definePlugin } from "@decky/api";
+import { useState, useEffect, useRef } from "react";
 import { FaBook } from "react-icons/fa";
 
 interface GameEntry {
@@ -36,7 +35,14 @@ interface PluginPayload {
 const POLL_MS = 1000;
 const MUTATION_METHODS = ["apply_patch", "restore_backup", "fix_codecs", "restore_via_steam"];
 
-const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
+const getLibraryGames = callable<[], PluginPayload>("get_library_games");
+const getJob = callable<[job_id: string], PluginPayload>("get_job");
+const listJobs = callable<[], PluginPayload>("list_jobs");
+const applyPatch = callable<[app_id: string], PluginPayload>("apply_patch");
+const restoreBackup = callable<[app_id: string], PluginPayload>("restore_backup");
+const fixCodecs = callable<[app_id: string], PluginPayload>("fix_codecs");
+
+function Content() {
   const [games, setGames] = useState<Record<string, GameEntry>>({});
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState("Ready");
@@ -61,14 +67,6 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
     timer.current = window.setTimeout(() => resolve(), POLL_MS);
   });
 
-  const callMethod = async (method: string, args: object): Promise<PluginPayload | undefined> => {
-    const res = await serverAPI.callPluginMethod<object, PluginPayload>(method, args);
-    if (!res.success) {
-      return undefined;
-    }
-    return res.result;
-  };
-
   const latestLog = (job: PluginPayload, fallback: string) => {
     if (job.logs && job.logs.length > 0) {
       return job.logs[job.logs.length - 1];
@@ -78,7 +76,7 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
 
   const pollJob = async (jobId: string, fallback: string): Promise<PluginPayload | undefined> => {
     while (alive.current) {
-      const job = await callMethod("get_job", { job_id: jobId });
+      const job = await getJob(jobId);
       if (!alive.current) {
         return undefined;
       }
@@ -142,7 +140,7 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
     setLoading(true);
     setStatusMsg("Scanning visual novels...");
     try {
-      const ticket = await callMethod("get_library_games", {});
+      const ticket = await getLibraryGames();
       if (!alive.current) {
         return;
       }
@@ -165,11 +163,21 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
     }
   };
 
+  const submitMutation = (method: "apply_patch" | "restore_backup" | "fix_codecs", appId: string) => {
+    if (method === "apply_patch") {
+      return applyPatch(appId);
+    }
+    if (method === "restore_backup") {
+      return restoreBackup(appId);
+    }
+    return fixCodecs(appId);
+  };
+
   const runMutation = async (method: "apply_patch" | "restore_backup" | "fix_codecs", appId: string, working: string, done: string) => {
     setLoading(true);
     setStatusMsg(working);
     try {
-      const ticket = await callMethod(method, { app_id: appId });
+      const ticket = await submitMutation(method, appId);
       if (!alive.current) {
         return;
       }
@@ -197,7 +205,7 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
 
     const boot = async () => {
       try {
-        const listed = await callMethod("list_jobs", {});
+        const listed = await listJobs();
         const jobs = listed?.jobs ?? [];
         const mutation = jobs.find((job) =>
           !!job.job_id &&
@@ -302,12 +310,13 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
       ))}
     </PanelSection>
   );
-};
+}
 
-export default definePlugin((serverAPI: ServerAPI) => {
+export default definePlugin(() => {
   return {
-    title: <div className={staticClasses.Title}>VN Patch Manager</div>,
-    content: <Content serverAPI={serverAPI} />,
+    name: "VN Patch Manager",
+    titleView: <div className={staticClasses.Title}>VN Patch Manager</div>,
+    content: <Content />,
     icon: <FaBook />,
     onDismount() {},
   };

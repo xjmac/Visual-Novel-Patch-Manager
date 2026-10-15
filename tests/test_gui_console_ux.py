@@ -3,9 +3,12 @@ Unit tests for SteamOS console-grade UX overhaul, theme system,
 poster card, game detail modal, and IPC service.
 """
 
+import ast
 import hashlib
 import os
 import socket
+import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -722,6 +725,92 @@ def test_decky_plugin_methods_return_job_tickets():
     assert scanned["success"] is True
     assert scanned["job_id"] == "scan-1"
     client.wait_job.assert_not_called()
+
+
+def _imported_roots(path: Path) -> set[str]:
+    tree = ast.parse(path.read_text())
+    roots: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            roots.update(alias.name.split(".", 1)[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            roots.add(node.module.split(".", 1)[0])
+    return roots
+
+
+def _wait_job(reader, job_id: str) -> dict:
+    deadline = time.monotonic() + 3
+    record = reader.get_job(job_id)
+    while record.get("status") in ("queued", "running") and time.monotonic() < deadline:
+        time.sleep(0.01)
+        record = reader.get_job(job_id)
+    return record
+
+
+def test_decky_plugin_client_matches_daemon_wire(tmp_path):
+    """The plugin client is stdlib-only and interoperates with VNPMClient on one server."""
+    import importlib.util
+
+    plugin_dir = Path(__file__).resolve().parents[1] / "decky-plugin"
+    client_path = plugin_dir / "ipc_client.py"
+    main_path = plugin_dir / "main.py"
+    for path in (client_path, main_path):
+        roots = _imported_roots(path)
+        assert "vnpatchmanager" not in roots
+        assert "PIL" not in roots
+
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(plugin_dir)
+    env.pop("DECKY_USER_HOME", None)
+    probe = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys\n"
+            "import ipc_client\n"
+            "import main\n"
+            "assert 'PIL' not in sys.modules\n"
+            "assert 'vnpatchmanager' not in sys.modules\n",
+        ],
+        cwd=plugin_dir,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert probe.returncode == 0, probe.stderr
+
+    spec = importlib.util.spec_from_file_location("decky_vnpm_ipc_client", client_path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec is not None and spec.loader is not None
+    spec.loader.exec_module(module)
+
+    service = MagicMock()
+    service.scan_games.return_value = {"123": {"name": "Game 123"}}
+    service.apply_patch.return_value = {"success": True, "message": "applied"}
+    server, vnpm = _job_server(tmp_path, service, name="plugin-client.sock")
+    try:
+        plugin = module.PluginClient(socket_path=server.socket_path)
+
+        ticket = plugin.scan_games()
+        assert ticket["status"] == "queued"
+        assert ticket["method"] == "scan_games"
+        finished = _wait_job(plugin, ticket["job_id"])
+        same = vnpm.get_job(ticket["job_id"])
+        assert finished["status"] == "succeeded"
+        assert finished["result"]["123"]["name"] == "Game 123"
+        assert same == finished
+
+        other = vnpm.apply_patch("42")
+        assert other["status"] == "queued"
+        assert other["method"] == "apply_patch"
+        finished = _wait_job(vnpm, other["job_id"])
+        same = plugin.get_job(other["job_id"])
+        assert finished["status"] == "succeeded"
+        assert finished["result"]["success"] is True
+        assert same == finished
+    finally:
+        server.stop()
 
 
 def test_game_detail_modal_uses_get_hero_image(tmp_path):

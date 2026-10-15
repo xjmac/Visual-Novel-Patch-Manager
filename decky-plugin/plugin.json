@@ -2,5 +2,10 @@
   "name": "VN Patch Manager",
   "author": "VNPM Contributors",
   "flags": [],
-  "version": "0.1.0"
+  "api_version": 1,
+  "publish": {
+    "tags": ["utility", "visual-novel"],
+    "description": "Apply and restore visual novel patches from the Quick Access menu.",
+    "image": "https://opengraph.githubassets.com/1/xjmac/Visual-Novel-Patch-Manager"
+  }
 }
