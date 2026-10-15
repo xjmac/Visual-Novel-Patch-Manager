@@ -39,3 +39,5 @@ AGENTS.md
 CODEBASE_REPORT.md
 .grokignore
 
+*.dump
+dumps/
