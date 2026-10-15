@@ -35,8 +35,8 @@ CONTENT_RES = [
 
 # The owner's real surname and personal email, stored only as SHA-256 so the
 # public repo doesn't spell them out. Any letters-only word or email address
-# whose lowercase hash matches fails the check (covers the owner's full name,
-# dotted variants, the gmail address, etc.).
+# whose lowercase hash matches fails the check (covers the full name, dotted
+# variants, the personal email address, etc.).
 IDENTITY_HASHES = {
     "f03a902de42509d935d3edab75b7750eb00856285616411c4517e9103eea390d",
     "d569f6c7d775ac7e52c45940a139ce20362ac4824fc112ca48afb31d72f3663f",
@@ -73,8 +73,6 @@ def main():
         if p.name in FORBIDDEN_NAMES or any(p.match(g) for g in FORBIDDEN_GLOBS):
             problems.append(f"{name}: forbidden personal/local file")
             continue
-        if p.name == "check_privacy.py":
-            continue
         try:
             data = git("show", f":{name}") if staged else open(name, "rb").read()
         except (OSError, subprocess.CalledProcessError):
@@ -83,6 +81,8 @@ def main():
             continue
         text = data.decode("utf-8", "replace")
         for n, line in enumerate(text.splitlines(), 1):
+            if p.name == "check_privacy.py" and not any(identity_hits(line)):
+                continue
             for m in HOME_RE.finditer(line):
                 if m.group(1).lower() not in ALLOWED_HOMES:
                     problems.append(f"{name}:{n}: real home path {m.group(0)!r}")
