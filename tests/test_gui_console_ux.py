@@ -749,7 +749,9 @@ def test_ipc_finished_jobs_drop_the_oldest(tmp_path):
     server, client = _job_server(tmp_path, service, name="cap.sock")
     try:
         ids = [client.scan_games()["job_id"] for _ in range(70)]
-        last = client.wait_job(ids[-1], timeout=3)
+        # CI (esp. Python 3.13) can be slow under load; wait long enough for
+        # the single worker to drain all 70 jobs before asserting the cap.
+        last = client.wait_job(ids[-1], timeout=30)
         assert last["status"] == "succeeded"
         listed = client.list_jobs()
         kept = {job["job_id"] for job in listed}
